@@ -19,7 +19,7 @@ actionlint
 ```
 
 `pnpm run format` applies formatting. GitHub Actions runs the same formatting and
-Markdown checks, plus actionlint 1.7.11, on pull requests and pushes to `master`.
+Markdown checks, plus actionlint 1.7.11, on pull requests and pushes to `main` or `master`.
 Dependencies are locked in `pnpm-lock.yaml`.
 
 ## Review gate
