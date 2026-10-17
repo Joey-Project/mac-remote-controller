@@ -12,6 +12,8 @@ This directory contains the native Android scaffold. It uses Kotlin and Jetpack 
 - Jetpack Compose BOM 2026.06.00 (the Compose 1.11 line supports compileSdk 36)
 - ktlint Gradle plugin 14.2.0 with ktlint 1.8.0
 
+Gradle is configured with a 2 GiB heap and up to two workers so D8 has enough heap during dex merging.
+
 Detekt is not enabled yet. The current compatible plugin line is built against a newer Kotlin compiler than AGP 9's built-in Kotlin 2.2.10. The project uses ktlint for Kotlin formatting and Android Lint for Android-specific static checks.
 
 ## Local commands
