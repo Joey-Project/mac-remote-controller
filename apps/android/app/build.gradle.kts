@@ -12,13 +12,13 @@ ktlint {
 
 android {
     namespace = "com.joey.macremotecontroller"
-    compileSdk = 36
-    buildToolsVersion = "36.0.0"
+    compileSdk = 37
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "com.joey.macremotecontroller"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -40,7 +40,7 @@ android {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(27)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
     }

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd -- "$script_dir/.." && pwd)"
+repo_root="$(cd -- "$script_dir/../.." && pwd)"
 tool_root="$repo_root/.codex-tmp/apple-tools"
 swiftlint_version="0.65.1"
 
@@ -13,6 +13,7 @@ fi
 
 mkdir -p "$tool_root"
 mkdir -p "$tool_root/SourcePackages"
+xcodebuild -version
 printf 'Swift compiler: '
 swift --version | sed -n '1p'
 printf 'Swift formatter: '
@@ -27,7 +28,7 @@ fi
 
 if [[ -z "$swiftlint_bin" ]]; then
     printf 'Preparing pinned SwiftLint %s in .codex-tmp/apple-tools.\n' "$swiftlint_version"
-    swiftlint_bin="$("$repo_root/scripts/bootstrap-swift-tools.sh")"
+    swiftlint_bin="$("$script_dir/bootstrap-tools.sh")"
 fi
 
 if [[ "$("$swiftlint_bin" --version)" != "$swiftlint_version" ]]; then
@@ -39,7 +40,6 @@ printf 'SwiftLint: %s (%s)\n' "$("$swiftlint_bin" --version)" "$swiftlint_bin"
 printf '\n==> Swift format lint\n'
 swift format lint \
     --strict \
-    --configuration "$repo_root/.swift-format" \
     --recursive \
     "$repo_root/apps/macos/SofaRemoteMac" \
     "$repo_root/apps/ios/SofaRemoteiOS" \
@@ -47,7 +47,12 @@ swift format lint \
     "$repo_root/packages/apple-core/Sources"
 
 printf '\n==> SwiftLint\n'
-"$swiftlint_bin" lint --strict --config "$repo_root/.swiftlint.yml" --quiet --no-cache
+for module in apps/macos apps/ios packages/apple-core; do
+    (
+        cd -- "$repo_root/$module"
+        "$swiftlint_bin" lint --strict --quiet --no-cache
+    )
+done
 
 printf '\n==> AppleCore package build\n'
 swift build \

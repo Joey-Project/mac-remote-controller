@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd -- "$script_dir/.." && pwd)"
+repo_root="$(cd -- "$script_dir/../.." && pwd)"
 version="0.65.1"
 checksum="c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0"
 tool_dir="$repo_root/.codex-tmp/apple-tools/swiftlint-$version"

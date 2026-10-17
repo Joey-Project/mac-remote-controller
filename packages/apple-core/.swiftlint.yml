@@ -1,0 +1,6 @@
+included:
+  - .
+
+excluded:
+  - .build
+  - .swiftpm

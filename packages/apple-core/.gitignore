@@ -3,3 +3,5 @@
 DerivedData/
 xcuserdata/
 *.xcuserstate
+*.xcresult
+.swiftlint_cache

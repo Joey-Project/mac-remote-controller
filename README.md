@@ -17,12 +17,19 @@ apps/
 packages/
   apple-core/         Shared Swift package
   protocol/           Future language-neutral protocol and fixtures
+tooling/
+  swift/              Shared Apple checks and SwiftLint bootstrap
 ```
 
 Each app and the Swift package keep their build/cache rules in a local
 `.gitignore`. The root ignore file covers shared machine, environment, Node, and
 task-temporary files. Shared Xcode projects/schemes, the Gradle wrapper, and
 dependency locks belong in Git.
+
+The Swift modules keep `.swift-format`, `.swiftlint.yml`, and Swift editor
+settings in their own directories. The shared scripts in `tooling/swift/` use
+those local configurations. Build products, archives, test results, personal
+IDE settings, caches, and signing material are ignored; none are tracked.
 
 ## Repository checks
 
@@ -36,7 +43,13 @@ dependency locks belong in Git.
 Swift and Kotlin compilation provide their type checks. The iOS target includes
 both iPhone and iPad; macOS has its own app target and lifecycle.
 
-Use Node.js 24 or newer and the pnpm version declared in `package.json`:
+Prefer the latest compatible stable toolchain and dependencies, with exact
+dependency versions and committed lockfiles. Do not opt into preview releases.
+Compiler/SDK versions can advance without raising the apps' minimum OS versions.
+The platform READMEs and build files record any compatibility constraints.
+
+Use Node.js 26 or newer and the pnpm version declared in `package.json`.
+CI pins Node.js 26.12.0:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -51,21 +64,21 @@ actionlint
 `pnpm run format` applies repository and TypeScript formatting. Dependencies are
 locked in the root `pnpm-lock.yaml`; install from the repository root.
 
-On macOS, use Xcode 26.6 and run:
+On macOS, use Xcode 27.1 (Swift 6.4) and run:
 
 ```sh
-scripts/check-swift.sh
+tooling/swift/check.sh
 ```
 
 To apply Swift formatting with the same configuration:
 
 ```sh
-swift format format --in-place --recursive --configuration .swift-format \
+swift format format --in-place --recursive \
   apps/ios/SofaRemoteiOS apps/macos/SofaRemoteMac \
   packages/apple-core/Package.swift packages/apple-core/Sources
 ```
 
-For Android, use JDK 17 and the Android SDK required by the checked-in Gradle
+For Android, use JDK 27 and the Android SDK required by the checked-in Gradle
 configuration, then run:
 
 ```sh

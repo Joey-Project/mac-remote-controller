@@ -2,3 +2,5 @@ dist/
 coverage/
 .eslintcache
 *.tsbuildinfo
+*.crx
+*.pem
