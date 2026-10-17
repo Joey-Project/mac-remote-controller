@@ -9,3 +9,8 @@ xcuserdata/
 *.dSYM.zip
 *.dSYM
 *.app
+*.p12
+*.pfx
+*.p8
+*.mobileprovision
+*.provisionprofile
