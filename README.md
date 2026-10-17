@@ -1,13 +1,40 @@
 # Mac Remote Controller
 
-A native iOS and Android remote for controlling media playback on a Mac from the
-sofa. The planned clients use SwiftUI and Jetpack Compose, with a Swift Mac
-companion, an IINA plugin, and a Chrome extension for YouTube and Bilibili.
+A native iPhone, iPad, and Android remote for controlling media playback on a Mac
+from the sofa. The clients use SwiftUI and Jetpack Compose, with a Swift Mac
+companion, an IINA plugin, and a TypeScript Chrome extension for YouTube and
+Bilibili. The current apps are buildable scaffolds; pairing and remote-control
+features are not implemented yet.
+
+## Layout
+
+```text
+apps/
+  macos/              Swift macOS companion
+  ios/                Universal SwiftUI iPhone and iPad app
+  android/            Kotlin and Jetpack Compose app
+  chrome-extension/   TypeScript Manifest V3 extension
+packages/
+  apple-core/         Shared Swift package
+  protocol/           Future language-neutral protocol and fixtures
+```
+
+Each app and the Swift package keep their build/cache rules in a local
+`.gitignore`. The root ignore file covers shared machine, environment, Node, and
+task-temporary files. Shared Xcode projects/schemes, the Gradle wrapper, and
+dependency locks belong in Git.
 
 ## Repository checks
 
-This repository starts with a CI baseline for its existing configuration and
-documentation. Native application builds will be added alongside their source.
+| Area             | Formatting             | Static checks            | Compiler and tests                              |
+| ---------------- | ---------------------- | ------------------------ | ----------------------------------------------- |
+| Repository       | Prettier               | Markdownlint, actionlint | Shell validation for repository scripts         |
+| Swift            | Xcode's `swift format` | SwiftLint                | Shared package, macOS, and iOS Simulator builds |
+| Chrome extension | Prettier               | Typed ESLint             | Strict `tsc`; unit tests; extension bundle      |
+| Android          | ktlint                 | Android Lint             | Kotlin compilation; debug APK                   |
+
+Swift and Kotlin compilation provide their type checks. The iOS target includes
+both iPhone and iPad; macOS has its own app target and lifecycle.
 
 Use Node.js 24 or newer and the pnpm version declared in `package.json`:
 
@@ -15,12 +42,43 @@ Use Node.js 24 or newer and the pnpm version declared in `package.json`:
 pnpm install --frozen-lockfile
 pnpm run format:check
 pnpm run lint
+pnpm run typecheck
+pnpm run test
+pnpm run build
 actionlint
 ```
 
-`pnpm run format` applies formatting. GitHub Actions runs the same formatting and
-Markdown checks, plus actionlint 1.7.11, on pull requests and pushes to `main` or `master`.
-Dependencies are locked in `pnpm-lock.yaml`.
+`pnpm run format` applies repository and TypeScript formatting. Dependencies are
+locked in the root `pnpm-lock.yaml`; install from the repository root.
+
+On macOS, use Xcode 26.6 and run:
+
+```sh
+scripts/check-swift.sh
+```
+
+To apply Swift formatting with the same configuration:
+
+```sh
+swift format format --in-place --recursive --configuration .swift-format \
+  apps/ios/SofaRemoteiOS apps/macos/SofaRemoteMac \
+  packages/apple-core/Package.swift packages/apple-core/Sources
+```
+
+For Android, use JDK 17 and the Android SDK required by the checked-in Gradle
+configuration, then run:
+
+```sh
+cd apps/android
+./gradlew --no-daemon --console=plain ktlintCheck lintDebug assembleDebug
+```
+
+The Gradle wrapper pins its distribution and checksum. Use `ktlintFormat` to apply
+Kotlin formatting. Native unit tests will be added with actual behavior; the
+placeholder apps do not report empty or constant-only test tasks as coverage.
+GitHub Actions runs the checks on pull requests and pushes to
+`main` or `master`, using a macOS runner for Apple builds and Linux for Node and
+Android. No signing credentials or device deployment are required for CI builds.
 
 ## Review gate
 

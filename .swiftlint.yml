@@ -1,0 +1,13 @@
+included:
+  - apps/macos
+  - apps/ios
+  - packages/apple-core/Package.swift
+  - packages/apple-core/Sources
+
+excluded:
+  - .codex-tmp
+  - apps/macos/DerivedData
+  - apps/ios/DerivedData
+  - packages/apple-core/.build
+  - DerivedData
+  - .build

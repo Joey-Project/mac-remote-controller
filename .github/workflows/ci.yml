@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   node-tooling:
-    name: Formatting and Markdown
+    name: Repository and Chrome Extension
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -34,8 +34,53 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check formatting
         run: pnpm run format:check
-      - name: Lint Markdown
-        run: pnpm run lint:markdown
+      - name: Lint Markdown and TypeScript
+        run: pnpm run lint
+      - name: Type-check TypeScript
+        run: pnpm run typecheck
+      - name: Test Chrome extension
+        run: pnpm run test
+      - name: Build Chrome extension
+        run: pnpm run build
+
+  apple:
+    name: Swift and Apple apps
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Check Swift and build Apple apps
+        run: scripts/check-swift.sh
+
+  android:
+    name: Kotlin and Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            apps/android/**/*.gradle.kts
+            apps/android/gradle/libs.versions.toml
+            apps/android/gradle/wrapper/gradle-wrapper.properties
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v5
+      - name: Install Android SDK components
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Check and build Android app
+        run: ./gradlew --no-daemon --console=plain ktlintCheck lintDebug assembleDebug
 
   repo-hygiene:
     name: GitHub Actions validation
@@ -55,3 +100,9 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Lint GitHub Actions workflows
         run: actionlint
+      - name: Check repository shell scripts
+        run: |
+          for script in scripts/*.sh apps/android/gradlew; do
+            bash -n "$script"
+          done
+          shellcheck scripts/*.sh apps/android/gradlew

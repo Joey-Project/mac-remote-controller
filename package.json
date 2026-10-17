@@ -4,11 +4,17 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint:markdown": "markdownlint-cli2",
-    "lint": "pnpm run lint:markdown"
+    "lint": "pnpm run lint:markdown && pnpm --filter @mac-remote-controller/chrome-extension lint",
+    "typecheck": "pnpm --filter @mac-remote-controller/chrome-extension typecheck",
+    "build": "pnpm --filter @mac-remote-controller/chrome-extension build",
+    "test": "pnpm --filter @mac-remote-controller/chrome-extension test"
   },
   "devDependencies": {
     "markdownlint-cli2": "0.22.1",
