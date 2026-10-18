@@ -2,7 +2,7 @@
 
 This package contains a minimal Manifest V3 service worker scaffold. It does not implement remote control and requests no Chrome or website permissions.
 
-The development toolchain targets Node 26 and pnpm 12.14.0. TypeScript is pinned to 6.0.3, the newest version supported by `typescript-eslint` 8.71.2; TypeScript 7 is outside its declared `<6.1` peer range.
+The development toolchain targets Node 26 and pnpm 12.14.0. It pins Oxlint 1.88.0 with `oxlint-tsgolint` 7.0.2004 for type-aware linting, and TypeScript 7.0.2 for the separate `tsc --noEmit` check. Keep the TypeScript compiler and type-aware linter versions aligned when upgrading this toolchain.
 
 From the repository root, install the workspace dependencies and build the extension:
 

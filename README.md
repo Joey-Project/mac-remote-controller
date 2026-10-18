@@ -37,7 +37,7 @@ IDE settings, caches, and signing material are ignored; none are tracked.
 | ---------------- | ---------------------- | ------------------------ | ----------------------------------------------- |
 | Repository       | Prettier               | Markdownlint, actionlint | Shell validation for repository scripts         |
 | Swift            | Xcode's `swift format` | SwiftLint                | Shared package, macOS, and iOS Simulator builds |
-| Chrome extension | Prettier               | Typed ESLint             | Strict `tsc`; unit tests; extension bundle      |
+| Chrome extension | Prettier               | Type-aware Oxlint        | Strict `tsc`; unit tests; extension bundle      |
 | Android          | ktlint                 | Android Lint             | Kotlin compilation; debug APK                   |
 
 Swift and Kotlin compilation provide their type checks. The iOS target includes
