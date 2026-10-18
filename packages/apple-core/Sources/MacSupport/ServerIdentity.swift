@@ -37,6 +37,52 @@
             }
         }
 
+        enum IdentityLoadTransaction {
+            static func resolve<Key, Record>(
+                decision: IdentityLoadDecision,
+                loadExisting: () throws -> (Key, Record),
+                createFresh: () throws -> (Key, Record)
+            ) throws -> (Key, Record) {
+                switch decision {
+                case .createFresh:
+                    try createFresh()
+                case .loadExisting:
+                    try loadExisting()
+                case .orphanedPrivateKey:
+                    throw ServerIdentityError.orphanedPrivateKey
+                case .missingPrivateKey:
+                    throw ServerIdentityError.missingPrivateKey
+                }
+            }
+        }
+
+        enum IdentityCreationTransaction {
+            static func perform<Key, Record>(
+                createKey: () throws -> Key,
+                createRecord: (Key) throws -> Record,
+                persistRecord: (Record) throws -> Void,
+                rollbackKey: (Key) throws -> Void
+            ) throws -> (Key, Record) {
+                let key = try createKey()
+                do {
+                    let record = try createRecord(key)
+                    try persistRecord(record)
+                    return (key, record)
+                } catch {
+                    let primaryFailure = error
+                    do {
+                        try rollbackKey(key)
+                    } catch {
+                        throw ServerIdentityError.creationRollbackFailed(
+                            primary: primaryFailure.localizedDescription,
+                            rollback: error.localizedDescription
+                        )
+                    }
+                    throw primaryFailure
+                }
+            }
+        }
+
         @MainActor
         public static func loadOrCreate() throws -> LocalIdentity {
             let (privateKey, record) = try loadOrCreateMaterial()
@@ -87,26 +133,25 @@
                 hasPrivateKey: loadedPrivateKey != nil
             )
 
-            let privateKey: SecKey
-            let record: StoredIdentity
-            switch decision {
-            case .createFresh:
-                privateKey = try createPrivateKey()
-                record = try createRecord(privateKey: privateKey)
-                try SecureStore.save(record, account: storageAccount)
-            case .loadExisting:
-                guard let loadedPrivateKey, let storedRecord else {
-                    throw ServerIdentityError.invalidLoadDecision
+            return try IdentityLoadTransaction.resolve(
+                decision: decision,
+                loadExisting: {
+                    guard let loadedPrivateKey, let storedRecord else {
+                        throw ServerIdentityError.invalidLoadDecision
+                    }
+                    return (loadedPrivateKey, storedRecord)
+                },
+                createFresh: {
+                    try IdentityCreationTransaction.perform(
+                        createKey: createPrivateKey,
+                        createRecord: createRecord,
+                        persistRecord: {
+                            try SecureStore.save($0, account: storageAccount)
+                        },
+                        rollbackKey: deleteCreatedPrivateKey
+                    )
                 }
-                privateKey = loadedPrivateKey
-                record = storedRecord
-            case .orphanedPrivateKey:
-                throw ServerIdentityError.orphanedPrivateKey
-            case .missingPrivateKey:
-                throw ServerIdentityError.missingPrivateKey
-            }
-
-            return (privateKey, record)
+            )
         }
 
         private static func loadPrivateKey() throws -> SecKey? {
@@ -149,6 +194,40 @@
             return key
         }
 
+        private static func deleteCreatedPrivateKey(_ key: SecKey) throws {
+            let persistentReference = try persistentReference(for: key)
+            guard let persistentReference else { return }
+
+            let query: [CFString: Any] = [
+                kSecClass: kSecClassKey,
+                kSecMatchItemList: [persistentReference]
+            ]
+            let status = SecItemDelete(query as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw ServerIdentityError.keyDeletion(status)
+            }
+        }
+
+        private static func persistentReference(for key: SecKey) throws -> Data? {
+            let query: [CFString: Any] = [
+                kSecClass: kSecClassKey,
+                kSecMatchItemList: [key],
+                kSecReturnPersistentRef: true,
+                kSecMatchLimit: kSecMatchLimitOne
+            ]
+            var result: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
+            if status == errSecItemNotFound { return nil }
+            guard status == errSecSuccess else {
+                throw ServerIdentityError.keychain(status)
+            }
+            guard let result, CFGetTypeID(result) == CFDataGetTypeID(), let data = result as? Data
+            else {
+                throw ServerIdentityError.invalidPersistentReference
+            }
+            return data
+        }
+
         private static func createRecord(privateKey: SecKey) throws -> StoredIdentity {
             let serviceName = UUID().uuidString.lowercased()
             let distinguishedName = try DistinguishedName {
@@ -185,9 +264,12 @@
         case keychain(OSStatus)
         case keyCreation(String)
         case invalidKeyResult
+        case keyDeletion(OSStatus)
+        case invalidPersistentReference
         case orphanedPrivateKey
         case missingPrivateKey
         case invalidLoadDecision
+        case creationRollbackFailed(primary: String, rollback: String)
         case invalidStoredIdentity
         case expiredCertificate(Date)
         case certificateNotYetValid(Date)
@@ -201,6 +283,10 @@
                 "A Mac TLS key could not be created: \(message)."
             case .invalidKeyResult:
                 "Keychain returned an unexpected object for the Mac TLS private key."
+            case .keyDeletion(let status):
+                "The newly created Mac TLS key could not be rolled back (status \(status))."
+            case .invalidPersistentReference:
+                "Keychain returned an unexpected persistent reference for the new TLS key."
             case .orphanedPrivateKey:
                 "A Mac TLS private key exists without its saved certificate and service identity. "
                     + "Restore the saved server identity or reset the key explicitly."
@@ -209,6 +295,8 @@
                     + "Restore the key or reset the saved server identity explicitly."
             case .invalidLoadDecision:
                 "The Mac TLS identity storage changed while it was being loaded."
+            case .creationRollbackFailed(let primary, let rollback):
+                "Mac TLS identity creation failed (\(primary)); cleanup also failed (\(rollback))."
             case .invalidStoredIdentity:
                 "The saved Mac TLS identity is malformed. "
                     + "Reset the saved server identity explicitly before pairing again."
