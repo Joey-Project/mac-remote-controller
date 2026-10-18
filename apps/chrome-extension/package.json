@@ -1,0 +1,22 @@
+{
+  "name": "@mac-remote-controller/chrome-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "lint": "oxlint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit",
+    "build": "node ./scripts/build.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.5",
+    "esbuild": "0.28.2",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "typescript": "7.0.2"
+  }
+}

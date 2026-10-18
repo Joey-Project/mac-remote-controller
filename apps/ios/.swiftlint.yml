@@ -1,0 +1,9 @@
+included:
+  - .
+
+excluded:
+  - DerivedData
+  - build
+  - .build
+  - .swiftpm
+  - xcuserdata

@@ -1,0 +1,23 @@
+{
+  "name": "mac-remote-controller",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:markdown": "markdownlint-cli2",
+    "lint": "pnpm run lint:markdown && pnpm --filter @mac-remote-controller/chrome-extension lint",
+    "typecheck": "pnpm --filter @mac-remote-controller/chrome-extension typecheck",
+    "build": "pnpm --filter @mac-remote-controller/chrome-extension build",
+    "test": "pnpm --filter @mac-remote-controller/chrome-extension test"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.23.3",
+    "prettier": "3.9.10"
+  }
+}

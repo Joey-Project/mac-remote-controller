@@ -1,0 +1,12 @@
+**/node_modules/
+**/.codex-tmp/
+pnpm-lock.yaml
+docs/project_journal/INDEX.md
+**/.build/
+**/.swiftpm/
+**/DerivedData/
+**/.gradle/
+**/.kotlin/
+**/build/
+**/dist/
+**/coverage/

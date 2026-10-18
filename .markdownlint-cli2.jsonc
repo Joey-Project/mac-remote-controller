@@ -1,0 +1,15 @@
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD025": { "front_matter_title": "" },
+  },
+  "globs": [
+    "**/*.md",
+    "!**/node_modules/**",
+    "!**/.build/**",
+    "!**/build/**",
+    "!**/.codex-tmp/**",
+    "!docs/project_journal/INDEX.md",
+  ],
+}

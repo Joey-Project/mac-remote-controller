@@ -1,11 +1,8 @@
 .DS_Store
 .env
 .env.*
+!.env.example
 .codex-tmp/
 node_modules/
-dist/
-build/
-out/
-target/
-__pycache__/
-*.py[cod]
+*.log
+.cache/

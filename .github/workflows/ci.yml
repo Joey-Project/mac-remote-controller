@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-tooling:
+    name: Repository and Chrome Extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+      - name: Set up Node with pnpm cache
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '26.12.0'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm run format:check
+      - name: Lint Markdown and TypeScript
+        run: pnpm run lint
+      - name: Type-check TypeScript
+        run: pnpm run typecheck
+      - name: Test Chrome extension
+        run: pnpm run test
+      - name: Build Chrome extension
+        run: pnpm run build
+
+  apple:
+    name: Swift and Apple apps
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Check Swift and build Apple apps
+        run: tooling/swift/check.sh
+
+  android:
+    name: Kotlin and Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Set up Java
+        uses: actions/setup-java@v6.1.0
+        with:
+          distribution: temurin
+          java-version: '27'
+          cache: gradle
+          cache-dependency-path: |
+            apps/android/**/*.gradle.kts
+            apps/android/gradle/libs.versions.toml
+            apps/android/gradle/wrapper/gradle-wrapper.properties
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6.4.0
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          cmdline-tools-version: '16111833'
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK components
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
+      - name: Check and build Android app
+        run: ./gradlew --no-daemon --console=plain ktlintCheck lintDebug assembleDebug
+
+  repo-hygiene:
+    name: GitHub Actions validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Set up Go for lint tools
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.27.2'
+          cache: false
+      - name: Install repository lint tools
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Lint GitHub Actions workflows
+        run: actionlint
+      - name: Check repository shell scripts
+        run: |
+          for script in tooling/swift/*.sh apps/android/gradlew; do
+            bash -n "$script"
+          done
+          shellcheck tooling/swift/*.sh apps/android/gradlew
