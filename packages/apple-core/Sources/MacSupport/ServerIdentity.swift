@@ -21,29 +21,25 @@
         private static let privateKeyTag = Data("com.joeyteng.sofaremote.tls.key".utf8)
         private static let certificateLifetime: TimeInterval = 10 * 365 * 24 * 60 * 60
 
+        enum IdentityLoadDecision: Equatable {
+            case createFresh
+            case loadExisting
+            case orphanedPrivateKey
+            case missingPrivateKey
+
+            static func resolve(hasStoredRecord: Bool, hasPrivateKey: Bool) -> Self {
+                switch (hasStoredRecord, hasPrivateKey) {
+                case (false, false): .createFresh
+                case (true, true): .loadExisting
+                case (false, true): .orphanedPrivateKey
+                case (true, false): .missingPrivateKey
+                }
+            }
+        }
+
         @MainActor
         public static func loadOrCreate() throws -> LocalIdentity {
-            let storedRecord = try SecureStore.load(StoredIdentity.self, account: storageAccount)
-            let loadedPrivateKey = try loadPrivateKey()
-
-            if storedRecord != nil, loadedPrivateKey == nil {
-                throw ServerIdentityError.missingPrivateKey
-            }
-
-            let privateKey: SecKey
-            if let loadedPrivateKey {
-                privateKey = loadedPrivateKey
-            } else {
-                privateKey = try createPrivateKey()
-            }
-
-            let record: StoredIdentity
-            if let storedRecord {
-                record = storedRecord
-            } else {
-                record = try createRecord(privateKey: privateKey)
-                try SecureStore.save(record, account: storageAccount)
-            }
+            let (privateKey, record) = try loadOrCreateMaterial()
 
             guard UUID(uuidString: record.serviceName) != nil,
                 let certificate = SecCertificateCreateWithData(nil, record.certificateDER as CFData)
@@ -81,6 +77,36 @@
                 certificateDER: record.certificateDER,
                 serviceName: record.serviceName
             )
+        }
+
+        private static func loadOrCreateMaterial() throws -> (SecKey, StoredIdentity) {
+            let storedRecord = try SecureStore.load(StoredIdentity.self, account: storageAccount)
+            let loadedPrivateKey = try loadPrivateKey()
+            let decision = IdentityLoadDecision.resolve(
+                hasStoredRecord: storedRecord != nil,
+                hasPrivateKey: loadedPrivateKey != nil
+            )
+
+            let privateKey: SecKey
+            let record: StoredIdentity
+            switch decision {
+            case .createFresh:
+                privateKey = try createPrivateKey()
+                record = try createRecord(privateKey: privateKey)
+                try SecureStore.save(record, account: storageAccount)
+            case .loadExisting:
+                guard let loadedPrivateKey, let storedRecord else {
+                    throw ServerIdentityError.invalidLoadDecision
+                }
+                privateKey = loadedPrivateKey
+                record = storedRecord
+            case .orphanedPrivateKey:
+                throw ServerIdentityError.orphanedPrivateKey
+            case .missingPrivateKey:
+                throw ServerIdentityError.missingPrivateKey
+            }
+
+            return (privateKey, record)
         }
 
         private static func loadPrivateKey() throws -> SecKey? {
@@ -159,7 +185,9 @@
         case keychain(OSStatus)
         case keyCreation(String)
         case invalidKeyResult
+        case orphanedPrivateKey
         case missingPrivateKey
+        case invalidLoadDecision
         case invalidStoredIdentity
         case expiredCertificate(Date)
         case certificateNotYetValid(Date)
@@ -173,9 +201,14 @@
                 "A Mac TLS key could not be created: \(message)."
             case .invalidKeyResult:
                 "Keychain returned an unexpected object for the Mac TLS private key."
+            case .orphanedPrivateKey:
+                "A Mac TLS private key exists without its saved certificate and service identity. "
+                    + "Restore the saved server identity or reset the key explicitly."
             case .missingPrivateKey:
                 "The saved Mac TLS certificate has no matching private key. "
                     + "Restore the key or reset the saved server identity explicitly."
+            case .invalidLoadDecision:
+                "The Mac TLS identity storage changed while it was being loaded."
             case .invalidStoredIdentity:
                 "The saved Mac TLS identity is malformed. "
                     + "Reset the saved server identity explicitly before pairing again."

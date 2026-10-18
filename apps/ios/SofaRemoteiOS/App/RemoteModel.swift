@@ -254,8 +254,9 @@ final class RemoteModel {
             remoteState = message.state
         case .result:
             guard message.connectionID == connectionID, let id = message.requestID,
-                let request = pending.removeValue(forKey: id), request.sequence == message.sequence
+                let request = pending[id], request.sequence == message.sequence
             else { peer?.close(); return }
+            pending.removeValue(forKey: id)
             if let error = message.error { errorMessage = error.message }
             if let volume = queuedVolume {
                 queuedVolume = nil

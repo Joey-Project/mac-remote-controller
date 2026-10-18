@@ -14,6 +14,26 @@ final class SystemVolumeControllerTests: XCTestCase {
         XCTAssertNil(result.reason)
     }
 
+    func testReadonlyMutedOutputReportsVolumeUnavailable() {
+        let audioIO = FakeCoreAudioIO(volume: 0.72, mute: .value(true), muteWritable: false)
+        let controller = SystemVolumeController(audioIO: audioIO)
+
+        let result = controller.read()
+
+        XCTAssertNil(result.value)
+        XCTAssertNotNil(result.reason)
+    }
+
+    func testReadonlyUnmutedOutputRemainsSupported() {
+        let audioIO = FakeCoreAudioIO(volume: 0.42, mute: .value(false), muteWritable: false)
+        let controller = SystemVolumeController(audioIO: audioIO)
+
+        let result = controller.read()
+
+        XCTAssertEqual(result.value ?? -1, 0.42, accuracy: 0.0001)
+        XCTAssertNil(result.reason)
+    }
+
     func testNonzeroWriteUpdatesScalarAndClearsCurrentMute() throws {
         let audioIO = FakeCoreAudioIO(volume: 0.2, mute: .value(true))
         let controller = SystemVolumeController(audioIO: audioIO)

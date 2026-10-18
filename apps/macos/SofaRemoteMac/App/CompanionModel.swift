@@ -36,6 +36,7 @@ final class CompanionModel {
     let desktop = DesktopController()
 
     private var listener: NWListener?
+    private var listenerReady = false
     private var identity: LocalIdentity?
     private var clients: [UUID: ClientConnection] = [:]
     private var pairing: PairingInvitation?
@@ -58,7 +59,7 @@ final class CompanionModel {
     }
 
     func openPairing() {
-        guard listener != nil, let identity else { return }
+        guard listenerReady, listener != nil, let identity else { return }
         do {
             guard pairedDevices.count < 8 else {
                 errorMessage = "Remove a paired device before adding another (maximum 8)."
@@ -95,15 +96,25 @@ final class CompanionModel {
         guard let identity else { return }
         let listener = try NWListener(using: WebSocketPeer.parameters(identity: identity.identity))
         listener.service = NWListener.Service(name: identity.serviceName, type: "_sofaremote._tcp")
-        listener.stateUpdateHandler = { [weak self] state in
+        listener.stateUpdateHandler = { [weak self, weak listener] state in
             MainActor.assumeIsolated {
+                guard let self, let listener, self.listener === listener else { return }
                 switch state {
-                case .ready: self?.summary = "Ready on the local network"
+                case .ready:
+                    self.listenerReady = true
+                    self.summary = "Ready on the local network"
                 case .failed:
-                    self?.summary = "Network unavailable"
-                    self?.errorMessage =
+                    self.listenerReady = false
+                    listener.cancel()
+                    self.listener = nil
+                    self.summary = "Network unavailable"
+                    self.errorMessage =
                         "Check Local Network permission and your Wi-Fi connection. Restart Sofa Remote to retry."
-                    self?.closePairing()
+                    self.closePairing()
+                case .waiting, .cancelled:
+                    self.listenerReady = false
+                    self.summary = "Local network listener unavailable"
+                    self.closePairing()
                 default: break
                 }
             }

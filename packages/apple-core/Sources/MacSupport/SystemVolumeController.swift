@@ -56,6 +56,7 @@ public final class SystemVolumeController {
         case .unavailable:
             return unavailableRead()
         case .value(true):
+            guard audioIO.canWriteMute(device: device) else { return unavailableRead() }
             return (0, nil)
         case .unsupported, .value(false):
             break
