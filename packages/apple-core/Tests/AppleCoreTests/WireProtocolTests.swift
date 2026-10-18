@@ -41,6 +41,32 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertThrowsError(try WireCodec.decode(unknownCommand))
     }
 
+    func testWelcomeRequiresStateAndRoundTripsValidState() throws {
+        let missingStateJSON = #"""
+            {
+              "protocolVersion": 1,
+              "type": "welcome",
+              "connectionId": "connection-example"
+            }
+            """#
+        XCTAssertThrowsError(try WireCodec.decode(Data(missingStateJSON.utf8)))
+
+        let missingState = WireMessage(type: .welcome, connectionID: "connection-example")
+        XCTAssertThrowsError(try WireCodec.encode(missingState))
+
+        let welcome = WireMessage(
+            type: .welcome,
+            connectionID: "connection-example",
+            state: RemoteState(
+                accessibilityGranted: true,
+                systemVolume: nil,
+                systemVolumeReason: "Unavailable",
+                deviceName: "Living Room Mac"
+            )
+        )
+        XCTAssertEqual(try WireCodec.decode(WireCodec.encode(welcome)), welcome)
+    }
+
     func testRejectsOversizedMessageAndMalformedEnvelope() throws {
         XCTAssertThrowsError(
             try WireCodec.decode(Data(repeating: 0x20, count: WireLimits.maximumMessageBytes + 1)))

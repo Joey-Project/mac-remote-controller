@@ -19,6 +19,9 @@ System volume targets the current default audio output. Fixed-volume outputs
 such as some HDMI or digital devices report that volume control is unavailable.
 The app does not silently substitute another volume target. Stereo channel
 controls are used together when the output has no main volume property.
+An independently muted output reports 0%; setting a nonzero volume clears its
+mute state when supported. Unreadable mute state or a mute state that cannot be
+cleared makes volume control unavailable.
 
 The companion generates a permanent P-256 key and a self-signed certificate with
 Apple's Swift Certificates library. The certificate and pairing records are

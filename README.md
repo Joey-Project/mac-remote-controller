@@ -90,8 +90,9 @@ cd apps/android
 ```
 
 The Gradle wrapper pins its distribution and checksum. Use `ktlintFormat` to apply
-Kotlin formatting. Shared Swift tests cover the implemented protocol and pairing
-validation. Android tests follow its implementation.
+Kotlin formatting. Shared Swift tests cover protocol and pairing validation,
+fractional scrolling, and system-volume behavior through a simulated audio
+interface. Android tests follow its implementation.
 GitHub Actions runs the checks on pull requests and pushes to
 `main` or `master`, using a macOS runner for Apple builds and Linux for Node and
 Android. No signing credentials or device deployment are required for CI builds.

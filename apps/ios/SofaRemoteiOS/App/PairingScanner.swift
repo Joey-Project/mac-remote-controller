@@ -21,9 +21,10 @@ struct PairingScanner: View {
                     ProgressView("Checking camera access…")
                         .frame(maxWidth: .infinity, minHeight: 300)
                 case .ready:
-                    QRCodeCameraPreview { invitation in
-                        onInvitation(invitation)
-                    }
+                    QRCodeCameraPreview(
+                        onCode: onInvitation,
+                        onSetupFailure: { cameraStatus = .failed }
+                    )
                     .frame(maxWidth: 520)
                     .frame(height: 340)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
@@ -123,16 +124,19 @@ private enum CameraStatus: Equatable {
 
 private struct QRCodeCameraPreview: UIViewRepresentable {
     let onCode: (String) -> Void
+    let onSetupFailure: @MainActor () -> Void
 
     func makeUIView(context: Context) -> CameraPreviewView {
         let view = CameraPreviewView()
         context.coordinator.onCode = onCode
+        context.coordinator.onSetupFailure = onSetupFailure
         context.coordinator.attach(to: view)
         return view
     }
 
     func updateUIView(_ uiView: CameraPreviewView, context: Context) {
         context.coordinator.onCode = onCode
+        context.coordinator.onSetupFailure = onSetupFailure
     }
 
     func makeCoordinator() -> Coordinator {
@@ -150,6 +154,7 @@ private struct QRCodeCameraPreview: UIViewRepresentable {
         private var configured = false
         private var didReadCode = false
         var onCode: ((String) -> Void)?
+        var onSetupFailure: (@MainActor () -> Void)?
 
         @MainActor
         func attach(to view: CameraPreviewView) {
@@ -171,25 +176,49 @@ private struct QRCodeCameraPreview: UIViewRepresentable {
                 if !session.isRunning { session.startRunning() }
                 return
             }
-            guard let camera = AVCaptureDevice.default(for: .video),
-                let input = try? AVCaptureDeviceInput(device: camera),
-                session.canAddInput(input)
-            else { return }
+            guard let camera = AVCaptureDevice.default(for: .video) else {
+                reportSetupFailure()
+                return
+            }
+
+            let input: AVCaptureDeviceInput
+            do {
+                input = try AVCaptureDeviceInput(device: camera)
+            } catch {
+                reportSetupFailure()
+                return
+            }
+            guard session.canAddInput(input) else {
+                reportSetupFailure()
+                return
+            }
 
             let output = AVCaptureMetadataOutput()
-            guard session.canAddOutput(output) else { return }
+            guard session.canAddOutput(output) else {
+                reportSetupFailure()
+                return
+            }
 
             session.beginConfiguration()
             session.sessionPreset = .high
             session.addInput(input)
             session.addOutput(output)
-            output.setMetadataObjectsDelegate(self, queue: sessionQueue)
-            if output.availableMetadataObjectTypes.contains(.qr) {
-                output.metadataObjectTypes = [.qr]
+            guard output.availableMetadataObjectTypes.contains(.qr) else {
+                session.commitConfiguration()
+                reportSetupFailure()
+                return
             }
+            output.setMetadataObjectsDelegate(self, queue: sessionQueue)
+            output.metadataObjectTypes = [.qr]
             session.commitConfiguration()
             configured = true
             session.startRunning()
+        }
+
+        private func reportSetupFailure() {
+            Task { @MainActor [weak self] in
+                self?.onSetupFailure?()
+            }
         }
 
         nonisolated func metadataOutput(

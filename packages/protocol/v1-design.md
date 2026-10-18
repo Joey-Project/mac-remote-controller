@@ -115,6 +115,9 @@ not prove that the foreground app accepted the input or completed an action.
 
 State contains `deviceName`, `accessibilityGranted`, optional `systemVolume`, and
 optional `systemVolumeReason`. Absent volume means unavailable, never zero.
+An independently muted output reports effective volume `0`; a nonzero volume
+command also clears mute. Fractional scroll pixels accumulate per connection,
+and their remainder is discarded on disconnect.
 The server sends state at authentication, after a command, and once per second.
 The client bounds outstanding commands to eight; excess relative input is
 dropped and only the latest unsent absolute volume is retained. It discards all

@@ -14,6 +14,7 @@ struct PairedDevice: Codable, Identifiable {
 private final class ClientConnection {
     let peer: WebSocketPeer
     var session: ServerSession?
+    var scrollAccumulator = PixelScrollAccumulator()
     var deviceID: String?
     let connectedAt = Date()
     var rateWindow = Date()
@@ -144,7 +145,7 @@ final class CompanionModel {
             let accepted = try session.accept(message)
             client.session = session
             var failure: RemoteError?
-            do { try desktop.execute(accepted.command) } catch {
+            do { try desktop.execute(accepted.command, scroll: &client.scrollAccumulator) } catch {
                 failure = RemoteError(
                     code: "control_unavailable", message: error.localizedDescription)
             }

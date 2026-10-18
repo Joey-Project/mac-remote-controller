@@ -32,6 +32,7 @@ let package = Package(
             name: "AppleCoreTests",
             dependencies: ["AppleCore"],
             resources: [.copy("Fixtures")]
-        )
+        ),
+        .testTarget(name: "MacSupportTests", dependencies: ["MacSupport"])
     ]
 )

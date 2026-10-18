@@ -252,9 +252,10 @@ public struct WireMessage: Codable, Sendable, Equatable {
 
     private func validateWelcome() throws {
         guard let connectionID, !connectionID.isEmpty,
-            connectionID.utf8.count <= WireLimits.maximumIdentityBytes
+            connectionID.utf8.count <= WireLimits.maximumIdentityBytes,
+            let state
         else {
-            throw WireProtocolError.invalidEnvelope("welcome requires connectionId")
+            throw WireProtocolError.invalidEnvelope("welcome requires connectionId and state")
         }
         guard requestID == nil, sequence == nil, command == nil, error == nil, deviceName == nil
         else {
@@ -264,7 +265,7 @@ public struct WireMessage: Codable, Sendable, Equatable {
         if let authToken, hasInvalidAuthToken(authToken) {
             throw WireProtocolError.invalidEnvelope("welcome authToken is empty or too long")
         }
-        try state?.validate()
+        try state.validate()
     }
 
     private func hasInvalidAuthToken(_ token: String) -> Bool {

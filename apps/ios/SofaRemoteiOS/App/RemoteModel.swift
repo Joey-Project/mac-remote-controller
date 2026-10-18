@@ -52,14 +52,18 @@ final class RemoteModel {
                 }.sorted { $0.name < $1.name }
             }
         }
-        browser.stateUpdateHandler = { [weak self] state in
+        browser.stateUpdateHandler = { [weak self, weak browser] state in
             MainActor.assumeIsolated {
+                guard let self, let browser, self.browser === browser else { return }
+
                 if case .failed = state {
-                    self?.errorMessage =
+                    browser.cancel()
+                    self.browser = nil
+                    self.errorMessage =
                         "Mac discovery failed. Allow Local Network access in Settings."
                 }
                 if case .waiting = state {
-                    self?.errorMessage = "Check Wi-Fi and Local Network permission in Settings."
+                    self.errorMessage = "Check Wi-Fi and Local Network permission in Settings."
                 }
             }
         }
