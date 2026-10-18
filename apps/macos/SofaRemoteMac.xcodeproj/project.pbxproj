@@ -8,11 +8,16 @@
 /* Begin PBXBuildFile section */
 		000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000010 /* SofaRemoteMacApp.swift */; };
 		000000000000000000000013 /* AppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000018 /* AppleCore */; };
+		000000000000000000000024 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000025; };
+		000000000000000000000026 /* DesktopController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
+		000000000000000000000028 /* MacSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000029; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000010 /* SofaRemoteMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SofaRemoteMacApp.swift; sourceTree = "<group>"; };
 		000000000000000000000011 /* SofaRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SofaRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000025 /* CompanionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionModel.swift; sourceTree = "<group>"; };
+		000000000000000000000027 /* DesktopController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -21,6 +26,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				000000000000000000000013 /* AppleCore in Frameworks */,
+				000000000000000000000028 /* MacSupport in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -39,6 +45,8 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000010 /* SofaRemoteMacApp.swift */,
+				000000000000000000000025 /* CompanionModel.swift */,
+				000000000000000000000027 /* DesktopController.swift */,
 			);
 			path = SofaRemoteMac/App;
 			sourceTree = "<group>";
@@ -67,6 +75,7 @@
 			name = SofaRemoteMac;
 			packageProductDependencies = (
 				000000000000000000000018 /* AppleCore */,
+				000000000000000000000029 /* MacSupport */,
 			);
 			productName = SofaRemoteMac;
 			productReference = 000000000000000000000011 /* SofaRemoteMac.app */;
@@ -121,6 +130,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */,
+				000000000000000000000024 /* CompanionModel.swift in Sources */,
+				000000000000000000000026 /* DesktopController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -149,6 +160,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SofaRemoteMac/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Sofa Remote";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -163,6 +175,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SofaRemoteMac/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Sofa Remote";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -208,6 +221,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 000000000000000000000017 /* XCLocalSwiftPackageReference "apple-core" */;
 			productName = AppleCore;
+		};
+		000000000000000000000029 /* MacSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000017;
+			productName = MacSupport;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

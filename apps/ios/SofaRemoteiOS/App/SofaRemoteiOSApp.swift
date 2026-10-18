@@ -1,35 +1,23 @@
-import AppleCore
 import SwiftUI
 
 @main
 struct SofaRemoteiOSApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var model = RemoteModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RemoteView(model: model)
+                .task {
+                    model.startDiscovery()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active {
+                        model.startDiscovery()
+                    } else {
+                        model.suspend()
+                    }
+                }
         }
-    }
-}
-
-private struct ContentView: View {
-    private let status = ConnectionStatus.disconnected
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "macbook")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-
-            Text("Sofa Remote")
-                .font(.largeTitle.weight(.semibold))
-
-            Text(status.summary)
-                .foregroundStyle(.secondary)
-
-            Text("Remote controls are not available yet.")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
     }
 }

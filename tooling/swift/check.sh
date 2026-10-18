@@ -44,7 +44,8 @@ swift format lint \
     "$repo_root/apps/macos/SofaRemoteMac" \
     "$repo_root/apps/ios/SofaRemoteiOS" \
     "$repo_root/packages/apple-core/Package.swift" \
-    "$repo_root/packages/apple-core/Sources"
+    "$repo_root/packages/apple-core/Sources" \
+    "$repo_root/packages/apple-core/Tests"
 
 printf '\n==> SwiftLint\n'
 for module in apps/macos apps/ios packages/apple-core; do
@@ -54,8 +55,10 @@ for module in apps/macos apps/ios packages/apple-core; do
     )
 done
 
-printf '\n==> AppleCore package build\n'
-swift build \
+printf '\n==> AppleCore package tests\n'
+cmp "$repo_root/packages/protocol/fixtures/pointer-move.json" \
+    "$repo_root/packages/apple-core/Tests/AppleCoreTests/Fixtures/pointer-move.json"
+swift test \
     --package-path "$repo_root/packages/apple-core" \
     --scratch-path "$tool_root/apple-core-build" \
     --quiet
@@ -83,6 +86,17 @@ if [[ ! -f "$ios_info_plist" ]]; then
     printf 'Generated iOS app Info.plist was not found: %s\n' "$ios_info_plist" >&2
     exit 1
 fi
+
+mac_info_plist="$tool_root/DerivedData/macOS/Build/Products/Debug/SofaRemoteMac.app/Contents/Info.plist"
+for app_info in "$ios_info_plist" "$mac_info_plist"; do
+    if [[ "$(plutil -type NSBonjourServices "$app_info")" != "array" ]] || \
+        [[ "$(plutil -extract NSBonjourServices.0 raw -o - "$app_info")" != "_sofaremote._tcp" ]]; then
+        printf 'Expected Sofa Remote Bonjour service array in %s.\n' "$app_info" >&2
+        exit 1
+    fi
+    test -n "$(plutil -extract NSLocalNetworkUsageDescription raw -o - "$app_info")"
+done
+test -n "$(plutil -extract NSCameraUsageDescription raw -o - "$ios_info_plist")"
 
 for generated_key in UIApplicationSceneManifest UILaunchScreen; do
     generated_type="$(plutil -type "$generated_key" "$ios_info_plist")"

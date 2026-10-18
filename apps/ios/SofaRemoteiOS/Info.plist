@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_sofaremote._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan the pairing QR code shown in Sofa Remote on your Mac.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Find and connect to Sofa Remote on your Mac over your local network.</string>
+</dict>
+</plist>
