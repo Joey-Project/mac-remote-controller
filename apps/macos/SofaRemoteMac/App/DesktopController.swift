@@ -23,7 +23,7 @@ final class DesktopController {
         try command.validate()
         if command.name == .systemVolumeSet {
             let value = try require(command.value)
-            do { try volumeController.set(value) } catch { throw ControlError.volumeUnavailable }
+            try volumeController.set(value)
             return
         }
         guard AXIsProcessTrusted() else { throw ControlError.accessibilityDenied }
@@ -126,7 +126,6 @@ private extension RemoteKey {
 enum ControlError: Error, LocalizedError {
     case accessibilityDenied
     case eventUnavailable
-    case volumeUnavailable
     case invalidCommand
 
     var errorDescription: String? {
@@ -134,7 +133,6 @@ enum ControlError: Error, LocalizedError {
         case .accessibilityDenied:
             "Allow Sofa Remote in System Settings → Privacy & Security → Accessibility."
         case .eventUnavailable: "macOS could not create an input event."
-        case .volumeUnavailable: "The current audio output does not support system volume control."
         case .invalidCommand: "The command is invalid."
         }
     }

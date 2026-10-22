@@ -39,6 +39,7 @@ final class CompanionModel {
     private var listenerReady = false
     private var identity: LocalIdentity?
     private var clients: [UUID: ClientConnection] = [:]
+    private var admission = ConnectionAdmission<UUID>()
     private var pairing: PairingInvitation?
     private var timer: Timer?
 
@@ -127,15 +128,14 @@ final class CompanionModel {
     }
 
     private func accept(_ connection: NWConnection) {
-        guard clients.count < 12 else { connection.cancel(); return }
         let id = UUID()
+        if let evictedID = admission.admitPending(id) {
+            removeClient(evictedID, closePeer: true)
+        }
         let peer = WebSocketPeer(connection: connection)
         clients[id] = ClientConnection(peer: peer)
         peer.onMessage = { [weak self] message in self?.receive(message, from: id) }
-        peer.onClose = { [weak self] _ in
-            self?.clients.removeValue(forKey: id)
-            self?.refreshConnectedCount()
-        }
+        peer.onClose = { [weak self] _ in self?.removeClient(id) }
         peer.start()
     }
 
@@ -148,7 +148,7 @@ final class CompanionModel {
         client.receivedCount += 1
         guard client.receivedCount <= 240 else { client.peer.close(); return }
         guard var session = client.session else {
-            authenticate(message, client: client)
+            authenticate(message, client: client, id: id)
             return
         }
         guard message.type == .command else { client.peer.close(); return }
@@ -177,7 +177,7 @@ final class CompanionModel {
         }
     }
 
-    private func authenticate(_ message: WireMessage, client: ClientConnection) {
+    private func authenticate(_ message: WireMessage, client: ClientConnection, id: UUID) {
         guard message.type == .authenticate, let token = message.authToken,
             let name = message.deviceName
         else {
@@ -204,8 +204,14 @@ final class CompanionModel {
                 client.peer.close()
                 return
             }
-            let previous = clients.values.filter { $0 !== client && $0.deviceID == device.id }
-            for old in previous { old.peer.close() }
+            let previousIDs = clients.compactMap { id, other in
+                other !== client && other.deviceID == device.id ? id : nil
+            }
+            for previousID in previousIDs { removeClient(previousID, closePeer: true) }
+            guard admission.authenticate(id) else {
+                client.peer.close()
+                return
+            }
             client.deviceID = device.id
             let session = ServerSession(connectionID: UUID().uuidString)
             client.session = session
@@ -237,6 +243,13 @@ final class CompanionModel {
     }
 
     private func refreshConnectedCount() {
-        connectedCount = clients.values.filter { $0.session != nil }.count
+        connectedCount = admission.authenticatedCount
+    }
+
+    private func removeClient(_ id: UUID, closePeer: Bool = false) {
+        guard let client = clients.removeValue(forKey: id) else { return }
+        _ = admission.remove(id)
+        refreshConnectedCount()
+        if closePeer { client.peer.close() }
     }
 }
