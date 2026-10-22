@@ -49,6 +49,8 @@ that simulator's UDID for its own DerivedData directory and result bundle, so
 build products cannot be shared across destinations. The script deletes only
 the temporary devices it created. To reuse existing simulators, pass their
 UDIDs as arguments; those devices are retained.
+Debug builds use the selected destination's active architecture for both the
+app and its package dependencies.
 
 The runner mutes system audio and leaves it muted. Result bundles, including
 failure screenshots, are saved under
