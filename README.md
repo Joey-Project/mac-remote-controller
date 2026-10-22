@@ -5,7 +5,13 @@ from the sofa. The clients use SwiftUI and Jetpack Compose, with a Swift Mac
 companion, an IINA plugin, and a TypeScript Chrome extension for YouTube and
 Bilibili. The first Apple slice implements local pairing, a desktop touchpad,
 committed keyboard text, and system volume. Android, IINA, and Chrome media
-adapters remain scaffolds. Physical iPhone/iPad validation is still required.
+adapters remain scaffolds.
+
+Manual acceptance on an iPhone XS running iOS 18.7.10 on 2026-10-22 verified
+QR pairing to a Mac, pointer and click control, the committed text
+`你好，世界 👋`, two-finger scrolling, and reconnecting to the paired Mac without
+scanning again. iPad acceptance, system-volume changes, and media playback
+remain unverified.
 
 ## Layout
 
