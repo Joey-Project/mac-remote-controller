@@ -47,6 +47,30 @@ superseded_by:
   pairing only. It is not acceptance evidence for these screen and gesture
   changes. iPhone and iPad layout/mode acceptance remains pending.
 
+## Repeatable UI Coverage
+
+- The shared iOS scheme includes `SofaRemoteiOSUITests`. Six UI regressions
+  exercise touchpad drag and two-finger secondary click, volume pinning and
+  placement, arrow-key commands, draft preservation and explicit submission,
+  disconnect, and landscape layout with scrollable keyboard controls.
+- A Debug-only Simulator fixture starts at a connected "UI Test Mac" and
+  records up to 128 validated commands. It bypasses Keychain, Bonjour, transport,
+  desktop input, and real audio. Release and physical-device builds do not
+  include this fixture. This is UI/command integration coverage; it does not
+  establish real pairing or Mac event-delivery acceptance.
+- `tooling/swift/test-ios-ui.sh` runs the same suite locally and in the existing
+  Apple CI job. Its default devices are a temporary iPhone 17 Pro and iPad mini
+  on the newest compatible installed runtime. It leaves system audio muted,
+  retains result bundles, and removes only devices it created. Existing device
+  IDs may be supplied for local diagnosis. CI retains result artifacts for
+  seven days.
+- The 54 AppleCore tests, strict Swift formatting/SwiftLint, shell validation,
+  and actionlint pass. A local UI execution pass is not asserted here.
+  Local Simulator lifecycle requests stalled before the first UI execution;
+  Computer Use separately reported a locked Mac and failed automatic unlock.
+  These observations do not establish that the lock caused the Simulator stall.
+  UI execution evidence belongs in the test result bundles and PR checks.
+
 ## Pairing Direction
 
 - The current QR invitation remains implemented. It transfers a certificate

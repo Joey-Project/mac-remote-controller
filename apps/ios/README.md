@@ -39,7 +39,23 @@ loss; their outcome may be unknown. No screen preview is transmitted.
 Only system volume is available in this slice. Media-source selection, player
 volume, playback controls, and Finder shortcuts follow with the media adapters.
 
-CoreSimulator responded normally during this iteration, but generic
-scheme-based iOS destination selection failed. The signed target-based arm64
-device build against the installed iPhoneOS SDK succeeded; this does not
-establish Simulator UI acceptance.
+## Simulator UI Tests
+
+Run the shared `SofaRemoteiOS` scheme's tests in Xcode, or run
+`tooling/swift/test-ios-ui.sh` from the repository. The script creates an iPhone
+17 Pro and iPad mini on the newest compatible installed runtime, runs them
+serially, and deletes only those temporary devices afterward. To reuse existing
+simulators, pass their UDIDs as arguments; those devices are retained.
+
+The runner mutes system audio and leaves it muted. Result bundles, including
+failure screenshots, are saved under `.codex-tmp/apple-tools/UI-Tests/Results/`.
+CI runs the same suite as part of **Swift and Apple apps** and retains its
+result bundles for seven days.
+
+The suite exercises the real SwiftUI/UIKit interface against an in-process
+Mac fixture, activated with `--ui-testing` only in Debug Simulator builds. It
+does not access pairing credentials, discover Macs, connect to the network,
+inject desktop input, or adjust real audio. Assertions inspect the validated
+commands emitted by the interface. This covers UI and command integration;
+real pairing, TLS transport, Mac event injection, and physical-device gesture
+feel require separate acceptance.

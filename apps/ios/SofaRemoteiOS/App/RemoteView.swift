@@ -105,6 +105,7 @@ private extension RemoteView {
                     "Touchpad",
                     systemImage: selectedMode == .touchpad ? "checkmark" : "cursorarrow")
             }
+            .accessibilityIdentifier("mode.touchpad")
             Button {
                 selectedMode = .keyboard
                 isVolumeEditing = false
@@ -113,19 +114,22 @@ private extension RemoteView {
                     "Keyboard",
                     systemImage: selectedMode == .keyboard ? "checkmark" : "keyboard")
             }
+            .accessibilityIdentifier("mode.keyboard")
             Toggle(isOn: $isVolumePinned) {
                 Label("Pin volume over touchpad", systemImage: "speaker.wave.2")
             }
+            .accessibilityIdentifier("volume.pin")
             Divider()
             Button(role: .destructive, action: disconnect) {
                 Label("Disconnect", systemImage: "rectangle.portrait.and.arrow.right")
             }
+            .accessibilityIdentifier("remote.disconnect")
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.title3)
                 .frame(minWidth: 44, minHeight: 44)
         }
-        .accessibilityLabel("Remote controls")
+        .accessibilityLabel("Remote controls").accessibilityIdentifier("remote.menu")
     }
 
     private func touchpadMode(availableWidth: CGFloat) -> some View {
@@ -228,7 +232,7 @@ private extension RemoteView {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title)
                 }
-                .accessibilityLabel("Send text to Mac")
+                .accessibilityLabel("Send text to Mac").accessibilityIdentifier("keyboard.send")
                 .disabled(!canSendText)
             }
             Text(
@@ -309,7 +313,7 @@ private extension RemoteView {
                     }
                 )
                 .disabled(!model.isConnected || systemVolume == nil)
-                .accessibilityLabel("Mac system volume")
+                .accessibilityLabel("Mac system volume").accessibilityIdentifier("volume.slider")
                 Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
             }
             if systemVolume == nil {
@@ -324,7 +328,8 @@ private extension RemoteView {
         .padding(14)
         .frame(maxWidth: 620, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity).accessibilityElement(children: .contain)
+        .accessibilityIdentifier("volume.card")
         .onAppear(perform: syncSystemVolumeFromRemote)
         .onChange(of: model.remoteState?.systemVolume) { _, _ in
             syncSystemVolumeFromRemote()
@@ -376,10 +381,9 @@ private extension RemoteView {
         .frame(minWidth: 44)
         .disabled(!remoteEnabled)
         .accessibilityLabel(compact ? "\(title) arrow key" : "\(title) key")
+        .accessibilityIdentifier("key.\(key.rawValue)")
     }
-    func sendTextFromButton() {
-        _ = sendText(textToSend)
-    }
+    func sendTextFromButton() { _ = sendText(textToSend) }
 
     func sendText(_ text: String) -> Bool {
         guard remoteEnabled, !text.isEmpty, text.utf8.count <= 4_096 else { return false }
@@ -393,8 +397,4 @@ private extension RemoteView {
         guard !isVolumeEditing, let systemVolume = model.remoteState?.systemVolume else { return }
         volumeValue = systemVolume
     }
-}
-private enum RemoteMode: String {
-    case touchpad = "Touchpad"
-    case keyboard = "Keyboard"
 }

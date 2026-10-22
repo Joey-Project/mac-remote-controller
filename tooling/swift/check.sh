@@ -43,6 +43,7 @@ swift format lint \
     --recursive \
     "$repo_root/apps/macos/SofaRemoteMac" \
     "$repo_root/apps/ios/SofaRemoteiOS" \
+    "$repo_root/apps/ios/SofaRemoteiOSUITests" \
     "$repo_root/packages/apple-core/Package.swift" \
     "$repo_root/packages/apple-core/Sources" \
     "$repo_root/packages/apple-core/Tests"

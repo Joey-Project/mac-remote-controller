@@ -42,6 +42,7 @@ struct TouchpadCard: View {
             .frame(maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Touchpad")
+            .accessibilityIdentifier("touchpad.surface")
             .accessibilityHint(
                 "Drag to move the Mac pointer, tap to click, use two fingers to scroll, "
                     + "or tap with two fingers to right-click"
