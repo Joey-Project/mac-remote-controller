@@ -46,7 +46,8 @@ Run the shared `SofaRemoteiOS` scheme's tests in Xcode, or run
 17 Pro and iPad mini on the newest compatible installed runtime, then runs a
 separate serial `xcodebuild` invocation for each simulator. Each invocation uses
 that simulator's UDID for its own DerivedData directory and result bundle, so
-build products cannot be shared across destinations. The script deletes only
+build products cannot be shared across destinations. Before each invocation,
+the runner waits for the simulator to finish booting. The script deletes only
 the temporary devices it created. To reuse existing simulators, pass their
 UDIDs as arguments; those devices are retained.
 Debug builds use the selected destination's active architecture for both the
@@ -57,8 +58,12 @@ failure screenshots, are saved under
 `.codex-tmp/apple-tools/UI-Tests/Results/<run-id>-<simulator-UDID>.xcresult/`.
 `IOS_UI_TEST_DERIVED_DATA` and `IOS_UI_TEST_RESULT_BUNDLE` can each override the
 corresponding root directory; each run still creates per-simulator subpaths or
-bundles beneath those roots. CI runs the same suite as part of **Swift and Apple
-apps** and retains its result bundles for seven days.
+bundles beneath those roots. CI disables Xcode's extra system diagnostic
+collection because it stalled for ten minutes; test assertions, attachments,
+and result bundles remain available. Each test has a 120-second execution
+allowance, including app launch. The UI test step has a 20-minute limit
+within the Apple job's 30-minute limit, leaving time for the always-run artifact
+upload. CI retains result bundles for seven days.
 
 The six test methods run on iPad. On iPhone, five run and the landscape-only
 test is skipped because the app supports portrait orientation there. The iPad

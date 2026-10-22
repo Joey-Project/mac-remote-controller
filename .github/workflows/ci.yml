@@ -54,6 +54,7 @@ jobs:
         uses: actions/checkout@v7.0.1
       - name: Test iPhone and iPad controls in Simulator
         run: tooling/swift/test-ios-ui.sh
+        timeout-minutes: 20
       - name: Check Swift and build Apple apps
         run: tooling/swift/check.sh
       - name: Upload UI test results

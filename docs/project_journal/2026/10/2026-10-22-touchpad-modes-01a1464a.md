@@ -5,7 +5,7 @@ status: active
 created: 2026-10-22
 updated: 2026-10-22
 branch: wip/touchpad-modes
-pr:
+pr: 3
 supersedes: []
 superseded_by:
 ---
@@ -36,15 +36,18 @@ superseded_by:
 - The implementation is complete. The existing 54 AppleCore package tests
   pass using fake audio in `.codex-tmp/touchpad-modes-20261022/swift-tests.log`;
   SwiftFormat and strict SwiftLint pass, and the signed arm64 iOS device build
-  succeeds. The package tests do not validate this UI. There has been no
-  Simulator or physical-device acceptance of the new UI. The signed
-  app was installed on the paired iPhone; launch was denied because the device
-  was locked. System output was muted at volume zero before the launch attempt
-  and remains muted. Build and installation receipts are ignored under
+  succeeds. The package tests do not validate this UI. A local iPhone 17 Pro
+  run on iOS 26.5 completed with five tests passed, one intentional
+  landscape-only skip, and zero failures. Per-device execution results and
+  remaining failures are retained in xcresult bundles and the PR. Build and
+  installation receipts are ignored under
   `.codex-tmp/touchpad-modes-20261022/`.
 - Earlier physical iPhone acceptance covered the Apple input foundation and QR
   pairing only. It is not acceptance evidence for these screen and gesture
-  changes. iPhone and iPad layout/mode acceptance remains pending.
+  changes. The signed app was installed on the paired iPhone, but launch was
+  denied while the device was locked; system output was muted at volume zero
+  before that attempt. Physical interaction acceptance for this slice remains
+  pending.
 
 ## Repeatable UI Coverage
 
@@ -61,17 +64,17 @@ superseded_by:
   establish real pairing or Mac event-delivery acceptance.
 - `tooling/swift/test-ios-ui.sh` runs the same suite locally and in the existing
   Apple CI job. Its default devices are a temporary iPhone 17 Pro and iPad mini
-  on the newest compatible installed runtime. Each destination runs in a
-  separate serial build/test invocation with its own DerivedData and result
-  bundle. It leaves system audio muted and removes only devices it created.
-  Existing device IDs may be supplied for local diagnosis. CI retains result
-  artifacts for seven days.
-- The 54 AppleCore tests, strict Swift formatting/SwiftLint, shell validation,
-  and actionlint pass. A local UI execution pass is not asserted here.
-  Local Simulator lifecycle requests stalled before the first UI execution;
-  Computer Use separately reported a locked Mac and failed automatic unlock.
-  These observations do not establish that the lock caused the Simulator stall.
-  UI execution evidence belongs in the test result bundles and PR checks.
+  on the newest compatible installed runtime. It waits for Simulator boot
+  readiness, then runs each destination serially with separate DerivedData and
+  result bundles. Each test has a 120-second timeout. Extra system diagnostic
+  collection is disabled; assertions, screenshot attachments, and xcresult
+  data remain available. The runner leaves system audio muted and removes only
+  devices it created. Existing device IDs may be supplied for local diagnosis.
+  CI retains result artifacts for seven days.
+- The completed local iPhone result covers Simulator UI and validated command
+  integration only. The fixture bypasses pairing, transport, desktop input,
+  and real audio. iPad Simulator acceptance requires all six tests to complete;
+  neither Simulator result establishes physical-device behavior.
 
 ## Pairing Direction
 
@@ -90,9 +93,10 @@ superseded_by:
 
 ## Next Steps
 
-- Validate touchpad/keyboard switching, two-finger tap versus scroll, volume
-  visibility and placement, arrow keys, and committed Chinese/emoji text on an
-  iPhone. Check rotation, multitasking, and layout on an iPad separately.
+- Validate touchpad feel, two-finger tap versus scroll, and Chinese/emoji input
+  methods on a physical iPhone; confirm real pairing, transport, and Mac event
+  delivery separately from the Simulator fixture. Check rotation,
+  multitasking, and layout on a physical iPad separately.
 - Keep three/four-finger dragging, Mission Control gestures, modifier shortcuts,
   media adapters, Control Centre widgets, a Web SPA, and App Clips as future
   work.

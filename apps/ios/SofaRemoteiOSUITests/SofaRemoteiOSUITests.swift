@@ -94,19 +94,25 @@ final class SofaRemoteiOSUITests: XCTestCase {
         launchApp()
         defer { terminateApp() }
 
-        chooseKeyboardMode()
+        XCTContext.runActivity(named: "Switch to keyboard mode") { _ in
+            chooseKeyboardMode()
+        }
         for direction in ["up", "down", "left", "right"] {
-            let key = element("key.\(direction)")
-            XCTAssertTrue(key.waitForExistence(timeout: 3), "Missing \(direction) key")
-            XCTAssertTrue(key.isHittable)
-            XCTAssertGreaterThanOrEqual(key.frame.width, 44)
-            XCTAssertGreaterThanOrEqual(key.frame.height, 44)
-            key.tap()
+            XCTContext.runActivity(named: "Tap the \(direction) arrow") { _ in
+                let key = element("key.\(direction)")
+                XCTAssertTrue(key.waitForExistence(timeout: 3), "Missing \(direction) key")
+                XCTAssertTrue(key.isHittable)
+                XCTAssertGreaterThanOrEqual(key.frame.width, 44)
+                XCTAssertGreaterThanOrEqual(key.frame.height, 44)
+                key.tap()
+            }
         }
 
-        let keys = try waitForCommands(count: 4).compactMap { command -> String? in
-            guard command["name"] as? String == "keyboard.key" else { return nil }
-            return command["key"] as? String
+        let keys = try XCTContext.runActivity(named: "Inspect accepted arrow commands") { _ in
+            try waitForCommands(count: 4).compactMap { command -> String? in
+                guard command["name"] as? String == "keyboard.key" else { return nil }
+                return command["key"] as? String
+            }
         }
         XCTAssertEqual(keys, ["up", "down", "left", "right"])
     }
@@ -205,23 +211,28 @@ final class SofaRemoteiOSUITests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
     }
 
+}
+
+private extension SofaRemoteiOSUITests {
     @MainActor
-    private func launchApp() {
-        continueAfterFailure = false
-        XCUIDevice.shared.orientation = .portrait
-        app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
-        app.launch()
+    func launchApp() {
+        XCTContext.runActivity(named: "Launch UI test app") { _ in
+            continueAfterFailure = false
+            XCUIDevice.shared.orientation = .portrait
+            app = XCUIApplication()
+            app.launchArguments = ["--ui-testing"]
+            app.launch()
+        }
     }
 
     @MainActor
-    private func terminateApp() {
+    func terminateApp() {
         app.terminate()
         app = nil
     }
 
     @MainActor
-    private func chooseKeyboardMode() {
+    func chooseKeyboardMode() {
         let menu = element("remote.menu")
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
         menu.tap()
@@ -229,17 +240,17 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
-    private func element(_ identifier: String) -> XCUIElement {
+    func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
     @MainActor
-    private func diagnosticElement() -> XCUIElement {
+    func diagnosticElement() -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: "uitest.commands").firstMatch
     }
 
     @MainActor
-    private func commands() throws -> [[String: Any]] {
+    func commands() throws -> [[String: Any]] {
         let diagnostic = diagnosticElement()
         XCTAssertTrue(diagnostic.waitForExistence(timeout: 3))
         let json =
@@ -249,12 +260,12 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
-    private func waitForCommands(count: Int) throws -> [[String: Any]] {
+    func waitForCommands(count: Int) throws -> [[String: Any]] {
         try waitForCommands { $0.count >= count }
     }
 
     @MainActor
-    private func waitForCommands(
+    func waitForCommands(
         until condition: ([[String: Any]]) -> Bool
     ) throws -> [[String: Any]] {
         let deadline = Date().addingTimeInterval(2)
@@ -268,7 +279,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
-    private func assertSameFrame(_ actual: CGRect, _ expected: CGRect, accuracy: CGFloat = 2) {
+    func assertSameFrame(_ actual: CGRect, _ expected: CGRect, accuracy: CGFloat = 2) {
         XCTAssertEqual(actual.minX, expected.minX, accuracy: accuracy)
         XCTAssertEqual(actual.minY, expected.minY, accuracy: accuracy)
         XCTAssertEqual(actual.width, expected.width, accuracy: accuracy)
@@ -276,7 +287,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
-    private func assertInsideWindow(_ frame: CGRect, window: CGRect? = nil) {
+    func assertInsideWindow(_ frame: CGRect, window: CGRect? = nil) {
         let bounds = window ?? app.windows.firstMatch.frame
         XCTAssertGreaterThan(frame.width, 0)
         XCTAssertGreaterThan(frame.height, 0)

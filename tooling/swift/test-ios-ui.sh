@@ -51,6 +51,8 @@ for ((index = 0; index < ${#destinations[@]}; index += 2)); do
     derived_data="$derived_data_root/$device_id"
     result_bundle="$result_bundle_root/$run_id-$device_id.xcresult"
 
+    printf 'Waiting for simulator %s to finish booting\n' "$device_id"
+    xcrun simctl bootstatus "$device_id" -b
     printf 'Running UI tests for %s; results: %s\n' "$device_id" "$result_bundle"
     xcodebuild -quiet \
         -project "$repo_root/apps/ios/SofaRemoteiOS.xcodeproj" \
@@ -61,8 +63,9 @@ for ((index = 0; index < ${#destinations[@]}; index += 2)); do
         -parallel-testing-enabled NO \
         -maximum-concurrent-test-simulator-destinations 1 \
         -test-timeouts-enabled YES \
-        -default-test-execution-time-allowance 60 \
+        -default-test-execution-time-allowance 120 \
         -maximum-test-execution-time-allowance 120 \
+        -collect-test-diagnostics never \
         -derivedDataPath "$derived_data" \
         -clonedSourcePackagesDirPath "$repo_root/.codex-tmp/apple-tools/SourcePackages" \
         -resultBundlePath "$result_bundle" \
