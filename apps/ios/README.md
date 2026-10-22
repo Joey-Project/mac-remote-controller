@@ -61,9 +61,10 @@ corresponding root directory; each run still creates per-simulator subpaths or
 bundles beneath those roots. CI disables Xcode's extra system diagnostic
 collection because it stalled for ten minutes; test assertions, attachments,
 and result bundles remain available. Each test has a 120-second execution
-allowance, including app launch. The UI test step has a 20-minute limit
-within the Apple job's 30-minute limit, leaving time for the always-run artifact
-upload. CI retains result bundles for seven days.
+allowance, including app launch. Cold Simulator startup, package compilation,
+and test execution are repeated for both destinations. The UI test step has a
+30-minute limit within the Apple job's 40-minute limit, leaving time for the
+always-run artifact upload. CI retains result bundles for seven days.
 
 The six test methods run on iPad. On iPhone, five run and the landscape-only
 test is skipped because the app supports portrait orientation there. The iPad
