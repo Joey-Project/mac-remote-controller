@@ -36,9 +36,8 @@ superseded_by:
 - The implementation is complete. The existing 54 AppleCore package tests
   pass using fake audio in `.codex-tmp/touchpad-modes-20261022/swift-tests.log`;
   SwiftFormat and strict SwiftLint pass, and the signed arm64 iOS device build
-  succeeds. The package tests do not validate this UI. CoreSimulator responded
-  normally, but generic scheme-based destination selection failed. There has
-  been no Simulator or physical-device acceptance of the new UI. The signed
+  succeeds. The package tests do not validate this UI. There has been no
+  Simulator or physical-device acceptance of the new UI. The signed
   app was installed on the paired iPhone; launch was denied because the device
   was locked. System output was muted at volume zero before the launch attempt
   and remains muted. Build and installation receipts are ignored under
@@ -60,8 +59,9 @@ superseded_by:
   establish real pairing or Mac event-delivery acceptance.
 - `tooling/swift/test-ios-ui.sh` runs the same suite locally and in the existing
   Apple CI job. Its default devices are a temporary iPhone 17 Pro and iPad mini
-  on the newest compatible installed runtime. It leaves system audio muted,
-  retains result bundles, and removes only devices it created. Existing device
+  on the newest compatible installed runtime. Each destination runs in a
+  separate serial build/test invocation with its own DerivedData and result
+  bundle. It leaves system audio muted and removes only devices it created. Existing device
   IDs may be supplied for local diagnosis. CI retains result artifacts for
   seven days.
 - The 54 AppleCore tests, strict Swift formatting/SwiftLint, shell validation,

@@ -43,14 +43,20 @@ volume, playback controls, and Finder shortcuts follow with the media adapters.
 
 Run the shared `SofaRemoteiOS` scheme's tests in Xcode, or run
 `tooling/swift/test-ios-ui.sh` from the repository. The script creates an iPhone
-17 Pro and iPad mini on the newest compatible installed runtime, runs them
-serially, and deletes only those temporary devices afterward. To reuse existing
-simulators, pass their UDIDs as arguments; those devices are retained.
+17 Pro and iPad mini on the newest compatible installed runtime, then runs a
+separate serial `xcodebuild` invocation for each simulator. Each invocation uses
+that simulator's UDID for its own DerivedData directory and result bundle, so
+build products cannot be shared across destinations. The script deletes only
+the temporary devices it created. To reuse existing simulators, pass their
+UDIDs as arguments; those devices are retained.
 
 The runner mutes system audio and leaves it muted. Result bundles, including
-failure screenshots, are saved under `.codex-tmp/apple-tools/UI-Tests/Results/`.
-CI runs the same suite as part of **Swift and Apple apps** and retains its
-result bundles for seven days.
+failure screenshots, are saved under
+`.codex-tmp/apple-tools/UI-Tests/Results/<run-id>-<simulator-UDID>.xcresult/`.
+`IOS_UI_TEST_DERIVED_DATA` and `IOS_UI_TEST_RESULT_BUNDLE` can each override the
+corresponding root directory; each run still creates per-simulator subpaths or
+bundles beneath those roots. CI runs the same suite as part of **Swift and Apple
+apps** and retains its result bundles for seven days.
 
 The suite exercises the real SwiftUI/UIKit interface against an in-process
 Mac fixture, activated with `--ui-testing` only in Debug Simulator builds. It

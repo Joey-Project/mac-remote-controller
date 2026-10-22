@@ -4,8 +4,9 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/../.." && pwd)"
 output_root="$repo_root/.codex-tmp/apple-tools/UI-Tests"
-derived_data="${IOS_UI_TEST_DERIVED_DATA:-$output_root/DerivedData}"
-result_bundle="${IOS_UI_TEST_RESULT_BUNDLE:-$output_root/Results/$(date -u +%Y%m%dT%H%M%SZ)-$$.xcresult}"
+derived_data_root="${IOS_UI_TEST_DERIVED_DATA:-$output_root/DerivedData}"
+result_bundle_root="${IOS_UI_TEST_RESULT_BUNDLE:-$output_root/Results}"
+run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 created_devices=()
 destinations=()
 
@@ -43,20 +44,27 @@ else
     done
 fi
 
-mkdir -p "$(dirname -- "$result_bundle")" "$repo_root/.codex-tmp/apple-tools/SourcePackages"
-printf 'UI test results: %s\n' "$result_bundle"
-xcodebuild -quiet \
-    -project "$repo_root/apps/ios/SofaRemoteiOS.xcodeproj" \
-    -scheme SofaRemoteiOS \
-    -configuration Debug \
-    "${destinations[@]}" \
-    -destination-timeout 90 \
-    -parallel-testing-enabled NO \
-    -maximum-concurrent-test-simulator-destinations 1 \
-    -test-timeouts-enabled YES \
-    -default-test-execution-time-allowance 60 \
-    -maximum-test-execution-time-allowance 120 \
-    -derivedDataPath "$derived_data" \
-    -clonedSourcePackagesDirPath "$repo_root/.codex-tmp/apple-tools/SourcePackages" \
-    -resultBundlePath "$result_bundle" \
-    test CODE_SIGNING_ALLOWED=NO
+mkdir -p "$derived_data_root" "$result_bundle_root" "$repo_root/.codex-tmp/apple-tools/SourcePackages"
+for ((index = 0; index < ${#destinations[@]}; index += 2)); do
+    destination="${destinations[index + 1]}"
+    device_id="${destination##*id=}"
+    derived_data="$derived_data_root/$device_id"
+    result_bundle="$result_bundle_root/$run_id-$device_id.xcresult"
+
+    printf 'Running UI tests for %s; results: %s\n' "$device_id" "$result_bundle"
+    xcodebuild -quiet \
+        -project "$repo_root/apps/ios/SofaRemoteiOS.xcodeproj" \
+        -scheme SofaRemoteiOS \
+        -configuration Debug \
+        -destination "$destination" \
+        -destination-timeout 90 \
+        -parallel-testing-enabled NO \
+        -maximum-concurrent-test-simulator-destinations 1 \
+        -test-timeouts-enabled YES \
+        -default-test-execution-time-allowance 60 \
+        -maximum-test-execution-time-allowance 120 \
+        -derivedDataPath "$derived_data" \
+        -clonedSourcePackagesDirPath "$repo_root/.codex-tmp/apple-tools/SourcePackages" \
+        -resultBundlePath "$result_bundle" \
+        test CODE_SIGNING_ALLOWED=NO
+done
