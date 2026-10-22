@@ -10,56 +10,33 @@ struct RemoteView: View {
     @State private var isVolumeEditing = false
     @State private var isTextComposing = false
     @State private var isTextInputFocused = false
+    @State private var selectedMode: RemoteMode = .touchpad
+    @State private var isVolumePinned = false
 
     private var remoteEnabled: Bool {
         model.isConnected && model.remoteState?.accessibilityGranted == true
     }
 
+    private var navigationTitle: String {
+        model.isConnected ? (model.remoteState?.deviceName ?? "Mac") : "Sofa Remote"
+    }
+
     var body: some View {
         NavigationStack {
-            GeometryReader { geometry in
-                ScrollView {
-                    VStack(spacing: 20) {
-                        ConnectionStatusCard(model: model)
-
-                        if model.isConnected {
-                            remoteControls(compact: geometry.size.width < 760)
-                        } else {
-                            PairingPanel(model: model) {
-                                showingScanner = true
-                            }
-                        }
-
-                        if let errorMessage = model.errorMessage, !errorMessage.isEmpty {
-                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                                .font(.callout)
-                                .foregroundStyle(.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(14)
-                                .background(
-                                    .red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14)
-                                )
-                                .accessibilityAddTraits(.isStaticText)
-                        }
-                    }
-                    .frame(maxWidth: 1_000)
-                    .padding(.horizontal, geometry.size.width < 600 ? 16 : 28)
-                    .padding(.vertical, 20)
-                    .frame(maxWidth: .infinity)
+            Group {
+                if model.isConnected {
+                    connectedContent
+                } else {
+                    disconnectedContent
                 }
-                .scrollDismissesKeyboard(.interactively)
-                .background(Color(uiColor: .systemGroupedBackground))
             }
-            .navigationTitle("Sofa Remote")
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if model.isConnected {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Disconnect", systemImage: "rectangle.portrait.and.arrow.right") {
-                            model.disconnect()
-                        }
-                        .labelStyle(.iconOnly)
-                        .accessibilityLabel("Disconnect")
+                        remoteMenu
                     }
                 }
             }
@@ -80,37 +57,141 @@ struct RemoteView: View {
             } message: {
                 Text(model.errorMessage ?? "Please try again.")
             }
+            .onChange(of: model.isConnected) { _, connected in
+                if !connected { resetInteractionState() }
+            }
         }
         .tint(.accentColor)
     }
+}
 
-    @ViewBuilder
-    private func remoteControls(compact: Bool) -> some View {
-        VStack(spacing: 18) {
-            if !remoteEnabled {
-                Label(
-                    "Enable Accessibility access on your Mac to control its pointer and keyboard.",
-                    systemImage: "hand.raised.fill"
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-            }
-
-            if compact {
-                touchpadCard
-                keyboardCard
+private extension RemoteView {
+    private var connectedContent: some View {
+        GeometryReader { geometry in
+            if selectedMode == .touchpad {
+                touchpadMode(availableWidth: geometry.size.width)
             } else {
-                HStack(alignment: .top, spacing: 18) {
-                    touchpadCard
+                keyboardMode(availableWidth: geometry.size.width)
+            }
+        }
+    }
+
+    private var disconnectedContent: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 20) {
+                    ConnectionStatusCard(model: model)
+                    PairingPanel(model: model) {
+                        showingScanner = true
+                    }
+                }
+                .frame(maxWidth: 1_000)
+                .padding(.horizontal, geometry.size.width < 600 ? 16 : 28)
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
+
+    private var remoteMenu: some View {
+        Menu {
+            Button {
+                selectedMode = .touchpad
+                isTextInputFocused = false
+                isVolumeEditing = false
+            } label: {
+                Label(
+                    "Touchpad",
+                    systemImage: selectedMode == .touchpad ? "checkmark" : "cursorarrow")
+            }
+            Button {
+                selectedMode = .keyboard
+                isVolumeEditing = false
+            } label: {
+                Label(
+                    "Keyboard",
+                    systemImage: selectedMode == .keyboard ? "checkmark" : "keyboard")
+            }
+            Toggle(isOn: $isVolumePinned) {
+                Label("Pin volume over touchpad", systemImage: "speaker.wave.2")
+            }
+            Divider()
+            Button(role: .destructive, action: disconnect) {
+                Label("Disconnect", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .accessibilityLabel("Remote controls")
+    }
+
+    private func touchpadMode(availableWidth: CGFloat) -> some View {
+        ZStack(alignment: .top) {
+            VStack(spacing: 10) {
+                if !remoteEnabled {
+                    Label(
+                        "Enable Accessibility access on your Mac to control its pointer "
+                            + "and keyboard.",
+                        systemImage: "hand.raised.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .accessibilityAddTraits(.isStaticText)
+                }
+
+                touchpadCard
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding(.horizontal, horizontalInset(for: availableWidth))
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+
+            if isVolumePinned {
+                systemVolumeCard
+                    .padding(.horizontal, horizontalInset(for: availableWidth))
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isVolumePinned)
+    }
+
+    private func keyboardMode(availableWidth: CGFloat) -> some View {
+        VStack(spacing: 10) {
+            systemVolumeCard
+                .padding(.horizontal, horizontalInset(for: availableWidth))
+                .padding(.top, 8)
+
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !remoteEnabled {
+                        Label(
+                            "Enable Accessibility access on your Mac to use the keyboard.",
+                            systemImage: "hand.raised.fill"
+                        )
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     keyboardCard
                 }
+                .frame(maxWidth: 760)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
             }
-
-            systemVolumeCard
+            .scrollDismissesKeyboard(.interactively)
         }
+    }
+
+    private func horizontalInset(for width: CGFloat) -> CGFloat {
+        width < 600 ? 12 : 24
     }
 
     private var touchpadCard: some View {
@@ -158,12 +239,7 @@ struct RemoteView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            HStack(spacing: 8) {
-                keyButton("Return", symbol: "return", key: .returnKey)
-                keyButton("Escape", symbol: "escape", key: .escape)
-                keyButton("Delete", symbol: "delete.left", key: .backspace)
-                keyButton("Space", symbol: "space", key: .space)
-            }
+            keyboardKeypad
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -172,20 +248,42 @@ struct RemoteView: View {
             in: RoundedRectangle(cornerRadius: 18))
     }
 
+    private var keyboardKeypad: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                keyButton("Return", symbol: "return", key: .returnKey)
+                keyButton("Escape", symbol: "escape", key: .escape)
+                keyButton("Delete", symbol: "delete.left", key: .backspace)
+            }
+            directionalPad
+        }
+    }
+
+    private var directionalPad: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 6), count: 4),
+            spacing: 6
+        ) {
+            Color.clear.frame(height: 54).accessibilityHidden(true)
+            Color.clear.frame(height: 54).accessibilityHidden(true)
+            keyButton("Up", symbol: "arrow.up", key: .up, compact: true)
+            Color.clear.frame(height: 54).accessibilityHidden(true)
+            keyButton("Space", symbol: "space", key: .space)
+            keyButton("Left", symbol: "arrow.left", key: .left, compact: true)
+            keyButton("Down", symbol: "arrow.down", key: .down, compact: true)
+            keyButton("Right", symbol: "arrow.right", key: .right, compact: true)
+        }
+    }
+
     private var systemVolumeCard: some View {
         let systemVolume = model.remoteState?.systemVolume
         let volumeText =
-            systemVolume?.formatted(.percent.precision(.fractionLength(0))) ?? "Unavailable"
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Button {
-                } label: {
-                    Label("System volume", systemImage: "arrow.left.arrow.right")
-                        .font(.title3.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .disabled(true)
-                .accessibilityHint("Player volume will be available with media adapters")
+            systemVolume?.formatted(.percent.precision(.fractionLength(0)))
+            ?? "Unavailable"
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Label("Mac volume", systemImage: "speaker.wave.2")
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(volumeText)
                     .font(.subheadline.weight(.medium))
@@ -193,10 +291,7 @@ struct RemoteView: View {
                     .foregroundStyle(systemVolume == nil ? .secondary : .primary)
                     .accessibilityLabel(systemVolume == nil ? "Volume unavailable" : volumeText)
             }
-            Text("Player volume will be available with media adapters")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Image(systemName: "speaker.fill").foregroundStyle(.secondary)
                 Slider(
                     value: Binding(
@@ -209,7 +304,7 @@ struct RemoteView: View {
                     onEditingChanged: { editing in
                         isVolumeEditing = editing
                         if !editing {
-                            model.send(RemoteCommand(name: .systemVolumeSet, value: volumeValue))
+                            syncSystemVolumeFromRemote()
                         }
                     }
                 )
@@ -226,14 +321,16 @@ struct RemoteView: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color(uiColor: .secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 18)
-        )
+        .padding(14)
+        .frame(maxWidth: 620, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity)
         .onAppear(perform: syncSystemVolumeFromRemote)
         .onChange(of: model.remoteState?.systemVolume) { _, _ in
+            syncSystemVolumeFromRemote()
+        }
+        .onDisappear {
+            isVolumeEditing = false
             syncSystemVolumeFromRemote()
         }
     }
@@ -242,24 +339,44 @@ struct RemoteView: View {
         remoteEnabled && !isTextComposing && !textToSend.isEmpty && textToSend.utf8.count <= 4_096
     }
 
-}
+    private func disconnect() {
+        model.disconnect()
+        resetInteractionState()
+    }
 
-private extension RemoteView {
-    func keyButton(_ title: String, symbol: String, key: RemoteKey) -> some View {
+    private func resetInteractionState() {
+        selectedMode = .touchpad
+        isVolumePinned = false
+        isVolumeEditing = false
+        volumeValue = 0.5
+        isTextInputFocused = false
+        isTextComposing = false
+        textToSend = ""
+    }
+    func keyButton(_ title: String, symbol: String, key: RemoteKey, compact: Bool = false)
+        -> some View
+    {
         Button {
             model.send(RemoteCommand(name: .keyboardKey, key: key))
         } label: {
-            VStack(spacing: 6) {
-                Image(systemName: symbol)
-                Text(title).font(.caption2)
+            Group {
+                if compact {
+                    Image(systemName: symbol).font(.headline)
+                } else {
+                    VStack(spacing: 6) {
+                        Image(systemName: symbol)
+                        Text(title).font(.caption2)
+                    }
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(minHeight: 54)
         }
         .buttonStyle(.bordered)
+        .frame(minWidth: 44)
         .disabled(!remoteEnabled)
+        .accessibilityLabel(compact ? "\(title) arrow key" : "\(title) key")
     }
-
     func sendTextFromButton() {
         _ = sendText(textToSend)
     }
@@ -276,4 +393,8 @@ private extension RemoteView {
         guard !isVolumeEditing, let systemVolume = model.remoteState?.systemVolume else { return }
         volumeValue = systemVolume
     }
+}
+private enum RemoteMode: String {
+    case touchpad = "Touchpad"
+    case keyboard = "Keyboard"
 }
