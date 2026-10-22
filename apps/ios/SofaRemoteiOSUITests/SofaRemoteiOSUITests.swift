@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class SofaRemoteiOSUITests: XCTestCase {
     @MainActor private var app: XCUIApplication!
@@ -154,21 +155,48 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
     @MainActor
     func testLandscapeControlsRemainVisibleAndInsideTheScreen() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else {
+            throw XCTSkip("The app supports landscape orientation on iPad only.")
+        }
+
         XCUIDevice.shared.orientation = .landscapeLeft
+        let windowElement = app.windows.firstMatch
+        let orientationDeadline = Date().addingTimeInterval(5)
+        while windowElement.frame.width <= windowElement.frame.height,
+            Date() < orientationDeadline
+        {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        let landscapeWindow = windowElement.frame
+        XCTAssertGreaterThan(
+            landscapeWindow.width, landscapeWindow.height,
+            "The iPad app window should rotate to landscape before layout checks.")
+
         let pad = element("touchpad.surface")
         XCTAssertTrue(pad.waitForExistence(timeout: 5))
-        assertInsideWindow(pad.frame)
+        assertInsideWindow(pad.frame, window: landscapeWindow)
         XCTAssertTrue(pad.isHittable)
 
         chooseKeyboardMode()
-        let window = app.windows.firstMatch.frame
+        let scrollView = app.scrollViews.firstMatch
+        for _ in 0..<3 {
+            let allKeysHittable = ["up", "down", "left", "right"].allSatisfy {
+                element("key.\($0)").isHittable
+            }
+            if allKeysHittable { break }
+            XCTAssertTrue(scrollView.exists, "Keyboard controls must be in a scrollable region.")
+            scrollView.swipeUp()
+        }
+
+        let finalWindow = windowElement.frame
+        XCTAssertGreaterThan(finalWindow.width, finalWindow.height)
         for direction in ["up", "down", "left", "right"] {
             let key = element("key.\(direction)")
             XCTAssertTrue(key.waitForExistence(timeout: 3))
             XCTAssertTrue(key.isHittable, "\(direction) key is not hittable in landscape")
             XCTAssertGreaterThanOrEqual(key.frame.width, 44)
             XCTAssertGreaterThanOrEqual(key.frame.height, 44)
-            assertInsideWindow(key.frame, window: window)
+            assertInsideWindow(key.frame, window: finalWindow)
         }
 
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())

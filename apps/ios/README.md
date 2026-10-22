@@ -60,6 +60,10 @@ corresponding root directory; each run still creates per-simulator subpaths or
 bundles beneath those roots. CI runs the same suite as part of **Swift and Apple
 apps** and retains its result bundles for seven days.
 
+The six test methods run on iPad. On iPhone, five run and the landscape-only
+test is skipped because the app supports portrait orientation there. The iPad
+test requires actual landscape window dimensions before checking control bounds.
+
 The suite exercises the real SwiftUI/UIKit interface against an in-process
 Mac fixture, activated with `--ui-testing` only in Debug Simulator builds. It
 does not access pairing credentials, discover Macs, connect to the network,

@@ -51,7 +51,9 @@ superseded_by:
 - The shared iOS scheme includes `SofaRemoteiOSUITests`. Six UI regressions
   exercise touchpad drag and two-finger secondary click, volume pinning and
   placement, arrow-key commands, draft preservation and explicit submission,
-  disconnect, and landscape layout with scrollable keyboard controls.
+  disconnect, and iPad landscape layout with scrollable keyboard controls.
+  iPhone runs five methods and skips the landscape-only method; iPad runs all
+  six and must demonstrate an actually rotated window before layout assertions.
 - A Debug-only Simulator fixture starts at a connected "UI Test Mac" and
   records up to 128 validated commands. It bypasses Keychain, Bonjour, transport,
   desktop input, and real audio. Release and physical-device builds do not
@@ -61,9 +63,9 @@ superseded_by:
   Apple CI job. Its default devices are a temporary iPhone 17 Pro and iPad mini
   on the newest compatible installed runtime. Each destination runs in a
   separate serial build/test invocation with its own DerivedData and result
-  bundle. It leaves system audio muted and removes only devices it created. Existing device
-  IDs may be supplied for local diagnosis. CI retains result artifacts for
-  seven days.
+  bundle. It leaves system audio muted and removes only devices it created.
+  Existing device IDs may be supplied for local diagnosis. CI retains result
+  artifacts for seven days.
 - The 54 AppleCore tests, strict Swift formatting/SwiftLint, shell validation,
   and actionlint pass. A local UI execution pass is not asserted here.
   Local Simulator lifecycle requests stalled before the first UI execution;
