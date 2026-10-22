@@ -11,7 +11,8 @@ final class DesktopController {
         let volume = volumeController.read()
         return RemoteState(
             accessibilityGranted: AXIsProcessTrusted(), systemVolume: volume.value,
-            systemVolumeReason: volume.reason, deviceName: Host.current().localizedName ?? "Mac")
+            systemVolumeReason: volume.reason,
+            deviceName: DeviceName.bounded(Host.current().localizedName ?? "", fallback: "Mac"))
     }
 
     func requestAccessibility() {

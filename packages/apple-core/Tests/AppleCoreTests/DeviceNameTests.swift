@@ -31,4 +31,51 @@ final class DeviceNameTests: XCTestCase {
     func testBoundedNameUsesFallbackForEmptyInput() {
         XCTAssertEqual(DeviceName.bounded(""), "iOS device")
     }
+
+    func testMacRemoteStateUsesFallbackForEmptyName() throws {
+        try assertValidMacRemoteState(for: "", expectedName: "Mac")
+    }
+
+    func testMacRemoteStateBoundsOversizedMultibyteName() throws {
+        let oversizedName = String(repeating: "é", count: 129)
+
+        try assertValidMacRemoteState(
+            for: oversizedName, expectedName: String(repeating: "é", count: 128))
+    }
+
+    func testMacRemoteStateUsesFallbackForOversizedGrapheme() throws {
+        let oversizedGrapheme = "a" + String(repeating: "\u{301}", count: 300)
+
+        try assertValidMacRemoteState(for: oversizedGrapheme, expectedName: "Mac")
+    }
+
+    func testFallbackCannotViolateRemoteStateDeviceNameLimits() throws {
+        let oversizedGrapheme = "a" + String(repeating: "\u{301}", count: 300)
+        let oversizedMultibyteFallback = String(repeating: "é", count: 129)
+
+        for fallback in ["", oversizedGrapheme, oversizedMultibyteFallback] {
+            let name = DeviceName.bounded("", fallback: fallback)
+            let state = RemoteState(
+                accessibilityGranted: true, systemVolume: nil, deviceName: name)
+
+            XCTAssertFalse(name.isEmpty)
+            XCTAssertLessThanOrEqual(name.utf8.count, WireLimits.maximumDeviceNameBytes)
+            XCTAssertNoThrow(try state.validate())
+        }
+
+        XCTAssertEqual(DeviceName.bounded("", fallback: ""), "Device")
+        XCTAssertEqual(DeviceName.bounded("", fallback: oversizedGrapheme), "Device")
+        XCTAssertEqual(
+            DeviceName.bounded("", fallback: oversizedMultibyteFallback),
+            String(repeating: "é", count: 128))
+    }
+
+    private func assertValidMacRemoteState(for name: String, expectedName: String) throws {
+        let boundedName = DeviceName.bounded(name, fallback: "Mac")
+        let state = RemoteState(
+            accessibilityGranted: true, systemVolume: nil, deviceName: boundedName)
+
+        XCTAssertEqual(boundedName, expectedName)
+        XCTAssertNoThrow(try state.validate())
+    }
 }

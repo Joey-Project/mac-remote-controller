@@ -68,7 +68,8 @@ public final class WebSocketPeer {
                 case .cancelled:
                     self.finish("Disconnected")
                 case .waiting:
-                    self.finish("The Mac is unavailable on this network.")
+                    // Network.framework can recover from waiting; the owner enforces a deadline.
+                    break
                 default: break
                 }
             }
