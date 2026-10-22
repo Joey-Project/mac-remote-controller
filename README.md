@@ -3,8 +3,15 @@
 A native iPhone, iPad, and Android remote for controlling media playback on a Mac
 from the sofa. The clients use SwiftUI and Jetpack Compose, with a Swift Mac
 companion, an IINA plugin, and a TypeScript Chrome extension for YouTube and
-Bilibili. The current apps are buildable scaffolds; pairing and remote-control
-features are not implemented yet.
+Bilibili. The first Apple slice implements local pairing, a desktop touchpad,
+committed keyboard text, and system volume. Android, IINA, and Chrome media
+adapters remain scaffolds.
+
+Manual acceptance on an iPhone XS running iOS 18.7.10 on 2026-10-22 verified
+QR pairing to a Mac, pointer and click control, the committed text
+`你好，世界 👋`, two-finger scrolling, and reconnecting to the paired Mac without
+scanning again. iPad acceptance, system-volume changes, and media playback
+remain unverified.
 
 ## Layout
 
@@ -16,7 +23,7 @@ apps/
   chrome-extension/   TypeScript Manifest V3 extension
 packages/
   apple-core/         Shared Swift package
-  protocol/           Future language-neutral protocol and fixtures
+  protocol/           Versioned wire contract and cross-client fixtures
 tooling/
   swift/              Shared Apple checks and SwiftLint bootstrap
 ```
@@ -33,12 +40,12 @@ IDE settings, caches, and signing material are ignored; none are tracked.
 
 ## Repository checks
 
-| Area             | Formatting             | Static checks            | Compiler and tests                              |
-| ---------------- | ---------------------- | ------------------------ | ----------------------------------------------- |
-| Repository       | Prettier               | Markdownlint, actionlint | Shell validation for repository scripts         |
-| Swift            | Xcode's `swift format` | SwiftLint                | Shared package, macOS, and iOS Simulator builds |
-| Chrome extension | Prettier               | Type-aware Oxlint        | Strict `tsc`; unit tests; extension bundle      |
-| Android          | ktlint                 | Android Lint             | Kotlin compilation; debug APK                   |
+| Area             | Formatting             | Static checks            | Compiler and tests                                   |
+| ---------------- | ---------------------- | ------------------------ | ---------------------------------------------------- |
+| Repository       | Prettier               | Markdownlint, actionlint | Shell validation for repository scripts              |
+| Swift            | Xcode's `swift format` | SwiftLint                | Shared package tests; macOS and iOS Simulator builds |
+| Chrome extension | Prettier               | Type-aware Oxlint        | Strict `tsc`; unit tests; extension bundle           |
+| Android          | ktlint                 | Android Lint             | Kotlin compilation; debug APK                        |
 
 Swift and Kotlin compilation provide their type checks. The iOS target includes
 both iPhone and iPad; macOS has its own app target and lifecycle.
@@ -47,6 +54,8 @@ Prefer the latest compatible stable toolchain and dependencies, with exact
 dependency versions and committed lockfiles. Do not opt into preview releases.
 Compiler/SDK versions can advance without raising the apps' minimum OS versions.
 The platform READMEs and build files record any compatibility constraints.
+The shared Swift package requires Swift 6.2 or newer for
+[isolated resource cleanup](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0371-isolated-synchronous-deinit.md).
 
 Use Node.js 26 or newer and the pnpm version declared in `package.json`.
 CI pins Node.js 26.12.0:
@@ -75,7 +84,7 @@ To apply Swift formatting with the same configuration:
 ```sh
 swift format format --in-place --recursive \
   apps/ios/SofaRemoteiOS apps/macos/SofaRemoteMac \
-  packages/apple-core/Package.swift packages/apple-core/Sources
+  packages/apple-core/Package.swift packages/apple-core/Sources packages/apple-core/Tests
 ```
 
 For Android, use JDK 27 and the Android SDK required by the checked-in Gradle
@@ -87,8 +96,9 @@ cd apps/android
 ```
 
 The Gradle wrapper pins its distribution and checksum. Use `ktlintFormat` to apply
-Kotlin formatting. Native unit tests will be added with actual behavior; the
-placeholder apps do not report empty or constant-only test tasks as coverage.
+Kotlin formatting. Shared Swift tests cover protocol and pairing validation,
+fractional scrolling, and system-volume behavior through a simulated audio
+interface. Android tests follow its implementation.
 GitHub Actions runs the checks on pull requests and pushes to
 `main` or `master`, using a macOS runner for Apple builds and Linux for Node and
 Android. No signing credentials or device deployment are required for CI builds.
@@ -103,6 +113,10 @@ events. Workflow ownership is defined in `.github/CODEOWNERS`.
 presence does not establish active branch protection. See the
 [upstream installation guide](https://github.com/Joey-Tools/codex-review-gate/blob/master/docs/install/human.md)
 for repository protection setup.
+
+The repository's configured [Required CI and Codex Review ruleset](https://github.com/Joey-Project/mac-remote-controller/rules/25337935)
+protects `master` with the four CI checks and Codex gate, strict branch freshness,
+resolved discussions, squash-only PR merges, and no bypass.
 
 ## Project journal
 

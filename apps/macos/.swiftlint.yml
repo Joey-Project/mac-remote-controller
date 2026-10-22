@@ -1,6 +1,12 @@
 included:
   - .
 
+identifier_name:
+  excluded: [id, x, y, up]
+opening_brace:
+  ignore_multiline_function_signatures: true
+  ignore_multiline_statement_conditions: true
+
 excluded:
   - DerivedData
   - build

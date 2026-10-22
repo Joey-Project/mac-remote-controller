@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "type": "command",
+  "connectionId": "connection-fixture",
+  "requestId": "7be3f81c-f579-42f3-b9fb-2fc322939b86",
+  "sequence": 1,
+  "command": {
+    "name": "pointer.move",
+    "x": 125.5,
+    "y": -48.25
+  }
+}
