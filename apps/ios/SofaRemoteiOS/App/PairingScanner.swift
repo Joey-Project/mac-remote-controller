@@ -1,9 +1,12 @@
 import AVFoundation
+import AppleCore
+import Foundation
 import SwiftUI
 import UIKit
 
 struct PairingScanner: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var cameraStatus: CameraStatus = .checking
     let onInvitation: (String) -> Void
 
@@ -85,6 +88,12 @@ struct PairingScanner: View {
         }
         .task {
             await checkCameraAccess()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, cameraStatus == .denied else { return }
+            Task {
+                await checkCameraAccess()
+            }
         }
     }
 
@@ -226,13 +235,18 @@ private struct QRCodeCameraPreview: UIViewRepresentable {
             didOutput metadataObjects: [AVMetadataObject],
             from connection: AVCaptureConnection
         ) {
-            guard
-                let value =
-                    metadataObjects
-                    .compactMap({ ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue })
-                    .first,
-                !value.isEmpty
-            else { return }
+            let invitation =
+                metadataObjects
+                .compactMap { ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue }
+                .compactMap { value -> String? in
+                    let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !value.isEmpty, (try? PairingInvitation.parse(value)) != nil else {
+                        return nil
+                    }
+                    return value
+                }
+                .first
+            guard let invitation else { return }
 
             resultLock.lock()
             let shouldDeliver = !didReadCode
@@ -241,7 +255,7 @@ private struct QRCodeCameraPreview: UIViewRepresentable {
             guard shouldDeliver else { return }
 
             Task { @MainActor [weak self] in
-                self?.onCode?(value)
+                self?.onCode?(invitation)
             }
             sessionQueue.async { [weak self] in
                 guard let self, self.session.isRunning else { return }

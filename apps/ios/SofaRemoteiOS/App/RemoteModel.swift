@@ -177,7 +177,7 @@ final class RemoteModel {
             connection: NWConnection(to: .url(url), using: parameters))
         self.peer = peer
         peer.onReady = { [weak self] in
-            let name = String(UIDevice.current.name.prefix(64))
+            let name = DeviceName.bounded(UIDevice.current.name)
             self?.peer?.send(
                 WireMessage(type: .authenticate, authToken: mac.token, deviceName: name))
         }

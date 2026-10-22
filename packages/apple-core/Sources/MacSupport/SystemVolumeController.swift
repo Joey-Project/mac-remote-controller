@@ -21,6 +21,8 @@ protocol CoreAudioIO {
 public enum SystemVolumeControllerError: Error, LocalizedError, Sendable {
     case unavailable
     case invalidValue
+    case volumeWriteFailed(element: UInt32, rollbackFailedElements: [UInt32])
+    case muteWriteFailed(rollbackFailedElements: [UInt32])
 
     public var errorDescription: String? {
         switch self {
@@ -28,6 +30,20 @@ public enum SystemVolumeControllerError: Error, LocalizedError, Sendable {
             "The current audio output does not support system volume control."
         case .invalidValue:
             "The system volume value is invalid."
+        case .volumeWriteFailed(_, let rollbackFailedElements):
+            if rollbackFailedElements.isEmpty {
+                "The system volume could not be changed."
+            } else {
+                "The system volume changed only partly and could not be fully restored. "
+                    + "Check the output volume on your Mac."
+            }
+        case .muteWriteFailed(let rollbackFailedElements):
+            if rollbackFailedElements.isEmpty {
+                "The system volume mute state could not be updated."
+            } else {
+                "The output mute state could not be updated, and its previous volume could not be fully restored. "
+                    + "Check the output volume on your Mac."
+            }
         }
     }
 }
@@ -96,16 +112,58 @@ public final class SystemVolumeController {
             throw SystemVolumeControllerError.unavailable
         }
 
+        let originalValues = try snapshotVolumes(device: device, elements: elements)
+
+        var writtenElements: [AudioObjectPropertyElement] = []
         for element in elements {
             guard audioIO.writeVolume(device: device, element: element, value: Float32(value))
             else {
-                throw SystemVolumeControllerError.unavailable
+                let rollbackFailures = restoreVolumes(
+                    device: device, elements: writtenElements, originalValues: originalValues)
+                throw SystemVolumeControllerError.volumeWriteFailed(
+                    element: UInt32(element),
+                    rollbackFailedElements: rollbackFailures)
             }
+            writtenElements.append(element)
         }
 
         if shouldUnmute && !audioIO.writeMute(device: device, muted: false) {
-            throw SystemVolumeControllerError.unavailable
+            let rollbackFailures = restoreVolumes(
+                device: device, elements: writtenElements, originalValues: originalValues)
+            throw SystemVolumeControllerError.muteWriteFailed(
+                rollbackFailedElements: rollbackFailures)
         }
+    }
+
+    private func snapshotVolumes(
+        device: AudioObjectID, elements: [AudioObjectPropertyElement]
+    ) throws -> [AudioObjectPropertyElement: Float32] {
+        var originalValues: [AudioObjectPropertyElement: Float32] = [:]
+        originalValues.reserveCapacity(elements.count)
+        for element in elements {
+            guard let value = audioIO.readVolume(device: device, element: element),
+                value.isFinite, (0...1).contains(value)
+            else { throw SystemVolumeControllerError.unavailable }
+            originalValues[element] = value
+        }
+        return originalValues
+    }
+
+    private func restoreVolumes(
+        device: AudioObjectID,
+        elements: [AudioObjectPropertyElement],
+        originalValues: [AudioObjectPropertyElement: Float32]
+    ) -> [AudioObjectPropertyElement] {
+        var failedElements: [AudioObjectPropertyElement] = []
+        for element in elements.reversed() {
+            guard let originalValue = originalValues[element],
+                audioIO.writeVolume(device: device, element: element, value: originalValue)
+            else {
+                failedElements.append(element)
+                continue
+            }
+        }
+        return failedElements
     }
 
     private func unavailableRead() -> (value: Double?, reason: String?) {
