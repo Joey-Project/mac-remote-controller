@@ -4,27 +4,11 @@ import UIKit
 final class SofaRemoteiOSUITests: XCTestCase {
     @MainActor private var app: XCUIApplication!
 
-    override func setUp() async throws {
-        try await super.setUp()
-        await MainActor.run {
-            continueAfterFailure = false
-            XCUIDevice.shared.orientation = .portrait
-            app = XCUIApplication()
-            app.launchArguments = ["--ui-testing"]
-            app.launch()
-        }
-    }
-
-    override func tearDown() async throws {
-        await MainActor.run {
-            app.terminate()
-            app = nil
-        }
-        try await super.tearDown()
-    }
-
     @MainActor
     func testTouchpadUsesDragAndTwoFingerTapCommands() throws {
+        launchApp()
+        defer { terminateApp() }
+
         let pad = element("touchpad.surface")
         XCTAssertTrue(pad.waitForExistence(timeout: 5))
         XCTAssertTrue(pad.isHittable)
@@ -64,6 +48,9 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
     @MainActor
     func testPinningVolumePersistsAcrossModesWithoutSendingCommands() throws {
+        launchApp()
+        defer { terminateApp() }
+
         let menu = element("remote.menu")
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
         XCTAssertFalse(element("volume.card").exists)
@@ -104,6 +91,9 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
     @MainActor
     func testArrowKeysSendTheirMatchingWireCommands() throws {
+        launchApp()
+        defer { terminateApp() }
+
         chooseKeyboardMode()
         for direction in ["up", "down", "left", "right"] {
             let key = element("key.\(direction)")
@@ -123,6 +113,9 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
     @MainActor
     func testDraftSurvivesModeChangesAndOnlySendCommitsText() throws {
+        launchApp()
+        defer { terminateApp() }
+
         chooseKeyboardMode()
         let textField = element("keyboard.text")
         XCTAssertTrue(textField.waitForExistence(timeout: 3))
@@ -146,6 +139,9 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
     @MainActor
     func testDisconnectReturnsToSetupScreen() throws {
+        launchApp()
+        defer { terminateApp() }
+
         element("remote.menu").tap()
         element("remote.disconnect").tap()
         XCTAssertTrue(app.staticTexts["Connect to your Mac"].waitForExistence(timeout: 3))
@@ -158,6 +154,9 @@ final class SofaRemoteiOSUITests: XCTestCase {
         guard UIDevice.current.userInterfaceIdiom == .pad else {
             throw XCTSkip("The app supports landscape orientation on iPad only.")
         }
+
+        launchApp()
+        defer { terminateApp() }
 
         XCUIDevice.shared.orientation = .landscapeLeft
         let windowElement = app.windows.firstMatch
@@ -204,6 +203,21 @@ final class SofaRemoteiOSUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
         XCUIDevice.shared.orientation = .portrait
+    }
+
+    @MainActor
+    private func launchApp() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        app = XCUIApplication()
+        app.launchArguments = ["--ui-testing"]
+        app.launch()
+    }
+
+    @MainActor
+    private func terminateApp() {
+        app.terminate()
+        app = nil
     }
 
     @MainActor

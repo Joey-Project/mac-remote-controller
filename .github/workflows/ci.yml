@@ -52,10 +52,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
-      - name: Check Swift and build Apple apps
-        run: tooling/swift/check.sh
       - name: Test iPhone and iPad controls in Simulator
         run: tooling/swift/test-ios-ui.sh
+      - name: Check Swift and build Apple apps
+        run: tooling/swift/check.sh
       - name: Upload UI test results
         if: always()
         uses: actions/upload-artifact@v7.0.2
