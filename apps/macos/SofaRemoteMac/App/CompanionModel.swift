@@ -45,7 +45,8 @@ final class CompanionModel {
     private var listenerReady = false
     private var identity: LocalIdentity?
     var clients: [UUID: ClientConnection] = [:]
-    private var heldPointerOwner: UUID?
+    var pendingHeldInputReleases: [UUID: HeldInputState] = [:]
+    var heldPointerOwner: UUID?
     private var admission = ConnectionAdmission<UUID>()
     private var pairing: PairingInvitation?
     private var timer: Timer?
@@ -334,12 +335,16 @@ extension CompanionModel {
         }
         for client in expired { client.peer.close() }
         for (id, client) in clients {
-            let expiredButtons = client.inputState.heldInput.expire(ifOlderThan: 8, now: now)
+            let expiredButtons = client.inputState.heldInput.expiredButtons(
+                ifOlderThan: 8, now: now)
             if !expiredButtons.isEmpty {
-                desktop.release(expiredButtons)
-                if heldPointerOwner == id { heldPointerOwner = nil }
+                desktop.release(expiredButtons, from: &client.inputState.heldInput)
+                if client.inputState.heldInput.buttons.isEmpty, heldPointerOwner == id {
+                    heldPointerOwner = nil
+                }
             }
         }
+        retryPendingHeldInputReleases()
     }
 
     private func refreshConnectedCount() {
@@ -353,8 +358,13 @@ extension CompanionModel {
         }
         for task in client.pendingMediaTasks.values { task.cancel() }
         client.pendingMediaTasks.removeAll()
-        if heldPointerOwner == id { heldPointerOwner = nil }
         desktop.release(&client.inputState.heldInput)
+        if client.inputState.heldInput.buttons.isEmpty {
+            if heldPointerOwner == id { heldPointerOwner = nil }
+        } else {
+            pendingHeldInputReleases[id] = client.inputState.heldInput
+            heldPointerOwner = id
+        }
         _ = admission.remove(id)
         refreshConnectedCount()
         if closePeer { client.peer.close() }

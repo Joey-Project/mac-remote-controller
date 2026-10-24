@@ -46,7 +46,7 @@ superseded_by:
   matching late result receives 204. Chrome uses a 1.5-second action deadline,
   discards late content-script callbacks, and clamps live/DVR seeks to valid
   seekable ranges, choosing the nearest endpoint across gaps.
-- Final integrated local Swift checks passed 144 AppleCore package tests, the macOS app
+- Final integrated local Swift checks passed 146 AppleCore package tests, the macOS app
   build, generic iOS Simulator build, and generated plist validation. The
   `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
   12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome

@@ -91,4 +91,33 @@ final class PointerClickTrackerTests: XCTestCase {
                 timebase: .client),
             2)
     }
+
+    func testFailedEventEmissionDoesNotCommitClickHistory() throws {
+        struct EventCreationFailure: Error {}
+
+        var tracker = PointerClickTracker()
+        XCTAssertThrowsError(
+            try tracker.emitClick(
+                PointerClickRequest(
+                    button: .left, x: 0, y: 0, uptime: 10, doubleClickInterval: 0.5),
+                posting: { _ in throw EventCreationFailure() }))
+
+        XCTAssertEqual(
+            try tracker.emitClick(
+                PointerClickRequest(
+                    button: .left, x: 0, y: 0, uptime: 10.1, doubleClickInterval: 0.5),
+                posting: { XCTAssertEqual($0, 1) }),
+            1)
+        XCTAssertThrowsError(
+            try tracker.emitClick(
+                PointerClickRequest(
+                    button: .left, x: 0, y: 0, uptime: 10.2, doubleClickInterval: 0.5),
+                posting: { _ in throw EventCreationFailure() }))
+        XCTAssertEqual(
+            try tracker.emitClick(
+                PointerClickRequest(
+                    button: .left, x: 0, y: 0, uptime: 10.3, doubleClickInterval: 0.5),
+                posting: { XCTAssertEqual($0, 2) }),
+            2)
+    }
 }

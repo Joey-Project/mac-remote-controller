@@ -63,12 +63,16 @@ final class DesktopController {
             try move(command, source: source, location: location, held: input.heldInput)
         case .pointerClick:
             let button = try require(command.button)
-            let clickState = input.clickTracker.register(
-                button: button, x: location.x, y: location.y,
-                at: command.tapTimestamp ?? ProcessInfo.processInfo.systemUptime,
-                doubleClickInterval: NSEvent.doubleClickInterval,
-                timebase: command.tapTimestamp == nil ? .server : .client)
-            try click(button: button, clickState: clickState, source: source, location: location)
+            _ = try input.clickTracker.emitClick(
+                PointerClickRequest(
+                    button: button, x: location.x, y: location.y,
+                    uptime: command.tapTimestamp ?? ProcessInfo.processInfo.systemUptime,
+                    doubleClickInterval: NSEvent.doubleClickInterval,
+                    timebase: command.tapTimestamp == nil ? .server : .client)
+            ) { clickState in
+                try click(
+                    button: button, clickState: clickState, source: source, location: location)
+            }
         case .pointerScroll:
             try emitScroll(command, source: source, accumulator: &input.scrollAccumulator)
         case .pointerButtonDown, .pointerButtonUp:
@@ -104,15 +108,20 @@ final class DesktopController {
     }
 
     func release(_ held: inout HeldInputState) {
-        release(held.releaseAll())
+        release(held.buttons.sorted { $0.rawValue < $1.rawValue }, from: &held)
     }
 
-    func release(_ buttons: [PointerButton]) {
+    func release(_ buttons: [PointerButton], from held: inout HeldInputState) {
         guard let source = CGEventSource(stateID: .hidSystemState),
             let location = CGEvent(source: nil)?.location
         else { return }
-        for button in buttons {
-            try? post(mouseEvent(button: button, down: false, source: source, location: location))
+        _ = held.release(buttons) { button in
+            guard
+                let event = mouseEvent(
+                    button: button, down: false, source: source, location: location)
+            else { return false }
+            event.post(tap: .cghidEventTap)
+            return true
         }
     }
 
@@ -189,6 +198,7 @@ final class DesktopController {
     private func click(
         button: PointerButton, clickState: Int, source: CGEventSource, location: CGPoint
     ) throws {
+        var events: [CGEvent] = []
         for isDown in [true, false] {
             let type: CGEventType =
                 switch (button, isDown) {
@@ -203,8 +213,9 @@ final class DesktopController {
                     mouseCursorPosition: location, mouseButton: button == .left ? .left : .right)
             else { throw ControlError.eventUnavailable }
             event.setIntegerValueField(.mouseEventClickState, value: Int64(clickState))
-            event.post(tap: .cghidEventTap)
+            events.append(event)
         }
+        for event in events { event.post(tap: .cghidEventTap) }
     }
 
     private func type(_ text: String, source: CGEventSource) throws {
