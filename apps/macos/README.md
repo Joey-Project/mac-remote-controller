@@ -37,6 +37,8 @@ Discovery names contain only an opaque service UUID, never a pairing secret.
 Only authenticated sessions can execute the typed input/volume allowlist. No
 arbitrary shell commands or scripts are exposed. See the
 [wire contract](../../packages/protocol/v1-design.md).
+The companion samples desktop state once per second and shares that snapshot
+with connected clients; a volume change triggers an immediate refreshed state.
 
 IINA and browser playback adapters follow this foundation. Their selected source
 will remain independent of desktop focus.

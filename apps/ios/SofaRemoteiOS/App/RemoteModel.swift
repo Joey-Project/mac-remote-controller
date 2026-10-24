@@ -61,9 +61,10 @@ final class RemoteModel {
     var benchmarkTargetID: String?
     var connectionID: String?
     var sequence: UInt64 = 0
-    var pending: [String: (sequence: UInt64, sent: Date)] = [:]
-    var queuedVolume: Double?
+    var pending: [String: (sequence: UInt64, sent: ContinuousClock.Instant)] = [:]
+    private var commandScheduler = InputCommandScheduler(capacity: 8)
     private var deadline: Timer?
+    private var coalescingTimer: Timer?
     var benchmark: RTTBenchmarkAccumulator?
     var benchmarkRequest: BenchmarkPendingProbe?
     var expiredBenchmarkRequestIDs: Set<String> = []
@@ -228,14 +229,15 @@ final class RemoteModel {
     }
 
     func monitorConnection() {
-        let started = Date()
+        let started = ContinuousClock.now
         deadline = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                let now = ContinuousClock.now
                 let timedOut =
                     self.isConnected
-                    ? self.pending.values.contains { Date().timeIntervalSince($0.sent) > 3 }
-                    : Date().timeIntervalSince(started) > 12
+                    ? self.pending.values.contains { now - $0.sent > .seconds(3) }
+                    : now - started > .seconds(12)
                 if timedOut {
                     self.peer?.close()
                     if !self.isConnected, self.errorMessage == "Disconnected" {
@@ -255,7 +257,9 @@ final class RemoteModel {
         remoteState = nil
         connectionID = nil
         pending.removeAll()
-        queuedVolume = nil
+        commandScheduler.reset()
+        coalescingTimer?.invalidate()
+        coalescingTimer = nil
         connectionSummary = "Disconnected"
         errorMessage =
             unknown
@@ -286,6 +290,8 @@ extension RemoteModel {
         attemptID = nil
         deadline?.invalidate()
         deadline = nil
+        coalescingTimer?.invalidate()
+        coalescingTimer = nil
         peer?.onClose = nil
         peer?.close()
         peer = nil
@@ -293,7 +299,7 @@ extension RemoteModel {
         connectionID = nil
         remoteState = nil
         pending.removeAll()
-        queuedVolume = nil
+        commandScheduler.reset()
         connectionSummary = "Disconnected"
         errorMessage =
             unknown
@@ -313,29 +319,52 @@ extension RemoteModel {
                 return accepted
             }
         #endif
-        guard let connectionID, let peer else { return false }
+        guard connectionID != nil, peer != nil else { return false }
         do { try command.validate() } catch {
             errorMessage = "The control value is invalid."; return false
         }
-        // Do not build an input backlog while the network is slow.
-        guard pending.count < 8 else {
-            if command.name == .systemVolumeSet {
-                queuedVolume = command.value
-                return true
-            }
-            if command.name != .pointerMove && command.name != .pointerScroll {
-                errorMessage = "The Mac is busy. Wait for the pending controls to finish."
-            }
+        guard commandScheduler.enqueue(command) else {
+            errorMessage = "The Mac is busy. Wait for the pending controls to finish."
             return false
         }
-        sequence += 1
-        let requestID = UUID().uuidString
-        pending[requestID] = (sequence, Date())
-        peer.send(
-            WireMessage(
-                type: .command, connectionID: connectionID, requestID: requestID,
-                sequence: sequence, command: command))
+        if command.name == .pointerMove || command.name == .pointerScroll
+            || command.name == .systemVolumeSet
+        {
+            scheduleCoalescedFlush()
+        } else {
+            coalescingTimer?.invalidate()
+            coalescingTimer = nil
+            flushQueuedCommands()
+        }
         return true
     }
 
+}
+
+extension RemoteModel {
+    private func scheduleCoalescedFlush() {
+        guard coalescingTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.coalescingTimer = nil
+                self?.flushQueuedCommands()
+            }
+        }
+        coalescingTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    func flushQueuedCommands() {
+        guard let connectionID, let peer else { return }
+        let available = max(0, 8 - pending.count)
+        for command in commandScheduler.dequeue(maximumCount: available) {
+            sequence += 1
+            let requestID = UUID().uuidString
+            pending[requestID] = (sequence, ContinuousClock.now)
+            peer.send(
+                WireMessage(
+                    type: .command, connectionID: connectionID, requestID: requestID,
+                    sequence: sequence, command: command))
+        }
+    }
 }

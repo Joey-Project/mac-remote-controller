@@ -168,10 +168,7 @@ extension RemoteModel {
         else { peer?.close(); return }
         pending.removeValue(forKey: id)
         if let error = message.error { errorMessage = error.message }
-        if let volume = queuedVolume {
-            queuedVolume = nil
-            send(RemoteCommand(name: .systemVolumeSet, value: volume))
-        }
+        flushQueuedCommands()
     }
 
     private func acceptPong(_ message: WireMessage) {
