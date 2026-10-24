@@ -50,7 +50,7 @@ superseded_by:
 - Final merged-stack validation passed with Node.js 26.12.0 and pnpm 12.14.0:
   format check, lint, strict typecheck, 41 tests (Chrome 15/15, IINA 10/10,
   Web preview 16/16), and builds for all three TypeScript packages. The
-  canonical Swift check passed 139 AppleCore tests, strict formatting/lint,
+  canonical Swift check passed 146 AppleCore tests, strict formatting/lint,
   macOS and generic iOS Simulator app builds, and generated Info.plist checks.
   `actionlint` 1.7.12 and project-journal validation passed. This final gate did
   not run browser UI, iOS Simulator UI, physical devices, or media playback.

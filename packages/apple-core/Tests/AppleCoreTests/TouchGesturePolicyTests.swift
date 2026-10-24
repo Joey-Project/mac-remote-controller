@@ -180,4 +180,34 @@ final class TouchGesturePolicyTests: XCTestCase {
         XCTAssertTrue(TouchGesturePolicy.shouldBeginMovement(distance: 7, threshold: 7))
         XCTAssertFalse(TouchGesturePolicy.shouldBeginMovement(distance: .infinity, threshold: 7))
     }
+
+    func testRejectedOrUnqueueableDragStaysBlockedUntilLift() {
+        var policy = PointerDragSequencePolicy()
+        XCTAssertFalse(policy.begin(gestureID: nil))
+        XCTAssertEqual(policy.state, .blocked)
+        XCTAssertFalse(policy.canSendMovement(gestureID: "unqueueable"))
+        XCTAssertFalse(policy.begin(gestureID: "same-touch-sequence"))
+
+        policy.finish()
+        XCTAssertTrue(policy.begin(gestureID: "rejected"))
+        XCTAssertTrue(policy.canSendMovement(gestureID: "rejected"))
+        XCTAssertTrue(policy.reject(gestureID: "rejected"))
+        XCTAssertEqual(policy.state, .blocked)
+        XCTAssertFalse(policy.canSendMovement(gestureID: "rejected"))
+
+        policy.finish()
+        XCTAssertTrue(policy.begin(gestureID: "next-touch-sequence"))
+        XCTAssertTrue(policy.canSendMovement(gestureID: "next-touch-sequence"))
+    }
+
+    func testStaleDragRejectionCannotBlockASeparateActiveSequence() {
+        var policy = PointerDragSequencePolicy()
+        XCTAssertTrue(policy.begin(gestureID: "current"))
+        XCTAssertFalse(policy.reject(gestureID: "stale"))
+        XCTAssertTrue(policy.canSendMovement(gestureID: "current"))
+        policy.blockUntilLift()
+        XCTAssertEqual(policy.state, .blocked)
+        policy.finish()
+        XCTAssertEqual(policy.state, .idle)
+    }
 }

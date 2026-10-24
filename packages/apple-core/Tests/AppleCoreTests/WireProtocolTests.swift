@@ -95,7 +95,36 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertThrowsError(try RemoteCommand(name: .pointerMove, x: 500.01, y: 0).validate())
         XCTAssertThrowsError(try RemoteCommand(name: .pointerScroll, x: 101, y: 0).validate())
         XCTAssertThrowsError(try RemoteCommand(name: .systemVolumeSet, value: 1.01).validate())
-        XCTAssertThrowsError(try RemoteCommand(name: .systemVolumeSet, value: .infinity).validate())
+        XCTAssertThrowsError(
+            try RemoteCommand(name: .systemVolumeSet, value: .infinity).validate())
+    }
+
+    func testPointerClickTimestampIsOptionalBoundedAndRoundTrips() throws {
+        let legacyJSON = #"{"name":"pointer.click","button":"left"}"#
+        let legacy = try JSONDecoder().decode(RemoteCommand.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(legacy.tapTimestamp)
+        try legacy.validate()
+
+        let timestamped = RemoteCommand(
+            name: .pointerClick, button: .right, tapTimestamp: 1234.5)
+        let message = try makeCommand(
+            connectionID: "connection-a", sequence: 1, command: timestamped)
+        XCTAssertEqual(try WireCodec.decode(WireCodec.encode(message)).command, timestamped)
+
+        let invalidTimestamps: [Double] = [
+            -0.001, .infinity, .nan,
+            WireLimits.maximumTapTimestampSeconds + 1
+        ]
+        for timestamp in invalidTimestamps {
+            XCTAssertThrowsError(
+                try RemoteCommand(
+                    name: .pointerClick, button: .left, tapTimestamp: timestamp
+                ).validate())
+        }
+        XCTAssertThrowsError(
+            try RemoteCommand(
+                name: .pointerMove, x: 0, y: 0, tapTimestamp: 12
+            ).validate())
     }
 
     func testGestureCommandsAreAllowlistedAndRejectExtraFields() throws {
