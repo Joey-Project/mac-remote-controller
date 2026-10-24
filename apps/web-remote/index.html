@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101216" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Sofa Remote · Web interaction preview</title>
+    <link rel="stylesheet" href="./app.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <div>
+            <p class="eyebrow">SOFA REMOTE</p>
+            <h1>Web interaction preview</h1>
+          </div>
+        </div>
+        <span class="offline-chip"><span aria-hidden="true"></span>Offline preview</span>
+      </header>
+
+      <section class="notice" aria-label="Preview limits">
+        <span class="notice-icon" aria-hidden="true">i</span>
+        <p>
+          Explore the touch and keyboard layout in Safari. This page has no Mac connection, sends no
+          commands, and stores no credentials.
+        </p>
+      </section>
+
+      <nav class="mode-switch" aria-label="Preview mode">
+        <button class="mode-button is-active" id="touchpad-mode" type="button" aria-pressed="true">
+          <span aria-hidden="true">⌖</span> Touchpad
+        </button>
+        <button class="mode-button" id="keyboard-mode" type="button" aria-pressed="false">
+          <span aria-hidden="true">⌨</span> Keyboard
+        </button>
+      </nav>
+
+      <section class="workspace" aria-label="Offline remote controls preview">
+        <div class="main-panel">
+          <section id="touchpad-panel" class="control-panel" aria-labelledby="touchpad-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">LOCAL PREVIEW</p>
+                <h2 id="touchpad-heading">Touchpad</h2>
+              </div>
+              <span class="gesture-hint">Drag to move · tap to click</span>
+            </div>
+
+            <div class="cursor-stage" aria-label="Local cursor preview">
+              <div class="stage-label"><span></span> Cursor stage</div>
+              <div class="stage-grid" aria-hidden="true"></div>
+              <div class="preview-cursor" id="preview-cursor" aria-hidden="true"></div>
+              <div class="stage-coordinate" id="stage-coordinate">50 · 50</div>
+            </div>
+
+            <div
+              class="touch-surface"
+              id="touch-surface"
+              role="group"
+              tabindex="0"
+              aria-label="Touchpad preview surface"
+              aria-describedby="touch-hint activity"
+            >
+              <span class="surface-orbit surface-orbit-one" aria-hidden="true"></span>
+              <span class="surface-orbit surface-orbit-two" aria-hidden="true"></span>
+              <span class="surface-center" aria-hidden="true">⌖</span>
+              <span class="surface-label" id="touch-hint"
+                >One finger moves · two fingers scroll</span
+              >
+              <span class="surface-subtitle">A touch-only feel check · nothing is sent</span>
+            </div>
+
+            <div class="click-controls" aria-label="Local click preview">
+              <button type="button" class="click-button" data-button="left">
+                <span class="click-dot" aria-hidden="true"></span>
+                <span>Left click <small id="left-click-count">0</small></span>
+              </button>
+              <button type="button" class="click-button" data-button="right">
+                <span class="click-dot click-dot-secondary" aria-hidden="true"></span>
+                <span>Right click <small id="right-click-count">0</small></span>
+              </button>
+            </div>
+          </section>
+
+          <section
+            id="keyboard-panel"
+            class="control-panel keyboard-panel"
+            aria-labelledby="keyboard-heading"
+            hidden
+          >
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">LOCAL PREVIEW</p>
+                <h2 id="keyboard-heading">Keyboard</h2>
+              </div>
+              <span class="gesture-hint">Keys update this page only</span>
+            </div>
+
+            <div class="keypad" aria-label="Keyboard preview controls">
+              <button type="button" class="key key-return" data-key="return">Return</button>
+              <button type="button" class="key" data-key="left" aria-label="Left arrow">←</button>
+              <button type="button" class="key" data-key="up" aria-label="Up arrow">↑</button>
+              <button type="button" class="key" data-key="down" aria-label="Down arrow">↓</button>
+              <button type="button" class="key" data-key="right" aria-label="Right arrow">→</button>
+              <button type="button" class="key" data-key="escape">Esc</button>
+              <button type="button" class="key" data-key="backspace">Delete</button>
+              <button type="button" class="key key-space" data-key="space">Space</button>
+            </div>
+
+            <label class="local-text-label" for="local-text-input">Text entry preview</label>
+            <input
+              class="text-input"
+              id="local-text-input"
+              type="text"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="Type here to check the layout"
+            />
+            <p class="input-caption" id="text-caption">
+              Text stays in this tab and clears when it closes.
+            </p>
+            <div class="last-key" aria-live="polite">
+              <span>Last local key</span>
+              <strong id="last-key">None</strong>
+              <span class="key-count" id="key-count">0 pressed</span>
+            </div>
+          </section>
+        </div>
+
+        <aside class="side-panel">
+          <div class="status-card">
+            <div class="status-line">
+              <span class="status-dot" aria-hidden="true"></span>
+              <div>
+                <p class="eyebrow">SESSION</p>
+                <h2>Not connected</h2>
+              </div>
+            </div>
+            <p>No network controls are available in this preview.</p>
+            <div class="divider"></div>
+            <div class="activity-row">
+              <span>Last action</span>
+              <strong id="activity" aria-live="polite">Ready · offline</strong>
+            </div>
+          </div>
+
+          <label class="volume-card" for="volume-range">
+            <div class="volume-heading">
+              <div>
+                <p class="eyebrow">LOCAL PREVIEW</p>
+                <h2>Volume control</h2>
+              </div>
+              <span class="volume-icon" aria-hidden="true">◖</span>
+            </div>
+            <div class="volume-value"><span>Level</span><strong id="volume-value">50%</strong></div>
+            <input
+              id="volume-range"
+              class="volume-range"
+              type="range"
+              min="0"
+              max="100"
+              value="50"
+            />
+            <div class="range-labels"><span>0</span><span>100</span></div>
+            <p>Moving this slider changes the preview only.</p>
+          </label>
+
+          <div class="privacy-card">
+            <span class="privacy-icon" aria-hidden="true">◇</span>
+            <div>
+              <h2>No control endpoint</h2>
+              <p>Preview values stay in this tab. No Mac address or credential is requested.</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="footer-note">
+        Interaction study only · no Mac control connection · no screen mirroring
+      </footer>
+    </main>
+  </body>
+</html>
