@@ -62,6 +62,9 @@ function snapshot() {
 }
 
 async function execute(action: string, value: number | undefined): Promise<void> {
+  if (iina.core.status.idle) {
+    throw new Error('IINA is idle; the media command was not applied.');
+  }
   const maximumMpvPercent = iina.mpv.getNumber('volume-max');
   validateAction(action, value, maximumMpvPercent);
   switch (action) {

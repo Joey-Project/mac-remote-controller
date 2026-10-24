@@ -12,7 +12,62 @@ function makeContext() {
   let timeoutId = 0;
   let runtimeMessageListener;
   let title = 'Episode one';
-  let currentVideo = {
+  let currentVideo;
+  const playerRoot = {
+    ownerDocument: null,
+    parentElement: null,
+    styles: {},
+    hasAttribute() {
+      return false;
+    },
+    matches(selector) {
+      return selector === '#movie_player';
+    },
+    querySelector() {
+      return null;
+    },
+    getClientRects() {
+      return [{ width: 640, height: 360 }];
+    },
+  };
+  const document = {
+    documentElement: {},
+    defaultView: {
+      getComputedStyle(element) {
+        const style = element.styles ?? {};
+        return {
+          display: style.display ?? 'inline',
+          visibility: style.visibility ?? 'visible',
+          opacity: style.opacity ?? '1',
+          getPropertyValue(name) {
+            return name === 'content-visibility' ? (style.contentVisibility ?? 'visible') : '';
+          },
+        };
+      },
+    },
+    get title() {
+      return title;
+    },
+    addEventListener() {},
+    querySelector(selector) {
+      return selector === 'video' ? currentVideo : undefined;
+    },
+    querySelectorAll(selector) {
+      return selector === '#movie_player video.html5-main-video' ? [currentVideo] : [];
+    },
+  };
+  playerRoot.ownerDocument = document;
+  function attachVideo(video) {
+    video.ownerDocument = document;
+    video.parentElement = playerRoot;
+    video.isConnected ??= true;
+    video.styles ??= {};
+    video.hasAttribute ??= () => false;
+    video.matches ??= () => false;
+    video.getClientRects ??= () => [{ width: 640, height: 360 }];
+    return video;
+  }
+  currentVideo = attachVideo({
     duration: 30,
     seekable: { length: 0 },
     paused: true,
@@ -21,17 +76,7 @@ function makeContext() {
     play() {},
     pause() {},
     addEventListener() {},
-  };
-  const document = {
-    documentElement: {},
-    get title() {
-      return title;
-    },
-    addEventListener() {},
-    querySelector(selector) {
-      return selector === 'video' ? currentVideo : undefined;
-    },
-  };
+  });
   const window = {
     addEventListener(name, callback) {
       windowListeners.set(name, callback);
@@ -97,7 +142,7 @@ function makeContext() {
     setPage({ href = location.href, pageTitle = title, video = currentVideo } = {}) {
       location.href = href;
       title = pageTitle;
-      currentVideo = video;
+      currentVideo = attachVideo(video);
     },
   };
 }

@@ -53,6 +53,7 @@ const knownMediaTabs = new Set<number>();
 let nativePort: chrome.runtime.Port | undefined;
 let nativeReconnectTimer: number | undefined;
 let nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
+let targetRefreshTimer: number | undefined;
 let nextDispatchId = 0;
 
 function allowedKindForURL(url: string | undefined): 'youtube' | 'bilibili' | undefined {
@@ -75,13 +76,31 @@ function clearPendingTabCommands(): void {
   commandForTab.clear();
 }
 
-function cancelReconnectIfNoKnownTabs(): void {
+function stopNativeWorkIfNoKnownTabs(): void {
   if (knownMediaTabs.size > 0) return;
   if (nativeReconnectTimer !== undefined) {
     clearTimeout(nativeReconnectTimer);
     nativeReconnectTimer = undefined;
   }
   nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
+  if (targetRefreshTimer !== undefined) {
+    clearInterval(targetRefreshTimer);
+    targetRefreshTimer = undefined;
+  }
+  const port = nativePort;
+  if (!port) return;
+  nativePort = undefined;
+  clearPendingTabCommands();
+  try {
+    port.disconnect();
+  } catch {
+    // The port may already have been closed by the browser.
+  }
+}
+
+function startTargetRefreshIfNeeded(): void {
+  if (knownMediaTabs.size === 0 || targetRefreshTimer !== undefined) return;
+  targetRefreshTimer = setInterval(refreshKnownTargets, targetRefreshIntervalMilliseconds);
 }
 
 function scheduleNativeReconnect(): void {
@@ -136,9 +155,12 @@ function postToNative(message: unknown): boolean {
 }
 
 function markTargetUnavailable(tabId: number): void {
-  knownMediaTabs.delete(tabId);
-  cancelReconnectIfNoKnownTabs();
-  postToNative({ type: 'media.targetUnavailable', targetId: `chrome:${tabId}` });
+  const wasKnown = knownMediaTabs.delete(tabId);
+  if (!wasKnown) return;
+  if (nativePort || knownMediaTabs.size > 0) {
+    postToNative({ type: 'media.targetUnavailable', targetId: `chrome:${tabId}` });
+  }
+  stopNativeWorkIfNoKnownTabs();
 }
 
 function refreshKnownTargets(): void {
@@ -308,6 +330,7 @@ chrome.runtime.onMessage.addListener(
       const snapshot = validateSnapshot(message.snapshot, expectedKind);
       if (!snapshot) return false;
       knownMediaTabs.add(tabId);
+      startTargetRefreshIfNeeded();
       postToNative({ type: 'media.targetUpdate', targetId: `chrome:${tabId}`, target: snapshot });
       return false;
     }
@@ -340,11 +363,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
-setInterval(refreshKnownTargets, targetRefreshIntervalMilliseconds);
-
 chrome.runtime.onStartup.addListener(() => {
-  ensureNativePort();
+  refreshKnownTargets();
 });
 chrome.runtime.onInstalled.addListener(() => {
-  ensureNativePort();
+  refreshKnownTargets();
 });

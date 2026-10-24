@@ -4,6 +4,8 @@ export type MediaAction = 'playPause' | 'seek' | 'next' | 'previous' | 'setVolum
 interface SiteAdapter {
   hostnames: ReadonlySet<string>;
   kind: SiteKind;
+  videoSelectors: readonly string[];
+  controlRootSelectors: readonly string[];
   next: readonly string[];
   previous: readonly string[];
 }
@@ -25,16 +27,25 @@ const siteAdapters: readonly SiteAdapter[] = [
   {
     hostnames: new Set(['www.youtube.com']),
     kind: 'youtube',
+    videoSelectors: [
+      'ytd-reel-video-renderer[is-active] video',
+      '#movie_player video.html5-main-video',
+    ],
+    controlRootSelectors: ['ytd-reel-video-renderer[is-active]', '#movie_player'],
     next: ['.ytp-next-button'],
     previous: ['.ytp-prev-button'],
   },
   {
     hostnames: new Set(['www.bilibili.com', 'bilibili.com']),
     kind: 'bilibili',
+    videoSelectors: ['.bpx-player-video-wrap video'],
+    controlRootSelectors: ['.bpx-player-container', '#bilibiliPlayer'],
     next: ['.bpx-player-ctrl-btn.bpx-player-ctrl-next', 'button[aria-label*="下一集"]'],
     previous: ['.bpx-player-ctrl-btn.bpx-player-ctrl-prev', 'button[aria-label*="上一集"]'],
   },
 ];
+
+const advertisedVideoByDocument = new WeakMap<Document, HTMLVideoElement | null>();
 
 function adapterForURL(url: string): SiteAdapter | undefined {
   try {
@@ -46,11 +57,23 @@ function adapterForURL(url: string): SiteAdapter | undefined {
   }
 }
 
-function videoForDocument(document: Document): HTMLVideoElement | undefined {
-  const video = document.querySelector('video');
-  if (!video || typeof video.play !== 'function' || typeof video.pause !== 'function')
-    return undefined;
-  return video;
+function videoForDocument(document: Document, adapter: SiteAdapter): HTMLVideoElement | undefined {
+  for (const selector of adapter.videoSelectors) {
+    const matches = Array.from(document.querySelectorAll<HTMLVideoElement>(selector));
+    if (matches.length === 0) continue;
+
+    const rendered = matches.filter(
+      (video) =>
+        typeof video.play === 'function' && typeof video.pause === 'function' && isRendered(video),
+    );
+    if (rendered.length === 0) return undefined;
+
+    const playing = rendered.filter((video) => !video.paused);
+    if (playing.length === 1) return playing[0];
+    if (playing.length > 1) return undefined;
+    return rendered.length === 1 ? rendered[0] : undefined;
+  }
+  return undefined;
 }
 
 interface SeekableRange {
@@ -112,9 +135,23 @@ function isRendered(element: HTMLElement): boolean {
   return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
 }
 
-function findFirst(document: Document, selectors: readonly string[]): HTMLElement | undefined {
+function closestMatchingElement(
+  element: Element,
+  selectors: readonly string[],
+): Element | undefined {
+  for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
+    if (selectors.some((selector) => ancestor.matches(selector))) return ancestor;
+  }
+  return undefined;
+}
+
+function findFirst(
+  root: Element | undefined,
+  selectors: readonly string[],
+): HTMLElement | undefined {
+  if (!root) return undefined;
   for (const selector of selectors) {
-    const element = document.querySelector<HTMLElement>(selector);
+    const element = root.querySelector<HTMLElement>(selector);
     if (
       element &&
       typeof element.click === 'function' &&
@@ -130,8 +167,10 @@ function findFirst(document: Document, selectors: readonly string[]): HTMLElemen
 
 export function readMediaTarget(document: Document, url: string): TargetSnapshot | undefined {
   const adapter = adapterForURL(url);
-  const video = videoForDocument(document);
+  const video = adapter ? videoForDocument(document, adapter) : undefined;
+  advertisedVideoByDocument.set(document, video ?? null);
   if (!adapter || !video) return undefined;
+  const controlRoot = closestMatchingElement(video, adapter.controlRootSelectors);
   const title = truncateUTF8((document.title || adapter.kind).trim(), 230);
   return {
     kind: adapter.kind,
@@ -139,8 +178,8 @@ export function readMediaTarget(document: Document, url: string): TargetSnapshot
     capabilities: {
       playPause: true,
       seek: Number.isFinite(video.duration) || video.seekable.length > 0,
-      next: Boolean(findFirst(document, adapter.next)),
-      previous: Boolean(findFirst(document, adapter.previous)),
+      next: Boolean(findFirst(controlRoot, adapter.next)),
+      previous: Boolean(findFirst(controlRoot, adapter.previous)),
       playerVolumeMaximum: 1,
     },
     playerVolume: video.muted
@@ -166,12 +205,27 @@ export async function executeMediaAction(
   value?: number,
 ): Promise<void> {
   const adapter = adapterForURL(url);
-  const video = videoForDocument(document);
-  if (!adapter || !video) throw new Error('This media tab is no longer available.');
+  const video = adapter ? videoForDocument(document, adapter) : undefined;
+  if (!adapter || !video) {
+    advertisedVideoByDocument.set(document, null);
+    throw new Error('This media tab is no longer available.');
+  }
+  if (
+    !advertisedVideoByDocument.has(document) ||
+    advertisedVideoByDocument.get(document) !== video
+  ) {
+    throw new Error(
+      'The active media player changed; refresh the target before sending another command.',
+    );
+  }
   switch (action) {
     case 'playPause':
-      if (video.paused) await video.play();
-      else video.pause();
+      if (video.paused) {
+        await video.play();
+        if (videoForDocument(document, adapter) !== video) {
+          throw new Error('The active media player changed while the command was running.');
+        }
+      } else video.pause();
       return;
     case 'seek': {
       if (
@@ -206,7 +260,8 @@ export async function executeMediaAction(
       return;
     case 'next':
     case 'previous': {
-      const control = findFirst(document, action === 'next' ? adapter.next : adapter.previous);
+      const controlRoot = closestMatchingElement(video, adapter.controlRootSelectors);
+      const control = findFirst(controlRoot, action === 'next' ? adapter.next : adapter.previous);
       if (!control) {
         throw new Error(
           `The ${action === 'next' ? 'next' : 'previous'} episode control is unavailable.`,

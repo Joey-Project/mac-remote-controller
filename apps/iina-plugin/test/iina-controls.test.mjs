@@ -23,14 +23,25 @@ const BRIDGE_LENGTH_SENTINEL = Array.from({ length: 32 }, (_, index) =>
   String.fromCharCode(65 + (index % 26)),
 ).join('');
 
-function createMainHarness({ port, token, commands = [], httpLatency = 0 }) {
+function createMainHarness({
+  port,
+  token,
+  commands = [],
+  httpLatency = 0,
+  idleBeforeFirstCommand = false,
+  playlistCount = 1,
+  playlistPosition = 0,
+}) {
   let now = 1_800_000_000_000;
   let targetId = '';
   let paused = false;
+  let idle = false;
+  let firstCommandRead = false;
   let activeRequests = 0;
   let maximumConcurrentRequests = 0;
   const calls = [];
   const results = [];
+  const sideEffects = [];
   const handlers = new Map();
   const timers = [];
   const preferences = { bridge_port: port, bridge_token: token };
@@ -47,9 +58,16 @@ function createMainHarness({ port, token, commands = [], httpLatency = 0 }) {
     await Promise.resolve();
     activeRequests -= 1;
     if (method === 'get') {
+      if (idleBeforeFirstCommand && !firstCommandRead) {
+        idle = true;
+        firstCommandRead = true;
+      }
+      const command = commands.shift() ?? undefined;
       return {
         statusCode: 200,
-        data: { command: commands.shift() ?? undefined },
+        data: {
+          command: command?.targetId === '$current' ? { ...command, targetId } : command,
+        },
       };
     }
     return { statusCode: 204, data: undefined };
@@ -64,7 +82,9 @@ function createMainHarness({ port, token, commands = [], httpLatency = 0 }) {
     core: {
       status: {
         title: 'Episode',
-        idle: false,
+        get idle() {
+          return idle;
+        },
         position: 5,
         duration: 60,
         get paused() {
@@ -73,16 +93,32 @@ function createMainHarness({ port, token, commands = [], httpLatency = 0 }) {
       },
       audio: { volume: 60, muted: false },
       pause: () => {
+        sideEffects.push('pause');
         paused = true;
       },
       resume: () => {
+        sideEffects.push('resume');
         paused = false;
       },
-      seek: () => undefined,
+      seek: (value, relative) => sideEffects.push({ type: 'seek', value, relative }),
     },
-    mpv: { getNumber: (name) => (name === 'volume-max' ? 130 : 0) },
-    playlist: { count: () => 1, playNext: () => undefined, playPrevious: () => undefined },
+    mpv: {
+      getNumber: (name) => (name === 'volume-max' ? 130 : playlistPosition),
+    },
+    playlist: {
+      count: () => playlistCount,
+      playNext: () => sideEffects.push('next'),
+      playPrevious: () => sideEffects.push('previous'),
+    },
   };
+  Object.defineProperty(iina.core.audio, 'volume', {
+    get: () => 60,
+    set: (value) => sideEffects.push({ type: 'volume', value }),
+  });
+  Object.defineProperty(iina.core.audio, 'muted', {
+    get: () => false,
+    set: (value) => sideEffects.push({ type: 'muted', value }),
+  });
   const context = vm.createContext({
     iina,
     Date: { now: () => now },
@@ -99,6 +135,7 @@ function createMainHarness({ port, token, commands = [], httpLatency = 0 }) {
     maximumConcurrentRequests: () => maximumConcurrentRequests,
     preferences,
     results,
+    sideEffects,
     targetID: () => targetId,
     advanceTime: (milliseconds) => {
       now += milliseconds;
@@ -315,6 +352,59 @@ test('IINA drains eight queued commands within the deadline without replay', asy
   assert.equal(harness.results.length, 8);
   assert.equal(harness.commands.length, 0);
   assert.equal(harness.maximumConcurrentRequests(), 1);
+});
+
+test('IINA rejects queued media commands if playback becomes idle before execution', async () => {
+  const mainSource = await loadMainSource();
+  const cases = [
+    { action: 'playPause' },
+    { action: 'seek', value: 10 },
+    { action: 'next' },
+    { action: 'previous' },
+    { action: 'setVolume', value: 0.5 },
+  ];
+
+  for (const [index, { action, value }] of cases.entries()) {
+    const harness = createMainHarness({
+      port: 47623,
+      token: BRIDGE_LENGTH_SENTINEL,
+      commands: [{ requestId: `idle-${index}`, targetId: '$current', action, value }],
+      idleBeforeFirstCommand: true,
+      playlistCount: 3,
+      playlistPosition: 1,
+    });
+    vm.runInContext(mainSource, harness.context, { timeout: 1_000 });
+    await waitFor(() => harness.results.length === 1 && harness.timers.length === 1);
+
+    const update = harness.calls.find((call) => call.path.endsWith('/update'));
+    assert.ok(update);
+    assert.equal(JSON.parse(update.options.data.payload).capabilities.playPause, true);
+    assert.equal(harness.results[0].requestId, `idle-${index}`);
+    assert.equal(harness.results[0].targetId, harness.targetID());
+    assert.equal(harness.results[0].ok, false, `${action} should fail after playback stops`);
+    assert.match(harness.results[0].error, /IINA is idle/);
+    assert.deepEqual(harness.sideEffects, [], `${action} must not affect an idle player`);
+    assert.equal(harness.results.length, 1, `${action} should produce exactly one result`);
+    assert.equal(harness.commands.length, 0, `${action} should not be replayed`);
+
+    harness.handlers.get('iina.window-will-close')();
+  }
+});
+
+test('IINA still executes a queued media command while playback remains active', async () => {
+  const mainSource = await loadMainSource();
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    commands: [{ requestId: 'active-1', targetId: '$current', action: 'playPause' }],
+  });
+  vm.runInContext(mainSource, harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.results.length === 1 && harness.timers.length === 1);
+
+  assert.equal(harness.results[0].requestId, 'active-1');
+  assert.equal(harness.results[0].ok, true);
+  assert.deepEqual(harness.sideEffects, ['pause']);
+  harness.handlers.get('iina.window-will-close')();
 });
 
 test('IINA rejects invalid bridge settings without making a loopback request', () => {
