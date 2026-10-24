@@ -15,9 +15,25 @@ await copyFile(
 );
 await build({
   bundle: true,
+  entryPoints: [resolve(sourceDirectory, 'site-controls.ts')],
+  format: 'esm',
+  outfile: resolve(outputDirectory, 'site-controls.js'),
+  platform: 'browser',
+  target: 'es2022',
+});
+await build({
+  bundle: true,
   entryPoints: [resolve(sourceDirectory, 'service-worker.ts')],
   format: 'esm',
   outfile: resolve(outputDirectory, 'service-worker.js'),
+  platform: 'browser',
+  target: 'es2022',
+});
+await build({
+  bundle: true,
+  entryPoints: [resolve(sourceDirectory, 'content-script.ts')],
+  format: 'iife',
+  outfile: resolve(outputDirectory, 'content-script.js'),
   platform: 'browser',
   target: 'es2022',
 });

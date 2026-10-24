@@ -191,6 +191,24 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  apps/iina-plugin:
+    devDependencies:
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      iina-plugin-definition:
+        specifier: 0.99.4
+        version: 0.99.4
+      oxlint:
+        specifier: 1.88.0
+        version: 1.88.0(oxlint-tsgolint@7.0.2004)
+      oxlint-tsgolint:
+        specifier: 7.0.2004
+        version: 7.0.2004
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':
@@ -742,6 +760,9 @@ packages:
   ignore@7.0.12:
     resolution: {integrity: sha512-/8UvqAPU9DGTI9k4mxtf49U37Isfwr8Uts96+SBHIkFxPJnHS0Ew4f00sM4Scd8V8EjM0jUNtVDdv1kPdt35lg==}
     engines: {node: '>= 4'}
+
+  iina-plugin-definition@0.99.4:
+    resolution: {integrity: sha512-pfPMP+4OrtqSq/n+3eBgVB5mVsfsjYHcFmQEo+tCyexB3evDpQkdeFdVanrr0OHjx2CPJAB5YUMS5lTz70e8Ag==}
 
   is-alphabetical@2.0.1:
     resolution: {integrity: sha512-FWyyY60MeTNyeSRpkM2Iry0G9hpr7/9kD40mD/cGQEuilcZYS4okz8SN2Q6rLCJ8gbCt6fN+rC+6tMGS99LaxQ==}
@@ -1319,6 +1340,8 @@ snapshots:
       unicorn-magic: 0.4.1
 
   ignore@7.0.12: {}
+
+  iina-plugin-definition@0.99.4: {}
 
   is-alphabetical@2.0.1: {}
 

@@ -19,6 +19,7 @@ private final class ClientConnection {
     let connectedAt = Date()
     var rateWindow = Date()
     var receivedCount = 0
+    var pendingMediaTasks: [String: Task<Void, Never>] = [:]
 
     init(peer: WebSocketPeer) { self.peer = peer }
 }
@@ -34,6 +35,7 @@ final class CompanionModel {
     var remoteState: RemoteState
     var connectedCount = 0
     let desktop = DesktopController()
+    let mediaAdapters = MediaAdapterController()
 
     private var listener: NWListener?
     private var listenerReady = false
@@ -49,6 +51,9 @@ final class CompanionModel {
             pairedDevices =
                 try SecureStore.load([PairedDevice].self, account: "paired-devices") ?? []
             identity = try ServerIdentity.loadOrCreate()
+            mediaAdapters.onTargetsChanged = { [weak self] targets in
+                self?.remoteState.mediaTargets = targets
+            }
             try startListener()
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tick() }
@@ -91,6 +96,10 @@ final class CompanionModel {
             let affected = clients.values.filter { $0.deviceID == device.id }
             for client in affected { client.peer.close() }
         } catch { errorMessage = error.localizedDescription }
+    }
+
+    func setMediaBridgeEnabled(_ enabled: Bool) {
+        mediaAdapters.setEnabled(enabled)
     }
 
     private func startListener() throws {
@@ -155,13 +164,21 @@ final class CompanionModel {
         do {
             let accepted = try session.accept(message)
             client.session = session
+            if accepted.command.name == .mediaControl, let request = accepted.command.mediaRequest {
+                startMediaCommand(
+                    accepted, request: request, session: session, client: client, id: id)
+                return
+            }
             var failure: RemoteError?
             do { try desktop.execute(accepted.command, scroll: &client.scrollAccumulator) } catch {
                 failure = RemoteError(
                     code: "control_unavailable", message: error.localizedDescription)
             }
             client.peer.send(session.makeResult(for: accepted, error: failure))
-            sendState(to: client)
+            if accepted.command.name == .systemVolumeSet {
+                refreshDesktopState()
+                sendState(to: client)
+            }
         } catch {
             client.session = session
             guard message.connectionID == session.connectionID, let requestID = message.requestID,
@@ -218,7 +235,7 @@ final class CompanionModel {
             client.peer.send(
                 WireMessage(
                     type: .welcome, authToken: issuedToken,
-                    connectionID: session.connectionID, state: desktop.state))
+                    connectionID: session.connectionID, state: remoteState))
             refreshConnectedCount()
         } catch {
             errorMessage = error.localizedDescription
@@ -229,11 +246,12 @@ final class CompanionModel {
     private func sendState(to client: ClientConnection) {
         guard let session = client.session else { return }
         client.peer.send(
-            WireMessage(type: .state, connectionID: session.connectionID, state: desktop.state))
+            WireMessage(type: .state, connectionID: session.connectionID, state: remoteState))
     }
 
     private func tick() {
-        remoteState = desktop.state
+        mediaAdapters.expireStaleTargets()
+        refreshDesktopState()
         if let pairing, pairing.expiresAt <= Date() { closePairing() }
         let expired = clients.values.filter {
             $0.session == nil && Date().timeIntervalSince($0.connectedAt) > 10
@@ -248,8 +266,50 @@ final class CompanionModel {
 
     private func removeClient(_ id: UUID, closePeer: Bool = false) {
         guard let client = clients.removeValue(forKey: id) else { return }
+        if let session = client.session {
+            mediaAdapters.router.cancel(sessionID: session.connectionID)
+        }
+        for task in client.pendingMediaTasks.values { task.cancel() }
+        client.pendingMediaTasks.removeAll()
         _ = admission.remove(id)
         refreshConnectedCount()
         if closePeer { client.peer.close() }
+    }
+
+    private func refreshDesktopState() {
+        remoteState = desktop.state
+        remoteState.mediaTargets = mediaAdapters.mediaTargets
+    }
+}
+
+private extension CompanionModel {
+    func startMediaCommand(
+        _ accepted: AcceptedCommand,
+        request: MediaRequest,
+        session: ServerSession,
+        client: ClientConnection,
+        id: UUID
+    ) {
+        let routedID = "\(session.connectionID):\(accepted.requestID)"
+        let task = Task { @MainActor [weak self, weak client] in
+            var failure: RemoteError?
+            do {
+                guard let self, self.mediaAdapters.isRunning else {
+                    throw MediaRouteError.targetUnavailable
+                }
+                try await self.mediaAdapters.router.execute(
+                    request, requestID: routedID, sessionID: session.connectionID)
+            } catch {
+                failure = RemoteError(
+                    code: "media_unavailable", message: error.localizedDescription)
+            }
+            guard let self, let client, self.clients[id] === client,
+                client.session?.connectionID == session.connectionID
+            else { return }
+            client.pendingMediaTasks.removeValue(forKey: accepted.requestID)
+            client.peer.send(session.makeResult(for: accepted, error: failure))
+            self.sendState(to: client)
+        }
+        client.pendingMediaTasks[accepted.requestID] = task
     }
 }

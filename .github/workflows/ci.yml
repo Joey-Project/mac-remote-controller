@@ -119,7 +119,7 @@ jobs:
         run: actionlint
       - name: Check repository shell scripts
         run: |
-          for script in tooling/swift/*.sh apps/android/gradlew; do
+          for script in tooling/swift/*.sh apps/android/gradlew scripts/*.sh; do
             bash -n "$script"
           done
-          shellcheck tooling/swift/*.sh apps/android/gradlew
+          shellcheck tooling/swift/*.sh apps/android/gradlew scripts/*.sh

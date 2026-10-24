@@ -1,0 +1,15 @@
+{
+  "protocolVersion": 1,
+  "type": "command",
+  "connectionId": "connection-example",
+  "requestId": "6ea6b57a-3c8a-45f3-9eed-7029af05614e",
+  "sequence": 1,
+  "command": {
+    "name": "media.control",
+    "mediaRequest": {
+      "targetId": "chrome:42",
+      "action": "seek",
+      "value": -10
+    }
+  }
+}

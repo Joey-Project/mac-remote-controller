@@ -104,27 +104,57 @@ has `code` and `message`. Malformed or incompatible wire envelopes close the
 connection. A result means the Mac submitted the input to its OS API; it does
 not prove that the foreground app accepted the input or completed an action.
 
-| Command             | Fields   | Bounds                                                                  |
-| ------------------- | -------- | ----------------------------------------------------------------------- |
-| `pointer.move`      | `x`, `y` | Relative finite deltas, each within ±500                                |
-| `pointer.click`     | `button` | `left` or `right`, at the current cursor                                |
-| `pointer.scroll`    | `x`, `y` | Pixel deltas, each within ±100                                          |
-| `keyboard.text`     | `text`   | 1–4096 UTF-8 bytes of committed text                                    |
-| `keyboard.key`      | `key`    | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
-| `system.volume.set` | `value`  | Finite scalar in 0...1                                                  |
+| Command             | Fields         | Bounds                                                                  |
+| ------------------- | -------------- | ----------------------------------------------------------------------- |
+| `pointer.move`      | `x`, `y`       | Relative finite deltas, each within ±500                                |
+| `pointer.click`     | `button`       | `left` or `right`, at the current cursor                                |
+| `pointer.scroll`    | `x`, `y`       | Pixel deltas, each within ±100                                          |
+| `keyboard.text`     | `text`         | 1–4096 UTF-8 bytes of committed text                                    |
+| `keyboard.key`      | `key`          | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
+| `system.volume.set` | `value`        | Finite scalar in 0...1                                                  |
+| `media.control`     | `mediaRequest` | Exact target ID, typed action, and optional finite value; see below     |
 
 State contains `deviceName`, `accessibilityGranted`, optional `systemVolume`, and
 optional `systemVolumeReason`. Absent volume means unavailable, never zero.
 An independently muted output reports effective volume `0`; a nonzero volume
 command also clears mute. Fractional scroll pixels accumulate per connection,
 and their remainder is discarded on disconnect.
-The server sends state at authentication, after a command, and once per second.
+The server sends state at authentication, after a completed command, when media
+targets change, and once per second.
 The client bounds outstanding commands to eight; excess relative input is
 dropped and only the latest unsent absolute volume is retained. It discards all
 pending input on disconnect. Missing command results time out after three
 seconds and close the connection without replaying commands.
 
-## State and future media boundaries
+## Media sources and command
+
+`state.mediaTargets` is optional for compatibility with older companions. If
+present, it is an array of at most 64 unique targets. Each target has a bounded
+opaque `id`, display `name`, `kind` (`iina`, `youtube`, or `bilibili`), typed
+capabilities, and optional current `playerVolume`. Capabilities include
+`playPause`, `seek`, `next`, `previous`, and optional `playerVolumeMaximum`.
+Current player volume must be within the reported maximum. Absence of
+`mediaTargets` means the companion does not provide media controls; an empty
+array means no adapter source is currently available.
+
+`media.control` contains exactly one `mediaRequest` object: `targetId`, `action`,
+and an optional `value`. Actions are `playPause`, `seek`, `next`, `previous`, and
+`setVolume`. Seek is a nonzero finite relative number no greater than 3600
+seconds in magnitude. Set-volume is finite and nonnegative, then checked against
+the selected source's advertised maximum at execution. Other actions reject a
+value. The Mac rejects unsupported capabilities and unavailable targets with a
+result; it never substitutes a foreground player or another tab.
+
+The companion's optional media bridge binds only to IPv4 loopback
+`127.0.0.1:47623`. Chrome uses a pinned native messaging host; IINA uses the
+official plugin HTTP client and polls the companion. A separate random bearer
+token is stored in a per-user mode-0600 companion file. The bridge is media-only,
+rejects cross-origin requests, bounds HTTP bodies, clients, request rate, and
+pending commands, and authenticates each request. No token is exposed to Chrome
+page scripts or content scripts. Adapter polling is not an authenticated
+network pairing mechanism.
+
+## State and media boundaries
 
 - Desktop input targets the current desktop. It does not change the selected
   media source. Keyboard text contains committed Unicode input, not intermediate

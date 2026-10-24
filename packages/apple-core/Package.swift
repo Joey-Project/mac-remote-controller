@@ -16,7 +16,8 @@ let package = Package(
         .library(
             name: "MacSupport",
             targets: ["MacSupport"]
-        )
+        ),
+        .executable(name: "SofaRemoteNativeHost", targets: ["SofaRemoteNativeHost"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-certificates.git", exact: "1.21.0")
@@ -28,6 +29,11 @@ let package = Package(
             dependencies: [
                 "AppleCore", .product(name: "X509", package: "swift-certificates")
             ]),
+        .executableTarget(
+            name: "SofaRemoteNativeHost",
+            dependencies: ["MacSupport"],
+            path: "Sources/SofaRemoteNativeHost"
+        ),
         .testTarget(
             name: "AppleCoreTests",
             dependencies: ["AppleCore"],

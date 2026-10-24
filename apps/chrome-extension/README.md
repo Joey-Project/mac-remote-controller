@@ -1,16 +1,49 @@
-# Chrome Extension (Placeholder)
+# Chrome extension: YouTube and Bilibili
 
-This package contains a minimal Manifest V3 service worker scaffold. It does not implement remote control and requests no Chrome or website permissions.
+The Manifest V3 extension exposes typed playback, relative seek, player-volume,
+and site-provided episode navigation for HTTPS `www.youtube.com`,
+`www.bilibili.com`, and `bilibili.com` tabs. A tab is an explicit media source;
+desktop focus does not select or switch the player. The extension reports next
+and previous only when the site's episode controls exist, and returns a visible
+failure if a control disappears after selection.
 
-The development toolchain targets Node 26 and pnpm 12.14.0. It pins Oxlint 1.88.0 with `oxlint-tsgolint` 7.0.2004 for type-aware linting, and TypeScript 7.0.2 for the separate `tsc --noEmit` check. Keep the TypeScript compiler and type-aware linter versions aligned when upgrading this toolchain.
+The service worker connects to the separately built native messaging host. The
+host reads the local bridge token from the companion's mode-0600 configuration
+file and proxies only validated media messages over authenticated loopback
+HTTP. The token never enters the extension, page, or content script. The bridge
+accepts no desktop-input commands.
 
-From the repository root, install the workspace dependencies and build the extension:
+From the repository root, install the pinned workspace dependencies and build.
+These commands require Node.js 26 or newer and the pnpm version declared in the
+repository. The installer uses Node's JSON serializer to preserve spaces and
+escape special characters in the native host path.
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm --filter @mac-remote-controller/chrome-extension build
+swift build -c release --package-path packages/apple-core --product SofaRemoteNativeHost
 ```
 
-In Chrome, open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `apps/chrome-extension/dist`.
+After enabling the media bridge in the Mac companion, load
+`apps/chrome-extension/dist` through `chrome://extensions` → **Developer mode**
+→ **Load unpacked**. Register the helper for your local Chrome profile with:
 
-Add permissions only alongside a feature that requires them. The placeholder intentionally has none.
+```sh
+scripts/install-chrome-native-host.sh \
+  "$(pwd)/packages/apple-core/.build/release/SofaRemoteNativeHost"
+```
+
+The installer pins the manifest to this extension's fixed public ID and writes
+it under the current user's Chrome NativeMessagingHosts directory. It does not
+install the extension or launch Chrome. Reopen the extension after installing
+the native host. To remove this registration, delete
+`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.joeyteng.sofaremote.json`.
+
+Website controls are implemented against the page's current `<video>` and
+visible episode buttons. SPA navigation, BFCache restore, replaced video
+elements, and tab closure refresh or remove the target. The extension does not
+inject arbitrary JavaScript, run shell commands, or use keyboard shortcuts.
+
+Site selectors can change without notice. Automated tests use DOM fixtures and
+do not claim live-site compatibility for every account, layout, region, or
+episode. Verify on the desired tab before relying on next/previous controls.
