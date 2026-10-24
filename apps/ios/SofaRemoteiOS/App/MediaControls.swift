@@ -205,29 +205,16 @@ extension RemoteView {
 
     @ViewBuilder
     func playerVolumeSlider(maximum: Double) -> some View {
-        let current = selectedMediaTarget?.playerVolume ?? playerVolumeValue
-        let step = min(PlayerVolumePolicy.step, maximum)
-        Slider(
-            value: Binding(
-                get: { isPlayerVolumeEditing ? playerVolumeValue : current },
-                set: { proposed in
-                    guard
-                        let snapped = PlayerVolumePolicy.snappedValue(
-                            proposed: proposed, maximum: maximum
-                        )
-                    else { return }
-                    playerVolumeValue = snapped
-                    guard let target = selectedMediaTarget else { return }
-                    sendMedia(.setVolume, target: target, value: snapped)
-                }
-            ), in: 0...maximum, step: step,
-            onEditingChanged: { editing in
-                isPlayerVolumeEditing = editing
+        if let target = selectedMediaTarget {
+            PlayerVolumeSliderControl(
+                target: target, maximum: maximum, isConnected: model.isConnected
+            ) { value in
+                sendMedia(.setVolume, target: target, value: value)
             }
-        )
-        .disabled(!model.isConnected || selectedMediaTarget?.playerVolume == nil)
-        .accessibilityLabel("Selected player volume")
-        .accessibilityIdentifier("volume.player.slider")
+            .id(target.id)
+            .accessibilityLabel("Selected player volume")
+            .accessibilityIdentifier("volume.player.slider")
+        }
     }
 
     func sendMedia(_ action: MediaAction, target: MediaTarget, value: Double? = nil) {
@@ -240,5 +227,80 @@ extension RemoteView {
     func syncSystemVolumeFromRemote() {
         guard !isVolumeEditing, let systemVolume = model.remoteState?.systemVolume else { return }
         volumeValue = systemVolume
+    }
+}
+
+private struct PlayerVolumeSliderControl: View {
+    let target: MediaTarget
+    let maximum: Double
+    let isConnected: Bool
+    let onSetVolume: (Double) -> Void
+
+    @State private var sliderValue: Double
+    @State private var isEditing = false
+    @State private var lastSentValue: Double?
+
+    init(
+        target: MediaTarget, maximum: Double, isConnected: Bool,
+        onSetVolume: @escaping (Double) -> Void
+    ) {
+        self.target = target
+        self.maximum = maximum
+        self.isConnected = isConnected
+        self.onSetVolume = onSetVolume
+        _sliderValue = State(initialValue: target.playerVolume ?? 0)
+    }
+
+    var body: some View {
+        Slider(
+            value: Binding(
+                get: { sliderValue },
+                set: { setVolume($0) }
+            ), in: 0...maximum,
+            onEditingChanged: updateEditingState
+        )
+        .disabled(!isConnected || target.playerVolume == nil)
+        .accessibilityAdjustableAction(adjustForAccessibility)
+        .onChange(of: target.playerVolume) { _, newValue in
+            syncRemoteVolume(newValue)
+        }
+    }
+
+    private func updateEditingState(_ editing: Bool) {
+        isEditing = editing
+        if editing {
+            sliderValue = target.playerVolume ?? sliderValue
+            lastSentValue = nil
+        } else if let current = target.playerVolume {
+            sliderValue = current
+            if current != lastSentValue { lastSentValue = nil }
+        }
+    }
+
+    private func adjustForAccessibility(_ direction: AccessibilityAdjustmentDirection) {
+        guard
+            let adjusted = PlayerVolumePolicy.accessibilityAdjustedValue(
+                current: sliderValue, increasing: direction == .increment, maximum: maximum)
+        else { return }
+        setVolume(adjusted)
+    }
+
+    private func setVolume(_ proposed: Double) {
+        guard let snapped = PlayerVolumePolicy.snappedValue(proposed: proposed, maximum: maximum),
+            snapped != sliderValue
+        else { return }
+        sliderValue = snapped
+        guard
+            PlayerVolumePolicy.shouldSend(
+                value: snapped, current: target.playerVolume, previouslySent: lastSentValue)
+        else { return }
+        lastSentValue = snapped
+        onSetVolume(snapped)
+    }
+
+    private func syncRemoteVolume(_ newValue: Double?) {
+        guard !isEditing, let newValue else { return }
+        sliderValue = newValue
+        if newValue != lastSentValue { lastSentValue = nil }
     }
 }
