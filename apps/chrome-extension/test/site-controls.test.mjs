@@ -101,6 +101,50 @@ test('playback, relative seek, and player volume act on the selected tab video',
   assert.equal(video.volume, 0.7);
 });
 
+test('live DVR seeks clamp to the active seekable window instead of zero', async () => {
+  const { document, video } = makeDocument();
+  video.duration = Number.POSITIVE_INFINITY;
+  video.currentTime = 112;
+  video.seekable = {
+    length: 1,
+    start(index) {
+      assert.equal(index, 0);
+      return 100;
+    },
+    end(index) {
+      assert.equal(index, 0);
+      return 120;
+    },
+  };
+
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'seek', -30);
+  assert.equal(video.currentTime, 100);
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'seek', 50);
+  assert.equal(video.currentTime, 120);
+});
+
+test('live DVR seeks stay outside gaps and choose the nearest range boundary', async () => {
+  const { document, video } = makeDocument();
+  video.duration = Number.POSITIVE_INFINITY;
+  video.currentTime = 120;
+  video.seekable = {
+    length: 2,
+    start(index) {
+      return index === 0 ? 100 : 130;
+    },
+    end(index) {
+      return index === 0 ? 120 : 150;
+    },
+  };
+
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'seek', 4);
+  assert.equal(video.currentTime, 120);
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'seek', 8);
+  assert.equal(video.currentTime, 130);
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'seek', -8);
+  assert.equal(video.currentTime, 120);
+});
+
 test('missing episode selectors fail clearly and are not replaced with keyboard shortcuts', async () => {
   const { document } = makeDocument();
   await assert.rejects(

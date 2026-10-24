@@ -39,12 +39,20 @@ superseded_by:
   current document every two seconds while its native messaging port is
   connected, so hidden-page timer throttling does not age out an unchanged
   player source. Muted HTML media also reports effective volume zero.
-- Final integrated local Swift checks passed 129 AppleCore tests, the macOS app
+- Second-review hardening keeps IINA target IDs and UTF-8 byte limits compatible
+  with JavaScriptCore, and checks playlist availability at command execution.
+  Both bridge routes decode the same Codable HTTP command envelope. Timed-out
+  request ownership is retained for 30 seconds with a 256-entry cap; only a
+  matching late result receives 204. Chrome uses a 1.5-second action deadline,
+  discards late content-script callbacks, and clamps live/DVR seeks to valid
+  seekable ranges, choosing the nearest endpoint across gaps.
+- Final integrated local Swift checks passed 131 AppleCore tests, the macOS app
   build, generic iOS Simulator build, and generated plist validation. The
-  `SofaRemoteNativeHost` product also builds. Pinned Node 26.12.0/pnpm 12.14.0
-  formatting, lint, strict typecheck, tests, and builds passed: Chrome 12/12 and
-  IINA mocks 7/7. `actionlint`, shell syntax checks, ShellCheck 0.11.0, and
-  project-journal validation passed. One loopback HTTP smoke passed.
+  `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
+  12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome
+  15/15 and IINA mocks 10/10. `actionlint`, shell syntax checks, ShellCheck
+  0.11.0, and project-journal validation passed. The backend lane reported six
+  focused bridge route/lifecycle tests and one localhost HTTP smoke passed.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,
   native messaging registration, IINA plugin, live media site, or device was
   installed or tested; no physical radio test or audio playback was performed.

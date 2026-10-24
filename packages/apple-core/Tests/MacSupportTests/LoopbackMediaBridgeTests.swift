@@ -7,9 +7,8 @@ import XCTest
 @MainActor
 final class LoopbackMediaBridgeTests: XCTestCase {
     func testSilentAndPartialRequestsExpireAndRestoreConnectionCapacity() async throws {
-        // Synthetic bearer fixture: bearer-a (joey-private-v3).
-        let configuration = MediaBridgeConfiguration(
-            port: try availableLoopbackPort(), token: "codex_synth_v1_bearer_a")
+        let configuration = MediaBridgeTestFixture.configuration(
+            port: try availableLoopbackPort())
         let bridge = LoopbackMediaBridge(configuration: configuration)
         try bridge.start()
         var clients: [NWConnection] = []

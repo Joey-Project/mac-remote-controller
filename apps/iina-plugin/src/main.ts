@@ -1,12 +1,14 @@
 import {
   iinaFormData,
+  canNavigatePlaylist,
+  createTargetID,
   mpvPercentFromGainRatio,
   shouldUnmuteForGainRatio,
   targetSnapshot,
   validateAction,
 } from './iina-controls';
 
-const targetId = `iina:${crypto.randomUUID()}`;
+const targetId = createTargetID();
 const bridgePort = iina.preferences.get('bridge_port') as number;
 const bridgeToken = iina.preferences.get('bridge_token') as string;
 const baseURL = `http://127.0.0.1:${bridgePort}/v1/iina`;
@@ -67,11 +69,17 @@ async function execute(action: string, value: number | undefined): Promise<void>
       iina.core.seek(value!, true);
       return;
     case 'next':
-      if (iina.playlist.count() <= 1) throw new Error('IINA has no next playlist item.');
+      if (!canNavigatePlaylist('next', iina.playlist.count(), iina.mpv.getNumber('playlist-pos'))) {
+        throw new Error('IINA has no next playlist item.');
+      }
       iina.playlist.playNext();
       return;
     case 'previous':
-      if (iina.playlist.count() <= 1) throw new Error('IINA has no previous playlist item.');
+      if (
+        !canNavigatePlaylist('previous', iina.playlist.count(), iina.mpv.getNumber('playlist-pos'))
+      ) {
+        throw new Error('IINA has no previous playlist item.');
+      }
       iina.playlist.playPrevious();
       return;
     case 'setVolume':

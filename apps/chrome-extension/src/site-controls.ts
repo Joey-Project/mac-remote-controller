@@ -53,6 +53,45 @@ function videoForDocument(document: Document): HTMLVideoElement | undefined {
   return video;
 }
 
+interface SeekableRange {
+  start: number;
+  end: number;
+}
+
+function readSeekableRanges(video: HTMLVideoElement): SeekableRange[] {
+  const ranges: SeekableRange[] = [];
+  for (let index = 0; index < video.seekable.length; index += 1) {
+    try {
+      const start = video.seekable.start(index);
+      const end = video.seekable.end(index);
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+        ranges.push({ start, end });
+      }
+    } catch {
+      // The live window can change while the browser exposes the TimeRanges.
+    }
+  }
+  return ranges.sort((left, right) => left.start - right.start);
+}
+
+function clampToSeekableRanges(target: number, direction: number, ranges: SeekableRange[]): number {
+  let previous: SeekableRange | undefined;
+  for (const range of ranges) {
+    if (target < range.start) {
+      if (!previous) return range.start;
+      const previousDistance = target - previous.end;
+      const nextDistance = range.start - target;
+      if (previousDistance === nextDistance) {
+        return direction > 0 ? range.start : previous.end;
+      }
+      return previousDistance < nextDistance ? previous.end : range.start;
+    }
+    if (target <= range.end) return target;
+    previous = range;
+  }
+  return previous?.end ?? target;
+}
+
 function findFirst(document: Document, selectors: readonly string[]): HTMLElement | undefined {
   for (const selector of selectors) {
     const element = document.querySelector<HTMLElement>(selector);
@@ -122,13 +161,19 @@ export async function executeMediaAction(
       ) {
         throw new Error('Invalid seek amount.');
       }
-      if (!Number.isFinite(video.duration) && video.seekable.length === 0) {
+      const currentTime = video.currentTime;
+      const targetTime = currentTime + value;
+      if (!Number.isFinite(currentTime) || !Number.isFinite(targetTime)) {
         throw new Error('This video cannot seek yet.');
       }
-      const maximum = Number.isFinite(video.duration)
-        ? Math.max(0, video.duration - 0.25)
-        : video.seekable.end(video.seekable.length - 1);
-      video.currentTime = Math.min(maximum, Math.max(0, video.currentTime + value));
+      if (Number.isFinite(video.duration)) {
+        const maximum = Math.max(0, video.duration - 0.25);
+        video.currentTime = Math.min(maximum, Math.max(0, targetTime));
+        return;
+      }
+      const ranges = readSeekableRanges(video);
+      if (ranges.length === 0) throw new Error('This video cannot seek yet.');
+      video.currentTime = clampToSeekableRanges(targetTime, value, ranges);
       return;
     }
     case 'setVolume':

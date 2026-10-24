@@ -55,6 +55,33 @@ export function iinaFormData(value: Record<string, unknown>): { payload: string 
   return { payload: JSON.stringify(value) };
 }
 
+/**
+ * Build a per-window routing label without browser cryptography APIs. This is
+ * an identifier, not an authentication token; bridge authentication uses the
+ * separate companion-issued token.
+ */
+export function createTargetID(nowMilliseconds = Date.now(), random = Math.random): string {
+  const randomPart = (): string => Math.floor(random() * 0x1_0000_0000).toString(36);
+  return `iina:${Math.floor(nowMilliseconds).toString(36)}-${randomPart()}-${randomPart()}`;
+}
+
+export function canNavigatePlaylist(
+  action: 'next' | 'previous',
+  playlistCount: number,
+  playlistPosition: number,
+): boolean {
+  if (
+    !Number.isInteger(playlistCount) ||
+    playlistCount < 2 ||
+    !Number.isInteger(playlistPosition) ||
+    playlistPosition < 0 ||
+    playlistPosition >= playlistCount
+  ) {
+    return false;
+  }
+  return action === 'next' ? playlistPosition < playlistCount - 1 : playlistPosition > 0;
+}
+
 export function effectiveMpvVolumePercent(value: number, muted: boolean): number | null {
   if (muted) return 0;
   return Number.isFinite(value) && value >= 0 ? value : null;
@@ -108,9 +135,14 @@ export function targetSnapshot(input: SnapshotInput): IINATargetSnapshot {
 
 function truncateUTF8(value: string, maximum: number): string {
   let result = '';
+  let byteCount = 0;
   for (const character of value) {
-    if (new TextEncoder().encode(result + character).byteLength > maximum) break;
+    const codePoint = character.codePointAt(0)!;
+    const characterBytes =
+      codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    if (byteCount + characterBytes > maximum) break;
     result += character;
+    byteCount += characterBytes;
   }
   return result;
 }

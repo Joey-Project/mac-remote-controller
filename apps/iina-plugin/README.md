@@ -6,10 +6,13 @@ using **Settings → Plugins → Install from file**, then enable the companion'
 local media bridge and copy its token into the plugin's preferences. The plugin
 uses HTTP polling against `127.0.0.1:47623`; it does not open a listener.
 
-Each IINA player window creates and reports its own exact target ID. Playback,
-relative seek, playlist next/previous, and player volume use IINA's supported
-Plugin API. Playlist controls are unavailable when the current playlist has at
-most one item. The plugin converts mpv's percentage-based volume and
+Each IINA player window creates and reports its own routing ID. The ID
+distinguishes windows but is not an authentication secret; the companion-issued
+bridge token authenticates requests. Playback, relative seek, playlist
+next/previous, and player volume use IINA's supported Plugin API. Playlist
+controls are unavailable at the relevant playlist boundary, and availability
+is checked again when a command executes. The plugin converts mpv's
+percentage-based volume and
 `volume-max` to the protocol's gain ratio (`1.0` means 100%) before reporting
 the current value and maximum. Incoming gain ratios are converted back to mpv
 percentages only when applying a volume command. A muted IINA window reports

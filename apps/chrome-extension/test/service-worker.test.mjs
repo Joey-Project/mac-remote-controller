@@ -24,6 +24,8 @@ async function makeHarness() {
   const nativeMessages = [];
   const tabMessages = [];
   const intervals = [];
+  const timeouts = new Map();
+  let timeoutId = 0;
   const runtimeMessage = makeEvent();
   const tabRemoved = makeEvent();
   const tabUpdated = makeEvent();
@@ -86,6 +88,14 @@ async function makeHarness() {
         intervals.push({ callback, delay });
         return intervals.length;
       },
+      setTimeout(callback, delay) {
+        timeoutId += 1;
+        timeouts.set(timeoutId, { callback, delay });
+        return timeoutId;
+      },
+      clearTimeout(id) {
+        timeouts.delete(id);
+      },
     }),
   );
   workerMessageListener = runtimeMessage.firstListener();
@@ -94,12 +104,20 @@ async function makeHarness() {
     nativeMessages,
     tabMessages,
     intervals,
+    timeouts,
+    nativeMessage,
     nativeDisconnected,
     tabRemoved,
     tabUpdated,
     workerMessageListener,
     sender,
     snapshot,
+    fireTimeout(id) {
+      const timeout = timeouts.get(id);
+      assert.ok(timeout, `timeout ${id} must be pending`);
+      timeouts.delete(id);
+      timeout.callback();
+    },
   };
 }
 
@@ -141,4 +159,46 @@ test('unavailable navigation, source removal, and native disconnect stop worker 
   harness.nativeDisconnected.dispatch();
   harness.intervals[0].callback();
   assert.equal(harness.tabMessages.length, 1);
+});
+
+test('command timeout retires its result, drops late replies, and frees the next request', async () => {
+  const harness = await makeHarness();
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  const firstCommand = {
+    type: 'media.command',
+    requestId: 'chrome-request-1',
+    targetId: 'chrome:41',
+    action: 'seek',
+    value: 1,
+  };
+  harness.nativeMessage.dispatch(firstCommand);
+
+  const firstTimeoutId = [...harness.timeouts.keys()][0];
+  assert.equal(harness.timeouts.get(firstTimeoutId).delay, 1_500);
+  harness.fireTimeout(firstTimeoutId);
+  const afterTimeoutCount = harness.nativeMessages.length;
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.commandResult');
+  assert.equal(harness.nativeMessages.at(-1).requestId, firstCommand.requestId);
+  assert.equal(harness.nativeMessages.at(-1).targetId, firstCommand.targetId);
+  assert.equal(harness.nativeMessages.at(-1).ok, false);
+
+  harness.workerMessageListener(
+    { type: 'mediaCommandResult', requestId: firstCommand.requestId, ok: true },
+    harness.sender,
+  );
+  assert.equal(harness.nativeMessages.length, afterTimeoutCount);
+  assert.equal(harness.timeouts.size, 0);
+
+  const nextCommand = { ...firstCommand, requestId: 'chrome-request-2' };
+  harness.nativeMessage.dispatch(nextCommand);
+  assert.equal(harness.timeouts.size, 1);
+  harness.workerMessageListener(
+    { type: 'mediaCommandResult', requestId: nextCommand.requestId, ok: true },
+    harness.sender,
+  );
+
+  assert.equal(harness.timeouts.size, 0);
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.commandResult');
+  assert.equal(harness.nativeMessages.at(-1).requestId, nextCommand.requestId);
+  assert.equal(harness.nativeMessages.at(-1).ok, true);
 });
