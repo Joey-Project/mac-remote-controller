@@ -20,6 +20,7 @@
 		100000000000000000000034 /* CommittedTextInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000035 /* CommittedTextInput.swift */; };
 		100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000036 /* SofaRemoteiOSUITests.swift */; };
 		100000000000000000000049 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000050 /* XCTest.framework */; };
+		C42000000000000000000001 /* MediaControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42000000000000000000002 /* MediaControls.swift */; };
 		100000000000000000000051 /* IOSBLEPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000052 /* IOSBLEPeer.swift */; };
 		B20000000000000000000001 /* RemoteActionsMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* RemoteActionsMenu.swift */; };
 		B20000000000000000000003 /* ConnectionBenchmarkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ConnectionBenchmarkSheet.swift */; };
@@ -39,6 +40,7 @@
 		100000000000000000000036 /* SofaRemoteiOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SofaRemoteiOSUITests.swift; sourceTree = "<group>"; };
 		100000000000000000000039 /* SofaRemoteiOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SofaRemoteiOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000050 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		C42000000000000000000002 /* MediaControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaControls.swift; sourceTree = "<group>"; };
 		100000000000000000000052 /* IOSBLEPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSBLEPeer.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* RemoteActionsMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteActionsMenu.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* ConnectionBenchmarkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBenchmarkSheet.swift; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 			children = (
 				100000000000000000000010 /* SofaRemoteiOSApp.swift */,
 				100000000000000000000024 /* RemoteView.swift */,
+				C42000000000000000000002 /* MediaControls.swift */,
 				A30000000000000000000002 /* SystemVolumeCard.swift */,
 				100000000000000000000026 /* PairingScanner.swift */,
 				100000000000000000000028 /* RemoteModel.swift */,
@@ -193,6 +196,7 @@
 			files = (
 				100000000000000000000012 /* SofaRemoteiOSApp.swift in Sources */,
 				100000000000000000000025 /* RemoteView.swift in Sources */,
+				C42000000000000000000001 /* MediaControls.swift in Sources */,
 				A30000000000000000000001 /* SystemVolumeCard.swift in Sources */,
 				100000000000000000000027 /* PairingScanner.swift in Sources */,
 				100000000000000000000029 /* RemoteModel.swift in Sources */,

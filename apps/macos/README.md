@@ -40,8 +40,20 @@ arbitrary shell commands or scripts are exposed. See the
 The companion samples desktop state once per second and shares that snapshot
 with connected clients; a volume change triggers an immediate refreshed state.
 
-IINA and browser playback adapters follow this foundation. Their selected source
-will remain independent of desktop focus.
+Enable **local media adapters** in the companion to expose the authenticated
+media-only bridge on `127.0.0.1:47623`. The companion creates a separate random
+bearer token in `~/Library/Application Support/SofaRemote/media-bridge.json`
+with mode `0600`. The bridge rejects cross-origin requests and does not expose
+desktop input. Copy the token only into the official IINA plugin preferences;
+Chrome uses a Native Messaging helper that reads the protected file directly.
+See [Chrome setup](../chrome-extension/README.md) and
+[IINA setup](../iina-plugin/README.md). The bridge is optional and stops when
+disabled.
+
+Media source selection is explicit and independent of the frontmost desktop
+application. Chrome tabs and each IINA player window report their own exact
+target IDs. Unavailable capabilities fail visibly, and commands are not replayed
+after the phone connection closes.
 
 For the authenticated Bluetooth protocol and connection benchmark limits, see
 the [wire contract](../../packages/protocol/v1-design.md#bluetooth-le-transport).

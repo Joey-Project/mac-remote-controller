@@ -9,6 +9,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     public var key: RemoteKey?
     public var button: PointerButton?
     public var shortcut: SystemShortcut?
+    public var mediaRequest: MediaRequest?
     public var tapTimestamp: TimeInterval?
 
     public init(
@@ -20,6 +21,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         key: RemoteKey? = nil,
         button: PointerButton? = nil,
         shortcut: SystemShortcut? = nil,
+        mediaRequest: MediaRequest? = nil,
         tapTimestamp: TimeInterval? = nil
     ) {
         self.name = name
@@ -30,6 +32,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         self.key = key
         self.button = button
         self.shortcut = shortcut
+        self.mediaRequest = mediaRequest
         self.tapTimestamp = tapTimestamp
     }
 
@@ -54,6 +57,8 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
                     "system.volume.set value must be finite and within 0...1")
             }
             try requireOnly(["value"])
+        case .mediaControl:
+            try validateMediaControl()
         }
     }
 
@@ -93,6 +98,14 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         }
     }
 
+    private func validateMediaControl() throws {
+        guard let mediaRequest else {
+            throw WireProtocolError.invalidCommand("media.control requires a media request")
+        }
+        try requireOnly(["mediaRequest"])
+        try mediaRequest.validate()
+    }
+
     private func requireCoordinates(limit: Double) throws {
         guard let x, let y, x.isFinite, y.isFinite, abs(x) <= limit, abs(y) <= limit else {
             throw WireProtocolError.invalidCommand(
@@ -122,8 +135,48 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         if shortcut != nil, !allowed.contains("shortcut") {
             throw WireProtocolError.invalidCommand("unexpected shortcut for \(name.rawValue)")
         }
+        if mediaRequest != nil, !allowed.contains("mediaRequest") {
+            throw WireProtocolError.invalidCommand("unexpected media request for \(name.rawValue)")
+        }
         if tapTimestamp != nil, !allowed.contains("tapTimestamp") {
             throw WireProtocolError.invalidCommand("unexpected tapTimestamp for \(name.rawValue)")
         }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: MediaDynamicCodingKey.self)
+        let name = try container.decode(
+            CommandName.self, forKey: MediaDynamicCodingKey("name"))
+        let keys = Set(container.allKeys.map(\.stringValue))
+        let allowed: Set<String> = [
+            "name", "x", "y", "value", "text", "key", "button", "shortcut", "mediaRequest",
+            "tapTimestamp"
+        ]
+        guard keys.isSubset(of: allowed) else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: container.codingPath,
+                    debugDescription: "command contains an unexpected field"))
+        }
+        if name == .mediaControl, keys != ["name", "mediaRequest"] {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: container.codingPath,
+                    debugDescription: "media.control must contain only name and mediaRequest"))
+        }
+        self.name = name
+        x = try container.decodeIfPresent(Double.self, forKey: MediaDynamicCodingKey("x"))
+        y = try container.decodeIfPresent(Double.self, forKey: MediaDynamicCodingKey("y"))
+        value = try container.decodeIfPresent(Double.self, forKey: MediaDynamicCodingKey("value"))
+        text = try container.decodeIfPresent(String.self, forKey: MediaDynamicCodingKey("text"))
+        key = try container.decodeIfPresent(RemoteKey.self, forKey: MediaDynamicCodingKey("key"))
+        button = try container.decodeIfPresent(
+            PointerButton.self, forKey: MediaDynamicCodingKey("button"))
+        shortcut = try container.decodeIfPresent(
+            SystemShortcut.self, forKey: MediaDynamicCodingKey("shortcut"))
+        mediaRequest = try container.decodeIfPresent(
+            MediaRequest.self, forKey: MediaDynamicCodingKey("mediaRequest"))
+        tapTimestamp = try container.decodeIfPresent(
+            TimeInterval.self, forKey: MediaDynamicCodingKey("tapTimestamp"))
     }
 }

@@ -10,7 +10,7 @@
     "lint": "oxlint --max-warnings=0 .",
     "typecheck": "tsc --noEmit",
     "build": "node ./scripts/build.mjs",
-    "test": "node --test"
+    "test": "pnpm run build && node --test"
   },
   "devDependencies": {
     "@types/chrome": "0.3.5",

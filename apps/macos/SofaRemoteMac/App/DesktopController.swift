@@ -49,6 +49,8 @@ final class DesktopController {
             try perform(command.shortcut, source: source)
         case .systemVolumeSet:
             break
+        case .mediaControl:
+            throw ControlError.invalidCommand
         }
     }
 

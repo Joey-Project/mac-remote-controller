@@ -11,14 +11,15 @@ struct PairedDevice: Codable, Identifiable {
 }
 
 @MainActor
-private final class ClientConnection {
+final class ClientConnection {
     let peer: RemotePeer
     var session: ServerSession?
     var inputState = DesktopInputState()
     var deviceID: String?
-    let connectedAt = Date()
-    var rateWindow = Date()
+    let connectedAtUptime = ProcessInfo.processInfo.systemUptime
+    var rateWindowUptime = ProcessInfo.processInfo.systemUptime
     var receivedCount = 0
+    var pendingMediaTasks: [String: Task<Void, Never>] = [:]
 
     init(peer: RemotePeer) { self.peer = peer }
 }
@@ -37,12 +38,13 @@ final class CompanionModel {
     var probeCount = 0
     var lastProbeProcessingMilliseconds: Double?
     let desktop = DesktopController()
+    let mediaAdapters = MediaAdapterController()
 
     private var listener: NWListener?
     @ObservationIgnored private var blePeripheral: MacBLEPeripheral?
     private var listenerReady = false
     private var identity: LocalIdentity?
-    private var clients: [UUID: ClientConnection] = [:]
+    var clients: [UUID: ClientConnection] = [:]
     var pendingHeldInputReleases: [UUID: HeldInputState] = [:]
     var heldPointerOwner: UUID?
     private var admission = ConnectionAdmission<UUID>()
@@ -54,20 +56,27 @@ final class CompanionModel {
         do {
             pairedDevices =
                 try SecureStore.load([PairedDevice].self, account: "paired-devices") ?? []
-            let identity = try ServerIdentity.loadOrCreate()
-            self.identity = identity
+            let loadedIdentity = try ServerIdentity.loadOrCreate()
+            identity = loadedIdentity
+            mediaAdapters.onTargetsChanged = { [weak self] targets in
+                self?.remoteState.mediaTargets = targets
+            }
             try startListener()
-            let blePeripheral = MacBLEPeripheral(serviceName: identity.serviceName) { [weak self] in
+            let pairedTokens: () -> [(id: String, token: String)] = { [weak self] in
                 self?.pairedDevices.map { (id: $0.id, token: $0.token) } ?? []
             }
+            let blePeripheral = MacBLEPeripheral(
+                serviceName: loadedIdentity.serviceName, pairedTokens: pairedTokens)
             self.blePeripheral = blePeripheral
             blePeripheral.onAuthenticated = { [weak self] peer, deviceID, deviceName in
                 self?.acceptAuthenticated(peer, deviceID: deviceID, deviceName: deviceName)
             }
             blePeripheral.onStatus = { [weak self] status in self?.bleStatus = status }
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tick() }
             }
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
         } catch {
             summary = "Companion unavailable"
             errorMessage = error.localizedDescription
@@ -106,6 +115,10 @@ final class CompanionModel {
             let affected = clients.values.filter { $0.deviceID == device.id }
             for client in affected { client.peer.close() }
         } catch { errorMessage = error.localizedDescription }
+    }
+
+    func setMediaBridgeEnabled(_ enabled: Bool) {
+        mediaAdapters.setEnabled(enabled)
     }
 
     private func startListener() throws {
@@ -180,7 +193,7 @@ final class CompanionModel {
         peer.send(
             WireMessage(
                 type: .welcome, connectionID: session.connectionID,
-                state: stateForClient(desktop.state)))
+                state: stateForClient(remoteState)))
         refreshConnectedCount()
     }
 }
@@ -207,29 +220,14 @@ extension CompanionModel {
     }
 
     private func allowIncomingMessage(from client: ClientConnection) -> Bool {
-        if Date().timeIntervalSince(client.rateWindow) >= 1 {
-            client.rateWindow = Date()
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - client.rateWindowUptime >= 1 {
+            client.rateWindowUptime = now
             client.receivedCount = 0
         }
         client.receivedCount += 1
         guard client.receivedCount <= 240 else { client.peer.close(); return false }
         return true
-    }
-
-    private func receiveProbe(
-        _ message: WireMessage, client: ClientConnection, session: ServerSession
-    ) {
-        let start = DispatchTime.now().uptimeNanoseconds
-        guard message.connectionID == session.connectionID,
-            let requestID = message.requestID, let sequence = message.sequence
-        else { client.peer.close(); return }
-        let pong = WireMessage(
-            type: .pong, connectionID: session.connectionID,
-            requestID: requestID, sequence: sequence)
-        client.peer.send(pong)
-        lastProbeProcessingMilliseconds =
-            Double(DispatchTime.now().uptimeNanoseconds &- start) / 1_000_000
-        probeCount += 1
     }
 
     private func receiveCommand(
@@ -242,6 +240,11 @@ extension CompanionModel {
         do {
             let accepted = try session.accept(message)
             client.session = session
+            if accepted.command.name == .mediaControl, let request = accepted.command.mediaRequest {
+                startMediaCommand(
+                    accepted, request: request, session: session, client: client, id: id)
+                return
+            }
             let failure = execute(accepted.command, for: client, id: id)
             client.peer.send(session.makeResult(for: accepted, error: failure))
             if accepted.command.name == .systemVolumeSet { refreshStateAndBroadcast() }
@@ -302,7 +305,7 @@ extension CompanionModel {
                 WireMessage(
                     type: .welcome, authToken: issuedToken,
                     connectionID: session.connectionID,
-                    state: stateForClient(desktop.state)))
+                    state: stateForClient(remoteState)))
             refreshConnectedCount()
         } catch {
             errorMessage = error.localizedDescription
@@ -310,36 +313,30 @@ extension CompanionModel {
         }
     }
 
-    private func sendState(_ state: RemoteState, to client: ClientConnection) {
-        guard let session = client.session else { return }
-        client.peer.send(
-            WireMessage(
-                type: .state, connectionID: session.connectionID, state: stateForClient(state)))
-    }
-
-    private func stateForClient(_ state: RemoteState) -> RemoteState {
-        var state = state
-        state.capabilities = [WireCapabilities.roundTripProbe]
-        return state
+    private func refreshDesktopState() {
+        remoteState = desktop.state
+        remoteState.mediaTargets = mediaAdapters.mediaTargets
     }
 
     private func refreshStateAndBroadcast() {
-        let state = desktop.state
-        remoteState = state
+        refreshDesktopState()
         for client in clients.values where client.session != nil {
-            sendState(state, to: client)
+            sendState(remoteState, to: client)
         }
     }
 
     private func tick() {
+        mediaAdapters.expireStaleTargets()
         refreshStateAndBroadcast()
         if let pairing, pairing.expiresAt <= Date() { closePairing() }
+        let now = ProcessInfo.processInfo.systemUptime
         let expired = clients.values.filter {
-            $0.session == nil && Date().timeIntervalSince($0.connectedAt) > 10
+            $0.session == nil && now - $0.connectedAtUptime > 10
         }
         for client in expired { client.peer.close() }
         for (id, client) in clients {
-            let expiredButtons = client.inputState.heldInput.expiredButtons(ifOlderThan: 8)
+            let expiredButtons = client.inputState.heldInput.expiredButtons(
+                ifOlderThan: 8, now: now)
             if !expiredButtons.isEmpty {
                 desktop.release(expiredButtons, from: &client.inputState.heldInput)
                 if client.inputState.heldInput.buttons.isEmpty, heldPointerOwner == id {
@@ -356,6 +353,11 @@ extension CompanionModel {
 
     private func removeClient(_ id: UUID, closePeer: Bool = false) {
         guard let client = clients.removeValue(forKey: id) else { return }
+        if let session = client.session {
+            mediaAdapters.router.cancel(sessionID: session.connectionID)
+        }
+        for task in client.pendingMediaTasks.values { task.cancel() }
+        client.pendingMediaTasks.removeAll()
         desktop.release(&client.inputState.heldInput)
         if client.inputState.heldInput.buttons.isEmpty {
             if heldPointerOwner == id { heldPointerOwner = nil }
@@ -389,4 +391,5 @@ extension CompanionModel {
             return RemoteError(code: "control_unavailable", message: error.localizedDescription)
         }
     }
+
 }

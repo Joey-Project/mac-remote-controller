@@ -121,6 +121,28 @@ final class InputCommandSchedulerTests: XCTestCase {
         }
     }
 
+    func testEveryMediaActionIsAnOrderingBarrier() {
+        let requests = [
+            MediaRequest(targetID: "iina:1", action: .playPause),
+            MediaRequest(targetID: "iina:1", action: .seek, value: 5),
+            MediaRequest(targetID: "iina:1", action: .next),
+            MediaRequest(targetID: "iina:1", action: .previous),
+            MediaRequest(targetID: "iina:1", action: .setVolume, value: 0.5)
+        ]
+
+        for request in requests {
+            var scheduler = InputCommandScheduler(capacity: 2)
+            let precedingMotion = RemoteCommand(name: .pointerMove, x: 3, y: 0)
+            let mediaCommand = RemoteCommand(name: .mediaControl, mediaRequest: request)
+            XCTAssertTrue(scheduler.enqueue(precedingMotion))
+            XCTAssertTrue(scheduler.enqueue(mediaCommand))
+            XCTAssertFalse(
+                scheduler.enqueue(RemoteCommand(name: .pointerMove, x: 2, y: 1)),
+                "\(request.action) must protect preceding pointer motion")
+            XCTAssertEqual(scheduler.queuedCommands, [precedingMotion, mediaCommand])
+        }
+    }
+
     func testSaturatedBarrierQueueDropsOnlyBestEffortPointerDeltas() {
         var scheduler = InputCommandScheduler(capacity: 3)
         let queued = [

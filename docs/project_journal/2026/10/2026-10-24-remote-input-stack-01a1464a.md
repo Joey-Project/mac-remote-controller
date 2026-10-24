@@ -75,26 +75,39 @@ superseded_by:
   the source supports them. Player volume uses 10% steps and a clear 100% snap point;
   its maximum is a reported player capability.
 
-## Shared gate dependency
+## Native stack prerequisite and verifier
 
-- Ordinary repository CI accepts non-default PR bases. The currently published shared
-  Codex review gate rejects them and needs upstream stacked-base support and retarget
-  handling. A clean remote review cannot substitute for that required check.
-- On 2026-10-24 the `@v2` action ref and released v2.2.10 resolved to the same commit;
-  the current action inputs match this repository's consumer. The non-default-base
-  rejection remains an upstream gate limitation.
-- The user explicitly chose repository-only changes and will coordinate the upstream
-  fix. Do not modify, publish, or merge either upstream repository from this workstream.
-- Keep this external dependency visible in PR evidence; do not skip, replace, or forge
-  the shared check to report readiness.
+- The released upstream `@v2` action resolves to v2.2.11 and supports authenticated
+  GitHub-native stacks rooted at the repository default branch. Manually chained
+  base branches still require native stack membership registration.
+- Native stack 10 is registered from `master` in order PR #9, #4, #5, #6, #7, #8.
+  The members remain open and unmerged. See the [GitHub stacked pull request API](https://docs.github.com/en/rest/pulls/stacks).
+- Repository PR #9 subscribes the verifier to GitHub's documented
+  `pull_request.stacked` activity. Its `actionlint` 1.7.12 compatibility rule is
+  limited to the documented event diagnostic; the `stacked_typo` negative control
+  remains rejected. The required check, provider-review policy, permission scope,
+  and upstream `@v2` reference remain unchanged.
+- The Simulator gate allows 240 seconds per case, 40 minutes for the UI-test step,
+  and 50 minutes for the Apple job. Failure diagnostics preserve the original
+  `xcodebuild` exit status, mute and cleanup behavior, and at most ten annotations.
+  The iOS README matches these limits and diagnostics.
+- The intended source stack is PR #9, functional PRs #4–#7, and optional offline
+  Web preview PR #8. Registration and branch retargeting are repository metadata
+  operations; CI support alone does not create stack membership.
+- Upstream action changes remain outside this repository-only workstream. Do not
+  skip, replace, or forge the shared required check.
 
 ## Evidence and follow-up
 
 - Foundation: PR #2; connected-screen and Simulator coverage: PR #3.
-- The final Gesture+BLE integration check passed 108 AppleCore tests, macOS and generic
-  iOS Simulator app builds, and plist validation. Full Node format, lint, typecheck, test,
-  and build checks also passed, along with actionlint, shell, and journal validation. No
-  Simulator UI suite, physical BLE radio, or real RTT comparison was run for this check.
+- Final integrated local checks passed 154 AppleCore package tests, macOS and generic
+  iOS Simulator app builds, generated plist validation, and the `SofaRemoteNativeHost`
+  release build. Pinned Node 26.12.0/pnpm 12.14.0 format, lint, typecheck, tests, and
+  builds passed: Chrome 20/20 and IINA 13/13. Chrome native-host reconnects use
+  a 15-second maximum backoff; IINA rereads current bridge settings and yields
+  after batches of at most eight commands. `actionlint` 1.7.12, shell syntax,
+  ShellCheck 0.11.0, project-journal validation, and whitespace checks passed. This local
+  gate did not run the Simulator UI suite, physical BLE radio, or live media playback.
 - Per-slice validation and current external-gate state belong in the corresponding PR.
 - Later product work retains numeric-comparison pairing, Control Centre/widgets, and
   installation-entry exploration from the earlier journals.
