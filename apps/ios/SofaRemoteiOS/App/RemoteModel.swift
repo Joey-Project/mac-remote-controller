@@ -62,9 +62,11 @@ final class RemoteModel {
     var connectionID: String?
     var sequence: UInt64 = 0
     var pending: [String: (metadata: PendingCommandMetadata, sent: ContinuousClock.Instant)] = [:]
-    private var commandScheduler = InputCommandScheduler(capacity: 8)
+    @ObservationIgnored var commandScheduler = InputCommandScheduler(capacity: 8)
+    @ObservationIgnored var localPointerDragCoordinator = LocalPointerDragCoordinator()
+    var rejectedLocalDragID: UUID?
     private var deadline: Timer?
-    private var coalescingTimer: Timer?
+    @ObservationIgnored var coalescingTimer: Timer?
     var benchmark: RTTBenchmarkAccumulator?
     var benchmarkRequest: BenchmarkPendingProbe?
     var benchmarkRequestTracker = RTTBenchmarkRequestTracker()
@@ -259,6 +261,7 @@ final class RemoteModel {
         connectionID = nil
         pending.removeAll()
         commandScheduler.reset()
+        resetLocalDragTracking()
         coalescingTimer?.invalidate()
         coalescingTimer = nil
         connectionSummary = "Disconnected"
@@ -281,6 +284,7 @@ extension RemoteModel {
                 connectionID = nil
                 remoteState = nil
                 benchmarkRequestTracker.reset()
+                resetLocalDragTracking()
                 connectionSummary = "Disconnected"
                 errorMessage = nil
                 return
@@ -302,6 +306,7 @@ extension RemoteModel {
         remoteState = nil
         pending.removeAll()
         commandScheduler.reset()
+        resetLocalDragTracking()
         connectionSummary = "Disconnected"
         errorMessage =
             unknown
@@ -353,37 +358,4 @@ extension RemoteModel {
         return true
     }
 
-}
-
-extension RemoteModel {
-    private func scheduleCoalescedFlush() {
-        guard coalescingTimer == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.coalescingTimer = nil
-                self?.flushQueuedCommands()
-            }
-        }
-        coalescingTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
-    }
-
-    func flushQueuedCommands() {
-        guard let connectionID, let peer else { return }
-        let available = max(0, 8 - pending.count)
-        for command in commandScheduler.dequeue(maximumCount: available) {
-            sequence += 1
-            let requestID = UUID().uuidString
-            pending[requestID] = (
-                metadata: PendingCommandMetadata(
-                    connectionID: connectionID, requestID: requestID,
-                    sequence: sequence, command: command),
-                sent: ContinuousClock.now
-            )
-            peer.send(
-                WireMessage(
-                    type: .command, connectionID: connectionID, requestID: requestID,
-                    sequence: sequence, command: command))
-        }
-    }
 }

@@ -8,9 +8,39 @@ public enum TouchGestureKind: Sendable, Equatable {
     case ignore
 }
 
+public struct TouchGestureInstructions: Sendable, Equatable {
+    public let caption: String
+    public let accessibilityHint: String
+
+    public init(caption: String, accessibilityHint: String) {
+        self.caption = caption
+        self.accessibilityHint = accessibilityHint
+    }
+}
+
 /// Pure touch-count and swipe policy shared with the UIKit classifier.
 public enum TouchGesturePolicy {
     public static let defaultMaximumTapDuration: TimeInterval = 0.5
+
+    public static func instructions(
+        dragEnabled: Bool, shortcutsEnabled: Bool
+    ) -> TouchGestureInstructions {
+        var captionParts = ["1 finger move/tap", "2 fingers scroll/right-click"]
+        var accessibilityParts = [
+            "One finger moves and taps", "two fingers scroll or right-click"
+        ]
+        if dragEnabled {
+            captionParts.append("3 drag")
+            accessibilityParts.append("three fingers drag")
+        }
+        if shortcutsEnabled {
+            captionParts.append("4 swipe")
+            accessibilityParts.append("four fingers open Mac window controls")
+        }
+        return TouchGestureInstructions(
+            caption: captionParts.joined(separator: " · "),
+            accessibilityHint: accessibilityParts.joined(separator: "; ") + ".")
+    }
 
     public static func shouldBeginMovement(distance: Double, threshold: Double) -> Bool {
         distance.isFinite && threshold.isFinite && threshold >= 0 && distance >= threshold

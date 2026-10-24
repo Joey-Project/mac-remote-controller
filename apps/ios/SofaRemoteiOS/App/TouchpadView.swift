@@ -16,13 +16,18 @@ struct TouchpadCard: View {
     let onDragEnd: () -> Void
     let onShortcut: (SystemShortcut) -> Void
 
+    private var gestureInstructions: TouchGestureInstructions {
+        TouchGesturePolicy.instructions(
+            dragEnabled: dragEnabled, shortcutsEnabled: shortcutsEnabled)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Touchpad", systemImage: "cursorarrow")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text("1 finger move/tap · 2 fingers scroll/right-click · 3 drag · 4 swipe")
+                Text(gestureInstructions.caption)
                     .font(.caption).foregroundStyle(.secondary)
             }
             ZStack {
@@ -47,10 +52,7 @@ struct TouchpadCard: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Touchpad")
             .accessibilityIdentifier("touchpad.surface")
-            .accessibilityHint(
-                "One finger moves and taps; two fingers scroll or right-click; "
-                    + "three fingers drag; four fingers open Mac window controls"
-            )
+            .accessibilityHint(gestureInstructions.accessibilityHint)
             .accessibilityAction(named: Text("Right-click")) { if isEnabled { onRightClick() } }
             .accessibilityAction(.default) { if isEnabled { onTap() } }
             .disabled(!isEnabled)
