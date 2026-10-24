@@ -3,3 +3,11 @@
 self-hosted-runner:
   labels:
     - xcode-27
+
+paths:
+  .github/workflows/codex-review-gate.yml:
+    ignore:
+      # GitHub documents this activity, but actionlint 1.7.12 omits it.
+      # Remove this exact diagnostic filter when actionlint supports it.
+      # https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request
+      - '^invalid activity type "stacked" for "pull_request" Webhook event\.'
