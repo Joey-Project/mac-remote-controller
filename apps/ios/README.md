@@ -24,6 +24,12 @@ arrow keys, Return, Escape, Delete, and Space. Compose text locally, then tap
 Send to submit committed Unicode text; intermediate input-method composition
 is not streamed.
 
+Pointer and scroll updates are combined for up to one display interval before
+they are sent. Adjacent deltas retain their sum; clicks and keyboard commands
+remain in order. If the bounded queue overloads, movement after the latest
+click or keyboard command may be cleared and replaced with the newest movement.
+Movement that positions an accepted click stays ahead of that click.
+
 The volume control uses a fixed position at the top of the screen. It starts
 hidden in touchpad mode; use the top menu to change the touchpad's volume-pin
 preference, which persists across mode changes. Keyboard mode always shows the
