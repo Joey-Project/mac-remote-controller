@@ -22,6 +22,7 @@ export type TextCount = Readonly<{ count: number; unit: TextCountUnit }>;
 
 export type WindowShortcutTarget = 'page' | 'control';
 export type WindowShortcutModifiers = Readonly<{
+  shiftKey: boolean;
   altKey: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
@@ -67,10 +68,16 @@ const DEFAULT_GRAPHEME_SEGMENTER =
 export function shouldHandleWindowShortcut(
   key: string,
   target: WindowShortcutTarget,
-  modifiers: WindowShortcutModifiers = { altKey: false, ctrlKey: false, metaKey: false },
+  modifiers: WindowShortcutModifiers = {
+    shiftKey: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+  },
 ): boolean {
   return (
     target === 'page' &&
+    !modifiers.shiftKey &&
     !modifiers.altKey &&
     !modifiers.ctrlKey &&
     !modifiers.metaKey &&

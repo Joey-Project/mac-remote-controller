@@ -170,12 +170,13 @@ const keyboardKeys: Readonly<Record<string, string>> = {
 };
 
 window.addEventListener('keydown', (event: KeyboardEvent) => {
+  const modifiers = { altKey: event.altKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey };
   if (
     event.repeat ||
     !shouldHandleWindowShortcut(
       event.key,
       isInteractiveKeyTarget(event.target) ? 'control' : 'page',
-      { altKey: event.altKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey },
+      { ...modifiers, shiftKey: event.shiftKey },
     )
   ) {
     return;

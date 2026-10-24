@@ -88,15 +88,27 @@ test('window shortcuts preserve native activation keys on interactive controls',
   assert.equal(shouldHandleWindowShortcut('ArrowLeft', 'control'), false);
   assert.equal(shouldHandleWindowShortcut('NotAKey', 'page'), false);
   for (const modifiers of [
-    { altKey: true, ctrlKey: false, metaKey: false },
-    { altKey: false, ctrlKey: true, metaKey: false },
-    { altKey: false, ctrlKey: false, metaKey: true },
+    { shiftKey: true, altKey: false, ctrlKey: false, metaKey: false },
+    { shiftKey: false, altKey: true, ctrlKey: false, metaKey: false },
+    { shiftKey: false, altKey: false, ctrlKey: true, metaKey: false },
+    { shiftKey: false, altKey: false, ctrlKey: false, metaKey: true },
   ]) {
     assert.equal(shouldHandleWindowShortcut('ArrowLeft', 'page', modifiers), false);
     assert.equal(shouldHandleWindowShortcut('Enter', 'page', modifiers), false);
+    assert.equal(shouldHandleWindowShortcut(' ', 'page', modifiers), false);
   }
   assert.equal(
+    shouldHandleWindowShortcut(' ', 'page', {
+      shiftKey: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+    }),
+    true,
+  );
+  assert.equal(
     shouldHandleWindowShortcut('ArrowLeft', 'page', {
+      shiftKey: false,
       altKey: false,
       ctrlKey: false,
       metaKey: false,

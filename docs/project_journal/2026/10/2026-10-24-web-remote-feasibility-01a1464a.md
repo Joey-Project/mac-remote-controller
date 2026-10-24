@@ -51,6 +51,11 @@ superseded_by:
   Line-mode wheel input uses an explicit 24 CSS-pixel preview line; page-mode
   input uses the layout viewport height. This package-only validation does not
   replace the full merged-stack gate.
+- The latest Web interaction review fixes preserve the browser's native
+  Shift+Space page scroll by excluding Shift-modified events from preview
+  shortcuts, while keeping unmodified Space and focused control activation.
+  Responsive shell padding now includes the horizontal device safe-area insets
+  at each existing breakpoint.
 - The current Web integration includes Media commit
   `cb2adbbd29687183f0f6810fa370d3d2693a55c7`. Node.js 26.12.0 and pnpm
   12.14.0 passed format check, lint, strict typecheck, tests, and builds for all
@@ -62,10 +67,11 @@ superseded_by:
   `SofaRemoteNativeHost` release build remain the applicable native evidence.
   No native build was repeated for this TypeScript parent integration.
   `actionlint` 1.7.12, shell syntax checks, ShellCheck 0.11.0, and
-  project-journal validation passed. Web preview source is unchanged from
-  `063533e09bbf014387a37eeb0c5db0c463fe7777`; its clean review was for that
-  earlier head, so this merged integration needs a fresh review. This gate did
-  not run browser UI, iOS Simulator UI, physical devices, or media playback.
+  project-journal validation passed. This integration starts from Web commit
+  `063533e09bbf014387a37eeb0c5db0c463fe7777` and includes the keyboard and
+  safe-area fixes above; the earlier clean review covered the base head, so the
+  combined candidate needs a fresh review. This gate did not run browser UI,
+  iOS Simulator UI, physical devices, or media playback.
 - A desktop in-app-browser smoke of the source-identical built mirror passed:
   the offline/no-Mac banner appeared, a left-click action ran locally, keyboard
   mode switched, text input reached nine characters, the right-arrow counter

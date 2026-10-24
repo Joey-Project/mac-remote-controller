@@ -23,8 +23,9 @@ to test pairing, security, command delivery, or physical-device behavior.
   ignored. Pointer cancellation, lost pointer capture, window blur, and page
   deactivation clear the active gesture.
 - Window keyboard shortcuts run only when focus is outside interactive controls
-  and no Alt, Control, or Command modifier is held. Enter and Space keep their
-  browser-native button behavior, and modified browser shortcuts remain
+  and no Shift, Alt, Control, or Command modifier is held. Enter and unmodified
+  Space remain available in the preview; focused controls keep their native
+  activation, and modified browser shortcuts such as Shift+Space remain
   untouched.
 - The touch surface accepts primary-button pointer input. Secondary and middle
   mouse/pen buttons do not count as taps; multiple touch pointers remain
