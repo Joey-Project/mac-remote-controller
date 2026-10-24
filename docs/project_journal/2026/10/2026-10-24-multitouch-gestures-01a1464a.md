@@ -57,6 +57,9 @@ superseded_by:
   40-minute limit and the Apple job a 50-minute limit: a six-scenario CI run took
   about 23 minutes, so the added capability and gesture cases need headroom.
   These limits do not assert that a particular run passed.
+- A failed Simulator run extracts its XCTest summary and reports up to ten
+  failure messages as GitHub annotations, while preserving the original
+  `xcodebuild` exit status. Missing summaries produce a diagnostic warning.
 
 ## Remaining Acceptance
 
