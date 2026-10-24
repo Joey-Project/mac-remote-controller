@@ -122,3 +122,13 @@ superseded_by:
   On iOS 18, a parent media-card identifier propagated over its child controls,
   hiding the picker's `media.target` identifier. Removing that unused parent
   identifier preserves the child's identity for the live media test.
+- The corrected live test passed on a physical iPhone XS running iOS 18 at
+  `7acf3c69766d282354b317fffa55e317b6ab02e5`: stored-pairing reconnect, real
+  Bilibili source selection, and three forward-ten-second seeks, each receiving
+  a correlated successful result with no connection-problem alert. XCTest
+  reported one passed test, zero failures, and zero skips. Fixtures were disabled
+  and system audio remained muted. The app was then relaunched normally.
+- The live test used the existing running companion and extension. Bundled
+  first-install UI acceptance remains separate. CI's newer `lipo` rejected
+  multi-architecture `-verify_arch` arguments; bundle validation now reads the
+  executable's architecture list and checks each requested slice explicitly.

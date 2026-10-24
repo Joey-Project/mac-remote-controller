@@ -45,7 +45,13 @@ rm -f "$resources/SofaRemote.iinaplgz"
     zip -q -X "$resources/SofaRemote.iinaplgz" Info.json main.js preferences.html
 )
 lipo -create "${helper_slices[@]}" -output "$helpers/SofaRemoteNativeHost"
-lipo "$helpers/SofaRemoteNativeHost" -verify_arch "${architectures[@]}"
+built_architectures="$(lipo -archs "$helpers/SofaRemoteNativeHost")"
+for architecture in "${architectures[@]}"; do
+    if [[ " $built_architectures " != *" $architecture "* ]]; then
+        printf 'Native host is missing requested architecture: %s\n' "$architecture" >&2
+        exit 1
+    fi
+done
 chmod 755 "$helpers/SofaRemoteNativeHost"
 codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none \
     "$helpers/SofaRemoteNativeHost"
