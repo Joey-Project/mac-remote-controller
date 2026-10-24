@@ -7,6 +7,7 @@ class StubVideo {
   duration = 30;
   currentTime = 10;
   volume = 0.5;
+  muted = false;
   seekable = { length: 0 };
 
   async play() {
@@ -69,6 +70,24 @@ test('capabilities are derived from the current video and available episode cont
   assert.equal(target?.capabilities.next, true);
   assert.equal(target?.capabilities.previous, true);
   assert.equal(target?.capabilities.playerVolumeMaximum, 1);
+});
+
+test('muted playback reports effective zero volume and a positive adjustment unmutes it', async () => {
+  const { document, video } = makeDocument();
+  video.volume = 0.65;
+  video.muted = true;
+
+  assert.equal(readMediaTarget(document, 'https://www.youtube.com/watch?v=1')?.playerVolume, 0);
+
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'setVolume', 0.7);
+  assert.equal(video.volume, 0.7);
+  assert.equal(video.muted, false);
+  assert.equal(readMediaTarget(document, 'https://www.youtube.com/watch?v=1')?.playerVolume, 0.7);
+
+  video.muted = true;
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'setVolume', 0);
+  assert.equal(video.muted, true);
+  assert.equal(readMediaTarget(document, 'https://www.youtube.com/watch?v=1')?.playerVolume, 0);
 });
 
 test('playback, relative seek, and player volume act on the selected tab video', async () => {

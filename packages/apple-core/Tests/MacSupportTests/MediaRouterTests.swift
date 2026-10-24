@@ -86,4 +86,34 @@ final class MediaRouterTests: XCTestCase {
         }
         XCTAssertNil(router.takeNext(targetID: target.id))
     }
+
+    func testAdapterTimeoutCompletesBeforeClientDeadlineWithoutReplayingCommand() async throws {
+        let router = MediaRouter()
+        let target = MediaTarget(
+            id: "chrome:timeout", name: "YouTube · Test", kind: .youtube,
+            capabilities: MediaCapabilities(
+                playPause: true, seek: true, next: true, previous: false))
+        try router.update(target)
+        let requestID = "session-timeout:1"
+        let startedAt = ContinuousClock.now
+        let work = Task {
+            try await router.execute(
+                MediaRequest(targetID: target.id, action: .next),
+                requestID: requestID, sessionID: "session-timeout")
+        }
+        await Task.yield()
+        XCTAssertEqual(router.takeNext(for: .youtube)?.requestID, requestID)
+
+        do {
+            try await work.value
+            XCTFail("an unanswered adapter command must time out")
+        } catch {
+            XCTAssertEqual(
+                error as? MediaRouteError,
+                .adapter("The media player did not respond."))
+        }
+
+        XCTAssertLessThan(startedAt.duration(to: ContinuousClock.now), .seconds(3))
+        XCTAssertNil(router.takeNext(for: .youtube))
+    }
 }

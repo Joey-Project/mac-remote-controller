@@ -10,6 +10,7 @@ function makeContext() {
   const scheduled = new Map();
   let mutationCallback;
   let timeoutId = 0;
+  let runtimeMessageListener;
   let title = 'Episode one';
   let currentVideo = {
     duration: 30,
@@ -57,7 +58,11 @@ function makeContext() {
         sent.push(message);
         return Promise.resolve();
       },
-      onMessage: { addListener() {} },
+      onMessage: {
+        addListener(listener) {
+          runtimeMessageListener = listener;
+        },
+      },
     },
   };
   const location = { href: 'https://www.youtube.com/watch?v=1' };
@@ -78,6 +83,9 @@ function makeContext() {
     sent,
     scheduled,
     windowListeners,
+    refresh() {
+      runtimeMessageListener({ type: 'mediaRefresh' });
+    },
     mutate() {
       mutationCallback();
     },
@@ -121,4 +129,18 @@ test('content script refreshes source after SPA navigation, BFCache restore, and
   harness.scheduled.delete(timerId);
   callback();
   assert.match(harness.sent.at(-1).snapshot.name, /Episode three/);
+});
+
+test('service-worker refresh messages report the current tab video without a page timer', async () => {
+  const source = await readFile(new URL('../dist/content-script.js', import.meta.url), 'utf8');
+  const harness = makeContext();
+  vm.runInContext(source, harness.context);
+  const initialMessageCount = harness.sent.length;
+
+  harness.setPage({ pageTitle: 'Background episode' });
+  harness.refresh();
+
+  assert.equal(harness.sent.length, initialMessageCount + 1);
+  assert.equal(harness.sent.at(-1).type, 'mediaState');
+  assert.match(harness.sent.at(-1).snapshot.name, /Background episode/);
 });

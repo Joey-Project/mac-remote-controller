@@ -83,7 +83,9 @@ export function readMediaTarget(document: Document, url: string): TargetSnapshot
       previous: Boolean(findFirst(document, adapter.previous)),
       playerVolumeMaximum: 1,
     },
-    playerVolume: Math.min(1, Math.max(0, Number.isFinite(video.volume) ? video.volume : 0)),
+    playerVolume: video.muted
+      ? 0
+      : Math.min(1, Math.max(0, Number.isFinite(video.volume) ? video.volume : 0)),
   };
 }
 
@@ -134,6 +136,7 @@ export async function executeMediaAction(
         throw new Error('This player volume is outside its supported range.');
       }
       video.volume = value;
+      if (value > 0) video.muted = false;
       return;
     case 'next':
     case 'previous': {

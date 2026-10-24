@@ -6,6 +6,7 @@ export interface SnapshotInput {
   duration: number | null;
   mpvVolumePercent: number;
   maximumMpvPercent: number;
+  muted: boolean;
   playlistCount: number;
   playlistPosition: number;
 }
@@ -50,11 +51,25 @@ export function mpvPercentFromGainRatio(value: number, maximumMpvPercent: number
   return Number.isFinite(mpvPercent) && mpvPercent <= maximumMpvPercent ? mpvPercent : null;
 }
 
+export function iinaFormData(value: Record<string, unknown>): { payload: string } {
+  return { payload: JSON.stringify(value) };
+}
+
+export function effectiveMpvVolumePercent(value: number, muted: boolean): number | null {
+  if (muted) return 0;
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export function shouldUnmuteForGainRatio(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
+}
+
 export function targetSnapshot(input: SnapshotInput): IINATargetSnapshot {
   const title = input.title.trim() || 'IINA';
   const maximum = gainRatioFromMpvPercent(input.maximumMpvPercent);
   const maximumGainRatio = maximum !== null && maximum > 0 ? maximum : null;
-  const volume = gainRatioFromMpvPercent(input.mpvVolumePercent);
+  const effectiveVolume = effectiveMpvVolumePercent(input.mpvVolumePercent, input.muted);
+  const volume = effectiveVolume === null ? null : gainRatioFromMpvPercent(effectiveVolume);
   const hasFile = !input.idle;
   return {
     target: {

@@ -1,4 +1,10 @@
-import { mpvPercentFromGainRatio, targetSnapshot, validateAction } from './iina-controls';
+import {
+  iinaFormData,
+  mpvPercentFromGainRatio,
+  shouldUnmuteForGainRatio,
+  targetSnapshot,
+  validateAction,
+} from './iina-controls';
 
 const targetId = `iina:${crypto.randomUUID()}`;
 const bridgePort = iina.preferences.get('bridge_port') as number;
@@ -13,11 +19,15 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${bridgeToken}` };
 }
 
-async function request<T>(method: 'get' | 'post', path: string, data?: unknown): Promise<T> {
+async function request<T>(
+  method: 'get' | 'post',
+  path: string,
+  data?: Record<string, unknown>,
+): Promise<T> {
   const options = {
     headers: authHeaders(),
     params: {} as Record<string, string>,
-    data: data ?? {},
+    data: method === 'post' ? iinaFormData(data ?? {}) : {},
   };
   const response =
     method === 'get'
@@ -39,6 +49,7 @@ function snapshot() {
     duration: iina.core.status.duration,
     mpvVolumePercent: iina.core.audio.volume,
     maximumMpvPercent,
+    muted: iina.core.audio.muted,
     playlistCount: iina.playlist.count(),
     playlistPosition: iina.mpv.getNumber('playlist-pos'),
   });
@@ -65,6 +76,7 @@ async function execute(action: string, value: number | undefined): Promise<void>
       return;
     case 'setVolume':
       iina.core.audio.volume = mpvPercentFromGainRatio(value!, maximumMpvPercent)!;
+      if (shouldUnmuteForGainRatio(value!)) iina.core.audio.muted = false;
       return;
     default:
       throw new Error('Unsupported media action.');

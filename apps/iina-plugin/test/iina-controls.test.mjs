@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   gainRatioFromMpvPercent,
+  effectiveMpvVolumePercent,
+  iinaFormData,
   mpvPercentFromGainRatio,
+  shouldUnmuteForGainRatio,
   targetSnapshot,
   validateAction,
 } from '../dist/iina-controls.js';
@@ -16,6 +19,7 @@ test('IINA state exposes exact target ID and gain-ratio volume range', () => {
     duration: 60,
     mpvVolumePercent: 110,
     maximumMpvPercent: 130,
+    muted: false,
     playlistCount: 2,
     playlistPosition: 0,
   });
@@ -33,6 +37,7 @@ test('IINA state exposes exact target ID and gain-ratio volume range', () => {
     duration: 60,
     mpvVolumePercent: 90,
     maximumMpvPercent: 130,
+    muted: false,
     playlistCount: 2,
     playlistPosition: 1,
   });
@@ -71,6 +76,7 @@ test('IINA disables unavailable playlist controls and exposes volume as gain rat
     duration: null,
     mpvVolumePercent: 5,
     maximumMpvPercent: 130,
+    muted: false,
     playlistCount: 1,
     playlistPosition: 0,
   });
@@ -78,4 +84,42 @@ test('IINA disables unavailable playlist controls and exposes volume as gain rat
   assert.equal(state.target.capabilities.previous, false);
   assert.equal(state.target.capabilities.playerVolumeMaximum, 1.3);
   assert.equal(state.target.playerVolume, 0.05);
+});
+
+test('IINA POST data survives the documented form-encoded options.data wire path', () => {
+  const request = {
+    targetId: 'iina:window-1',
+    name: 'Episode + A & B = C',
+    capabilities: { playPause: true },
+  };
+  const optionsData = iinaFormData(request);
+  const wireBody = new URLSearchParams(optionsData).toString();
+  assert.match(wireBody, /^payload=%7B/);
+  assert.deepEqual(JSON.parse(new URLSearchParams(wireBody).get('payload')), request);
+});
+
+test('IINA snapshots report zero effective volume while muted', () => {
+  assert.equal(effectiveMpvVolumePercent(72, true), 0);
+  assert.equal(effectiveMpvVolumePercent(72, false), 72);
+  assert.equal(effectiveMpvVolumePercent(Number.NaN, false), null);
+  const state = targetSnapshot({
+    targetId: 'iina:window-muted',
+    title: 'Muted',
+    idle: false,
+    position: 5,
+    duration: 60,
+    mpvVolumePercent: 72,
+    maximumMpvPercent: 130,
+    muted: true,
+    playlistCount: 1,
+    playlistPosition: 0,
+  });
+  assert.equal(state.volume, 0);
+  assert.equal(state.target.playerVolume, 0);
+});
+
+test('only positive player-volume commands request clearing IINA mute', () => {
+  assert.equal(shouldUnmuteForGainRatio(0), false);
+  assert.equal(shouldUnmuteForGainRatio(0.01), true);
+  assert.equal(shouldUnmuteForGainRatio(Number.NaN), false);
 });

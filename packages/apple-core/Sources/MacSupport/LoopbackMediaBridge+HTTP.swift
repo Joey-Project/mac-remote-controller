@@ -25,8 +25,7 @@ extension LoopbackMediaBridge {
             return false
         }
         guard request.host == "127.0.0.1:\(configuration.port)", request.origin == nil,
-            request.authorization.map(constantTimeMatches) == true,
-            request.method != "POST" || request.contentType == "application/json"
+            request.authorization.map(constantTimeMatches) == true
         else {
             send(status: 401, body: ["error": "unauthorized"], on: connection)
             return false
@@ -37,6 +36,7 @@ extension LoopbackMediaBridge {
     private func route(_ request: HTTPRequest, on connection: NWConnection) throws {
         switch (request.method, request.path) {
         case ("POST", "/v1/chrome") where request.query.isEmpty:
+            guard request.contentType == "application/json" else { throw HTTPError.badRequest }
             try handleChrome(request.body)
             send(status: 204, body: Data(), on: connection)
         case ("GET", "/v1/chrome/next") where request.query.isEmpty:
@@ -45,18 +45,22 @@ extension LoopbackMediaBridge {
                 status: 200, body: try json(["command": command as Any? ?? NSNull()]),
                 on: connection)
         case ("POST", "/v1/iina/update") where request.query.isEmpty:
-            try updateTarget(from: request.body, expectedKind: .iina)
+            try updateTarget(from: iinaJSONBody(request), expectedKind: .iina)
             send(status: 204, body: Data(), on: connection)
         case ("POST", "/v1/iina/unregister") where request.query.isEmpty:
-            try unregisterIINA(request.body, on: connection)
+            try unregisterIINA(iinaJSONBody(request), on: connection)
         case ("GET", "/v1/iina/next"):
             try pollIINA(request.query, on: connection)
         case ("POST", "/v1/iina/result") where request.query.isEmpty:
-            try handleResult(request.body)
+            try handleResult(iinaJSONBody(request))
             send(status: 204, body: Data(), on: connection)
         default:
             send(status: 404, body: ["error": "not_found"], on: connection)
         }
+    }
+
+    func iinaJSONBody(_ request: HTTPRequest) throws -> Data {
+        try IINAFormPayload.decode(request)
     }
 
     private func unregisterIINA(_ body: Data, on connection: NWConnection) throws {
@@ -254,8 +258,7 @@ extension LoopbackMediaBridge {
             content: response,
             completion: .contentProcessed { [weak self, weak connection] _ in
                 MainActor.assumeIsolated {
-                    connection?.cancel()
-                    if let self { self.activeConnections = max(0, self.activeConnections - 1) }
+                    if let connection { self?.finishConnection(connection) }
                 }
             })
     }
@@ -265,5 +268,34 @@ extension LoopbackMediaBridge {
         let actual = Data(value.utf8)
         guard expected.count == actual.count else { return false }
         return zip(expected, actual).reduce(UInt8(0)) { $0 | ($1.0 ^ $1.1) } == 0
+    }
+}
+
+enum IINAFormPayload {
+    static let contentType = "application/x-www-form-urlencoded"
+    private static let maximumBodyBytes = 65_536
+
+    static func decode(_ request: HTTPRequest) throws -> Data {
+        guard request.contentType?.lowercased() == contentType else {
+            throw HTTPError.badRequest
+        }
+        let body = request.body
+        guard body.count <= maximumBodyBytes,
+            let form = String(data: body, encoding: .utf8), !form.isEmpty,
+            !form.contains("&"),
+            let separator = form.firstIndex(of: "=")
+        else { throw HTTPError.badRequest }
+
+        let encodedKey = String(form[..<separator])
+        let encodedPayload = String(form[form.index(after: separator)...])
+        guard decodeComponent(encodedKey) == "payload",
+            let payload = decodeComponent(encodedPayload), !payload.isEmpty,
+            payload.utf8.count <= maximumBodyBytes
+        else { throw HTTPError.badRequest }
+        return Data(payload.utf8)
+    }
+
+    private static func decodeComponent(_ value: String) -> String? {
+        value.replacingOccurrences(of: "+", with: " ").removingPercentEncoding
     }
 }

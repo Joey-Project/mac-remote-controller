@@ -43,6 +43,12 @@ Website controls are implemented against the page's current `<video>` and
 visible episode buttons. SPA navigation, BFCache restore, replaced video
 elements, and tab closure refresh or remove the target. The extension does not
 inject arbitrary JavaScript, run shell commands, or use keyboard shortcuts.
+While the native messaging host is connected, the service worker asks each
+registered tab for a current media snapshot every two seconds. This keeps the
+target lease alive when Chrome throttles timers in a hidden, silent page. Chrome
+105 or newer is required because that version keeps an extension service worker
+alive while its native messaging port remains connected. A muted `<video>` is
+reported with effective volume zero; a positive volume command unmutes it.
 
 Site selectors can change without notice. Automated tests use DOM fixtures and
 do not claim live-site compatibility for every account, layout, region, or

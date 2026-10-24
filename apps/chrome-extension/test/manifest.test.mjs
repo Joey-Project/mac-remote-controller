@@ -10,6 +10,7 @@ test('MV3 permissions are restricted to the supported media sites and native hos
   );
 
   assert.equal(manifest.manifest_version, 3);
+  assert.equal(manifest.minimum_chrome_version, '105');
   const extensionID = createHash('sha256')
     .update(Buffer.from(manifest.key, 'base64'))
     .digest()
