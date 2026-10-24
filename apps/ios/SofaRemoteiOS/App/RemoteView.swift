@@ -5,6 +5,7 @@ import UIKit
 struct RemoteView: View {
     @Bindable var model: RemoteModel
     @State private var showingScanner = false
+    @State private var showingBenchmark = false
     @State private var textToSend = ""
     @State private var volumeValue = 0.5
     @State private var isVolumeEditing = false
@@ -36,7 +37,25 @@ struct RemoteView: View {
             .toolbar {
                 if model.isConnected {
                     ToolbarItem(placement: .topBarTrailing) {
-                        remoteMenu
+                        RemoteActionsMenu(
+                            model: model, selectedMode: $selectedMode,
+                            isVolumePinned: $isVolumePinned,
+                            onTouchpad: {
+                                selectedMode = .touchpad
+                                isTextInputFocused = false
+                                isVolumeEditing = false
+                            },
+                            onKeyboard: {
+                                selectedMode = .keyboard
+                                isVolumeEditing = false
+                            },
+                            onSwitchTransport: {
+                                model.selectTransport(
+                                    model.selectedTransport == .wifi ? .bluetooth : .wifi)
+                                resetInteractionState()
+                            },
+                            onBenchmark: { showingBenchmark = true },
+                            onDisconnect: disconnect)
                     }
                 }
             }
@@ -45,6 +64,9 @@ struct RemoteView: View {
                     showingScanner = false
                     model.pair(invitation: code)
                 }
+            }
+            .sheet(isPresented: $showingBenchmark) {
+                ConnectionBenchmarkSheet(model: model, isPresented: $showingBenchmark)
             }
             .alert(
                 "Connection problem",
@@ -92,44 +114,6 @@ private extension RemoteView {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-    }
-
-    private var remoteMenu: some View {
-        Menu {
-            Button {
-                selectedMode = .touchpad
-                isTextInputFocused = false
-                isVolumeEditing = false
-            } label: {
-                Label(
-                    "Touchpad",
-                    systemImage: selectedMode == .touchpad ? "checkmark" : "cursorarrow")
-            }
-            .accessibilityIdentifier("mode.touchpad")
-            Button {
-                selectedMode = .keyboard
-                isVolumeEditing = false
-            } label: {
-                Label(
-                    "Keyboard",
-                    systemImage: selectedMode == .keyboard ? "checkmark" : "keyboard")
-            }
-            .accessibilityIdentifier("mode.keyboard")
-            Toggle(isOn: $isVolumePinned) {
-                Label("Pin volume over touchpad", systemImage: "speaker.wave.2")
-            }
-            .accessibilityIdentifier("volume.pin")
-            Divider()
-            Button(role: .destructive, action: disconnect) {
-                Label("Disconnect", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-            .accessibilityIdentifier("remote.disconnect")
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-                .frame(minWidth: 44, minHeight: 44)
-        }
-        .accessibilityLabel("Remote controls").accessibilityIdentifier("remote.menu")
     }
 
     private func touchpadMode(availableWidth: CGFloat) -> some View {

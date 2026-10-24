@@ -1,8 +1,9 @@
 # Remote protocol v1
 
 Status: the Apple foundation implements discovery, pairing, state, pointer,
-keyboard, and system volume. iPhone/iPad is the first mobile target; Android and
-media adapters follow. Physical device validation remains outstanding.
+keyboard, system volume, and an authenticated Bluetooth LE transport.
+iPhone/iPad is the first mobile target; Android and media adapters follow.
+Physical Bluetooth validation remains outstanding.
 
 ## First slice
 
@@ -97,7 +98,8 @@ encoding. The Swift binding and JSON fixture implement these bounds.
 ## Implemented messages
 
 All messages use `protocolVersion: 1` and one of `authenticate`, `welcome`,
-`command`, `result`, or `state`. Maximum encoded size is 64 KiB. A command has
+`command`, `result`, `state`, `ping`, `pong`, or `disconnect`. Maximum encoded
+size is 64 KiB. A command has
 `connectionId`, UUID `requestId`, positive `sequence`, and a `command` object.
 A result echoes those three identities; absent `error` means success. An error
 has `code` and `message`. Malformed or incompatible wire envelopes close the
@@ -123,6 +125,50 @@ The client bounds outstanding commands to eight; excess relative input is
 dropped and only the latest unsent absolute volume is retained. It discards all
 pending input on disconnect. Missing command results time out after three
 seconds and close the connection without replaying commands.
+
+### Bluetooth LE transport
+
+Pair the iPhone or iPad with the Mac over the existing Wi-Fi QR flow first.
+Bluetooth LE then uses the paired 32-byte token as a pre-shared key; it never
+sends the token itself. The Mac advertises its existing opaque per-Mac service
+UUID. That UUID only narrows scan results and contains no pairing credential.
+The iOS app is the CoreBluetooth central and the Mac companion is the
+peripheral. Bluetooth permission and an available radio are required on both
+devices.
+
+Every BLE connection runs a one-shot mutual-authentication handshake with fresh
+32-byte client and server nonces. HMAC-SHA-256 proofs bind the service name,
+device name, and nonces. HKDF-SHA-256 derives separate client-to-server and
+server-to-client keys; ChaCha20-Poly1305 protects every wire message with a
+strictly increasing per-direction sequence number as authenticated data.
+Frames use a four-byte big-endian length prefix. Handshake records are limited
+to 512 bytes; encrypted messages are limited to the wire-message bound plus
+framing overhead. Queues are capped at 1 MiB. Authentication expires after 12
+seconds, and incomplete frames expire after three seconds. Invalid, oversized,
+unauthenticated, replayed, or out-of-order frames close the BLE connection.
+
+Changing transport explicitly disconnects the current peer. Select the paired
+Mac again from the setup screen to connect over the selected transport. A failed
+Bluetooth connection is shown as a failure; the app does not silently fall back
+to Wi-Fi or replay a pending control.
+Previously paired Macs that do not advertise the `roundTripProbe.v1`
+capability remain usable for normal controls, but the benchmark stays disabled.
+
+### Connection benchmark
+
+The benchmark sends three warm-up probes followed by 90 sequential no-op
+`ping`/`pong` exchanges in three groups of 30. Probes do not execute pointer,
+keyboard, volume, or playback commands. Each measured exchange has a two-second
+timeout; cancelling keeps a partial report. Successful measured round trips
+produce minimum, p50, p95, maximum, and `p95 - p50` jitter. Timed-out measured
+probes are excluded from latency percentiles and included in the reported loss
+count and rate; warm-ups are excluded from both.
+
+The mobile app measures round-trip duration with its monotonic clock. The Mac
+separately reports how many probes it handled and the elapsed Mac-local time to
+prepare the latest pong. Those Mac-side values are not subtracted from mobile
+RTT because the clocks are independent. Comparison reports are retained per
+Mac so Wi-Fi and Bluetooth results can be viewed after an explicit switch.
 
 ## State and future media boundaries
 

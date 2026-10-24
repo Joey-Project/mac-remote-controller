@@ -14,6 +14,18 @@ enum RemoteMode: String {
     case touchpad = "Touchpad", keyboard = "Keyboard"
 }
 
+enum RemoteTransportKind: String, CaseIterable, Identifiable {
+    case wifi = "Wi-Fi"
+    case bluetooth = "Bluetooth LE"
+    var id: String { rawValue }
+}
+
+struct BenchmarkPendingProbe {
+    let id: String
+    let sequence: UInt64
+    let sentNanoseconds: UInt64
+}
+
 @MainActor
 @Observable
 final class RemoteModel {
@@ -22,6 +34,12 @@ final class RemoteModel {
     var isConnected = false
     var remoteState: RemoteState?
     var errorMessage: String?
+    var selectedTransport: RemoteTransportKind = .wifi
+    var benchmarkRunning = false
+    var benchmarkProgress = 0
+    var benchmarkResultText: String?
+    var benchmarkGroupProgress = ""
+    var benchmarkReports: [String: [RTTBenchmarkReport]] = [:]
 
     #if DEBUG && targetEnvironment(simulator)
         @ObservationIgnored private let uiTestFixture = UITestFixture()
@@ -36,15 +54,29 @@ final class RemoteModel {
 
     private var browser: NWBrowser?
     private var resolver: BonjourResolver?
-    private var attemptID: UUID?
-    private var peer: WebSocketPeer?
-    private var pairedMacs: [PairedMac] = []
-    private var candidate: PairedMac?
-    private var connectionID: String?
-    private var sequence: UInt64 = 0
-    private var pending: [String: (sequence: UInt64, sent: Date)] = [:]
-    private var queuedVolume: Double?
+    var attemptID: UUID?
+    var peer: RemotePeer?
+    var pairedMacs: [PairedMac] = []
+    var candidate: PairedMac?
+    var benchmarkTargetID: String?
+    var connectionID: String?
+    var sequence: UInt64 = 0
+    var pending: [String: (sequence: UInt64, sent: Date)] = [:]
+    var queuedVolume: Double?
     private var deadline: Timer?
+    var benchmark: RTTBenchmarkAccumulator?
+    var benchmarkRequest: BenchmarkPendingProbe?
+    var expiredBenchmarkRequestIDs: Set<String> = []
+    var benchmarkTimeout: Timer?
+
+    var pairedMacChoices: [DiscoveredMac] {
+        pairedMacs.map { DiscoveredMac(id: $0.serviceName, name: $0.name, isPaired: true) }
+            .sorted { $0.name < $1.name }
+    }
+
+    var supportsRoundTripProbe: Bool {
+        remoteState?.capabilities?.contains(WireCapabilities.roundTripProbe) == true
+    }
 
     init() {
         #if DEBUG && targetEnvironment(simulator)
@@ -61,6 +93,7 @@ final class RemoteModel {
     }
 
     func startDiscovery() {
+        guard selectedTransport == .wifi else { return }
         #if DEBUG && targetEnvironment(simulator)
             guard !isUITesting else { return }
         #endif
@@ -105,13 +138,26 @@ final class RemoteModel {
             errorMessage = "Open pairing on this Mac and scan its invitation."
             return
         }
+        benchmarkTargetID = saved.serviceName
         connect(saved)
+    }
+
+    func selectTransport(_ transport: RemoteTransportKind) {
+        guard selectedTransport != transport else { return }
+        cancelBenchmark()
+        disconnect()
+        selectedTransport = transport
+        if transport == .wifi { startDiscovery() } else { browser?.cancel(); browser = nil }
     }
 
     func pair(invitation: String) {
         #if DEBUG && targetEnvironment(simulator)
             guard !isUITesting else { return }
         #endif
+        guard selectedTransport == .wifi else {
+            errorMessage = "Pair this Mac over Wi-Fi first, then select Bluetooth LE to reconnect."
+            return
+        }
         do {
             let invitation = try PairingInvitation.parse(
                 invitation.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -140,8 +186,13 @@ final class RemoteModel {
         errorMessage = nil
         connectionSummary = "Resolving Mac…"
         candidate = mac
+        benchmarkTargetID = mac.serviceName
         let attempt = UUID()
         attemptID = attempt
+        if selectedTransport == .bluetooth {
+            startBluetoothConnection(to: mac, attempt: attempt)
+            return
+        }
         let resolver = BonjourResolver()
         self.resolver = resolver
         resolver.resolve(serviceName: mac.serviceName) { [weak self] result in
@@ -176,7 +227,7 @@ final class RemoteModel {
         peer.start()
     }
 
-    private func monitorConnection() {
+    func monitorConnection() {
         let started = Date()
         deadline = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -196,8 +247,9 @@ final class RemoteModel {
         }
     }
 
-    private func handleClose(_ reason: String) {
+    func handleClose(_ reason: String) {
         let unknown = !pending.isEmpty
+        if benchmarkRunning { cancelBenchmark() }
         attemptID = nil
         isConnected = false
         remoteState = nil
@@ -211,50 +263,9 @@ final class RemoteModel {
             : reason
         deadline?.invalidate()
         deadline = nil
+        peer = nil
     }
 
-    private func receive(_ message: WireMessage) {
-        switch message.type {
-        case .welcome:
-            guard !isConnected, let id = message.connectionID, let state = message.state,
-                let candidate
-            else { peer?.close(); return }
-            do {
-                let saved = PairedMac(
-                    serviceName: candidate.serviceName, name: state.deviceName,
-                    certificateSHA256: candidate.certificateSHA256,
-                    token: message.authToken ?? candidate.token)
-                var updated = pairedMacs.filter { $0.serviceName != saved.serviceName }
-                updated.append(saved)
-                try SecureStore.save(updated, account: "paired-macs")
-                pairedMacs = updated
-                connectionID = id
-                sequence = 0
-                remoteState = state
-                isConnected = true
-                connectionSummary = "Connected to \(state.deviceName)"
-                discoveredMacs = discoveredMacs.map {
-                    $0.id == saved.serviceName
-                        ? DiscoveredMac(id: $0.id, name: saved.name, isPaired: true) : $0
-                }
-            } catch { peer?.close(); errorMessage = error.localizedDescription }
-        case .state:
-            guard isConnected, message.connectionID == connectionID else { peer?.close(); return }
-            remoteState = message.state
-        case .result:
-            guard message.connectionID == connectionID, let id = message.requestID,
-                let request = pending[id], request.sequence == message.sequence
-            else { peer?.close(); return }
-            pending.removeValue(forKey: id)
-            if let error = message.error { errorMessage = error.message }
-            if let volume = queuedVolume {
-                queuedVolume = nil
-                send(RemoteCommand(name: .systemVolumeSet, value: volume))
-            }
-        default:
-            peer?.close()
-        }
-    }
 }
 
 extension RemoteModel {
@@ -288,6 +299,7 @@ extension RemoteModel {
             unknown
             ? "Disconnected with a pending control. Its outcome is unknown; it was not retried."
             : nil
+        if benchmarkRunning { cancelBenchmark() }
     }
 
     @discardableResult
@@ -325,4 +337,5 @@ extension RemoteModel {
                 sequence: sequence, command: command))
         return true
     }
+
 }
