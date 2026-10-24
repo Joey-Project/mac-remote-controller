@@ -13,7 +13,10 @@ file and proxies only validated media messages over authenticated loopback
 HTTP. The token never enters the extension, page, or content script. The bridge
 accepts no desktop-input commands.
 
-From the repository root, install the pinned workspace dependencies and build:
+From the repository root, install the pinned workspace dependencies and build.
+These commands require Node.js 26 or newer and the pnpm version declared in the
+repository. The installer uses Node's JSON serializer to preserve spaces and
+escape special characters in the native host path.
 
 ```sh
 pnpm install --frozen-lockfile

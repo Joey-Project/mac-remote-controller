@@ -1,12 +1,12 @@
 import AppleCore
 import SwiftUI
-import UIKit
 
 extension RemoteView {
     var systemVolumeCard: some View {
         let systemVolume = model.remoteState?.systemVolume
         let playerMaximum = selectedMediaTarget?.capabilities.playerVolumeMaximum
         let showPlayerVolume = volumeScope == .player
+        let canUsePlayerVolume = playerMaximum != nil && selectedMediaTarget?.playerVolume != nil
         let volumeText =
             systemVolume?.formatted(.percent.precision(.fractionLength(0)))
             ?? "Unavailable"
@@ -17,15 +17,23 @@ extension RemoteView {
                 )
                 .font(.subheadline.weight(.semibold))
                 Spacer()
-                if model.remoteState?.mediaTargets != nil {
-                    Picker("Volume scope", selection: $volumeScope) {
-                        Text("System").tag(VolumeScope.system)
-                        Text("Player").tag(VolumeScope.player)
+                Button {
+                    volumeScope = showPlayerVolume ? .system : .player
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(showPlayerVolume ? "Player" : "System")
+                        Image(systemName: "arrow.left.arrow.right")
                     }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 170)
-                    .accessibilityIdentifier("volume.scope")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.quaternary, in: Capsule())
                 }
+                .disabled(!canUsePlayerVolume && !showPlayerVolume)
+                .accessibilityLabel(
+                    showPlayerVolume ? "Switch to Mac system volume" : "Switch to player volume"
+                )
+                .accessibilityIdentifier("volume.scope")
                 if showPlayerVolume, let playerMaximum,
                     let playerVolume = selectedMediaTarget?.playerVolume
                 {
@@ -198,19 +206,16 @@ extension RemoteView {
     @ViewBuilder
     func playerVolumeSlider(maximum: Double) -> some View {
         let current = selectedMediaTarget?.playerVolume ?? playerVolumeValue
-        let step = maximum / 10
+        let step = min(PlayerVolumePolicy.step, maximum)
         Slider(
             value: Binding(
                 get: { isPlayerVolumeEditing ? playerVolumeValue : current },
                 set: { proposed in
-                    let snapped =
-                        proposed >= maximum * 0.96
-                        ? maximum
-                        : (proposed / step).rounded() * step
-                    if snapped == maximum && !playerVolumeDetentActive {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    }
-                    playerVolumeDetentActive = snapped == maximum
+                    guard
+                        let snapped = PlayerVolumePolicy.snappedValue(
+                            proposed: proposed, maximum: maximum
+                        )
+                    else { return }
                     playerVolumeValue = snapped
                     guard let target = selectedMediaTarget else { return }
                     sendMedia(.setVolume, target: target, value: snapped)
@@ -218,7 +223,6 @@ extension RemoteView {
             ), in: 0...maximum, step: step,
             onEditingChanged: { editing in
                 isPlayerVolumeEditing = editing
-                if !editing { playerVolumeDetentActive = false }
             }
         )
         .disabled(!model.isConnected || selectedMediaTarget?.playerVolume == nil)

@@ -15,7 +15,6 @@ struct RemoteView: View {
     @State var isVolumeEditing = false
     @State var isPlayerVolumeEditing = false
     @State var playerVolumeValue = 0.5
-    @State var playerVolumeDetentActive = false
     @State var selectedMediaTargetID: String?
     @State var seekInterval: Double = 10
     @State var volumeScope: VolumeScope = .system
@@ -167,18 +166,20 @@ private extension RemoteView {
 
                 touchpadCard
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                mediaControlsCard
             }
             .padding(.horizontal, horizontalInset(for: availableWidth))
             .padding(.top, 8)
             .padding(.bottom, 12)
 
             if isVolumePinned {
-                systemVolumeCard
-                    .padding(.horizontal, horizontalInset(for: availableWidth))
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(1)
+                VStack(spacing: 10) {
+                    systemVolumeCard
+                    mediaControlsCard
+                }
+                .padding(.horizontal, horizontalInset(for: availableWidth))
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(1)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: isVolumePinned)
@@ -186,10 +187,10 @@ private extension RemoteView {
 
     private func keyboardMode(availableWidth: CGFloat) -> some View {
         VStack(spacing: 10) {
-            mediaControlsCard
             systemVolumeCard
                 .padding(.horizontal, horizontalInset(for: availableWidth))
                 .padding(.top, 8)
+            mediaControlsCard
 
             ScrollView {
                 VStack(spacing: 16) {

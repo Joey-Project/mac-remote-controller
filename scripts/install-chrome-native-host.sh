@@ -16,21 +16,22 @@ if [ ! -x "$host_binary" ]; then
   printf 'Native host is not executable: %s\n' "$host_binary" >&2
   exit 2
 fi
+if ! command -v node >/dev/null 2>&1; then
+  printf 'Node.js 26 or newer is required to write the Native Messaging manifest.\n' >&2
+  exit 2
+fi
 
-manifest_directory="${HOME}/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+# This override is used by isolated tests to avoid touching a Chrome profile.
+if [ -n "${SOFA_REMOTE_NATIVE_HOST_DIRECTORY:-}" ]; then
+  manifest_directory=$SOFA_REMOTE_NATIVE_HOST_DIRECTORY
+else
+  manifest_directory="${HOME}/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+fi
 manifest_path="${manifest_directory}/${host_name}.json"
 mkdir -p "$manifest_directory"
-temporary_manifest="${manifest_path}.tmp.$$"
+temporary_manifest=$(mktemp "${manifest_path}.tmp.XXXXXX")
 trap 'rm -f "$temporary_manifest"' EXIT HUP INT TERM
-cat > "$temporary_manifest" <<EOF
-{
-  "name": "${host_name}",
-  "description": "Sofa Remote local media bridge",
-  "path": "${host_binary}",
-  "type": "stdio",
-  "allowed_origins": ["chrome-extension://${extension_id}/"]
-}
-EOF
+node -e 'const fs = require("node:fs"); const [manifestPath, hostBinary, hostName, extensionId] = process.argv.slice(1); const manifest = { name: hostName, description: "Sofa Remote local media bridge", path: hostBinary, type: "stdio", allowed_origins: ["chrome-extension://" + extensionId + "/"] }; fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", { encoding: "utf8" });' "$temporary_manifest" "$host_binary" "$host_name" "$extension_id"
 chmod 600 "$temporary_manifest"
 mv "$temporary_manifest" "$manifest_path"
 printf 'Registered Sofa Remote native messaging host for extension %s.\n' "$extension_id"
