@@ -116,3 +116,9 @@ superseded_by:
   prepared. The desktop later locked; automatic unlock and the user's requested
   retry both failed. Live GUI acceptance remains unverified. The user authorized
   continuing implementation and automatic checks while manual unlock is unavailable.
+- Real-device XCTest signing is configured using the existing development Team.
+  The iPhone's first automation launch required a system confirmation; after the
+  user approved it, XCTest launched the real app and reconnected its paired Mac.
+  On iOS 18, a parent media-card identifier propagated over its child controls,
+  hiding the picker's `media.target` identifier. Removing that unused parent
+  identifier preserves the child's identity for the live media test.

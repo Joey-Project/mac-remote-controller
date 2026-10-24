@@ -95,7 +95,6 @@ extension RemoteView {
                 .padding(12)
                 .frame(maxWidth: 620, alignment: .leading)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .accessibilityIdentifier("media.controls")
             }
         }
     }
