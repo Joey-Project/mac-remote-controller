@@ -1,4 +1,4 @@
-import { targetSnapshot, validateAction } from './iina-controls';
+import { mpvPercentFromGainRatio, targetSnapshot, validateAction } from './iina-controls';
 
 const targetId = `iina:${crypto.randomUUID()}`;
 const bridgePort = iina.preferences.get('bridge_port') as number;
@@ -30,23 +30,23 @@ async function request<T>(method: 'get' | 'post', path: string, data?: unknown):
 }
 
 function snapshot() {
-  const max = iina.mpv.getNumber('volume-max');
+  const maximumMpvPercent = iina.mpv.getNumber('volume-max');
   return targetSnapshot({
     targetId,
     title: iina.core.status.title,
     idle: iina.core.status.idle,
     position: iina.core.status.position,
     duration: iina.core.status.duration,
-    volume: iina.core.audio.volume,
-    maximumVolume: max,
+    mpvVolumePercent: iina.core.audio.volume,
+    maximumMpvPercent,
     playlistCount: iina.playlist.count(),
     playlistPosition: iina.mpv.getNumber('playlist-pos'),
   });
 }
 
 async function execute(action: string, value: number | undefined): Promise<void> {
-  const maximum = iina.mpv.getNumber('volume-max');
-  validateAction(action, value, maximum);
+  const maximumMpvPercent = iina.mpv.getNumber('volume-max');
+  validateAction(action, value, maximumMpvPercent);
   switch (action) {
     case 'playPause':
       if (iina.core.status.paused) iina.core.resume();
@@ -64,7 +64,7 @@ async function execute(action: string, value: number | undefined): Promise<void>
       iina.playlist.playPrevious();
       return;
     case 'setVolume':
-      iina.core.audio.volume = value!;
+      iina.core.audio.volume = mpvPercentFromGainRatio(value!, maximumMpvPercent)!;
       return;
     default:
       throw new Error('Unsupported media action.');

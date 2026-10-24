@@ -7,6 +7,9 @@ Bilibili. The Apple clients implement local pairing, desktop controls, system
 volume, and typed controls for explicitly selected media sources. Android does
 not yet implement the media adapters.
 
+`apps/web-remote/` is an offline browser interaction preview only; it has no
+Mac connection, pairing, or control transport.
+
 Manual acceptance on an iPhone XS running iOS 18.7.10 on 2026-10-22 verified
 QR pairing to a Mac, pointer and click control, the committed text
 `你好，世界 👋`, two-finger scrolling, and reconnecting to the paired Mac without
@@ -23,6 +26,7 @@ apps/
   android/            Kotlin and Jetpack Compose app
   chrome-extension/   TypeScript Manifest V3 extension and Native Messaging proxy
   iina-plugin/        TypeScript IINA plugin package
+  web-remote/         Offline browser UI preview (no Mac connection)
 packages/
   apple-core/         Shared Swift package
   protocol/           Versioned wire contract and cross-client fixtures
@@ -47,6 +51,8 @@ IDE settings, caches, and signing material are ignored; none are tracked.
 | Repository       | Prettier               | Markdownlint, actionlint | Shell validation for repository scripts              |
 | Swift            | Xcode's `swift format` | SwiftLint                | Shared package tests; macOS and iOS Simulator builds |
 | Chrome extension | Prettier               | Type-aware Oxlint        | Strict `tsc`; unit tests; extension bundle           |
+| IINA plugin      | Prettier               | Oxlint                   | Strict `tsc`; mock tests; plugin bundle              |
+| Web preview      | Prettier               | Oxlint                   | Strict `tsc`; offline-boundary tests; static bundle  |
 | Android          | ktlint                 | Android Lint             | Kotlin compilation; debug APK                        |
 
 Swift and Kotlin compilation provide their type checks. The iOS target includes
@@ -126,3 +132,4 @@ Durable workstream state lives in `docs/project_journal/`:
 
 - [CI baseline](docs/project_journal/2026/10/2026-10-16-ci-bootstrap-01a1464a.md)
 - [Native remote design and implementation handoff](docs/project_journal/2026/10/2026-10-16-native-remote-01a1464a.md)
+- [No-install Web preview feasibility](docs/project_journal/2026/10/2026-10-24-web-remote-feasibility-01a1464a.md)

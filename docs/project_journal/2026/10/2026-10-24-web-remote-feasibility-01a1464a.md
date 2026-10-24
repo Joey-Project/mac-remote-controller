@@ -40,6 +40,10 @@ superseded_by:
 - The root pnpm workspace and CI include the offline preview's lint,
   type-check, tests, and build. The app keeps its package-local generated
   output ignored.
+- Final workspace validation passed with Node.js 26.12.0 and pnpm 12.14.0:
+  format check, lint, strict typecheck, tests (Chrome 8/8, IINA 4/4, Web
+  preview 9/9), and builds for all three TypeScript packages. `actionlint` and
+  project-journal validation also passed.
 - A desktop in-app-browser smoke of the source-identical built mirror passed:
   the offline/no-Mac banner appeared, a left-click action ran locally, keyboard
   mode switched, text input reached nine characters, the right-arrow counter

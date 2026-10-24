@@ -90,6 +90,39 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
+    func testGesturePreferencesAreAvailableOnCapableCompanionAndStayLocal() throws {
+        launchApp()
+        defer { terminateApp() }
+
+        element("remote.menu").tap()
+        let gesturePreferences = [
+            "gesture.drag", "gesture.shortcuts", "gesture.force", "gesture.haptics"
+        ]
+        for identifier in gesturePreferences {
+            XCTAssertTrue(element(identifier).waitForExistence(timeout: 3))
+            XCTAssertTrue(element(identifier).isEnabled)
+        }
+        element("gesture.shortcuts").tap()
+        XCTAssertEqual(try commands().count, 0, "Gesture preferences are local settings.")
+    }
+
+    @MainActor
+    func testLegacyCompanionKeepsNewGesturesDisabled() throws {
+        launchApp(scenario: "legacy-companion")
+        defer { terminateApp() }
+
+        element("remote.menu").tap()
+        let gesturePreferences = [
+            "gesture.drag", "gesture.shortcuts", "gesture.force", "gesture.haptics"
+        ]
+        for identifier in gesturePreferences {
+            XCTAssertTrue(element(identifier).waitForExistence(timeout: 3))
+            XCTAssertFalse(element(identifier).isEnabled)
+        }
+        XCTAssertEqual(try commands().count, 0)
+    }
+
+    @MainActor
     func testArrowKeysSendTheirMatchingWireCommands() throws {
         launchApp()
         defer { terminateApp() }
@@ -156,6 +189,24 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
+    func testBenchmarkRequiresMacProbeCapability() throws {
+        launchApp()
+        defer { terminateApp() }
+
+        element("remote.menu").tap()
+        element("remote.benchmark").tap()
+
+        let runButton = app.buttons["Run benchmark"]
+        XCTAssertTrue(runButton.waitForExistence(timeout: 3))
+        XCTAssertFalse(runButton.isEnabled)
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "does not advertise round-trip probe")
+            ).firstMatch.exists)
+        XCTAssertEqual(try commands().count, 0)
+    }
+
+    @MainActor
     func testLandscapeControlsRemainVisibleAndInsideTheScreen() throws {
         guard UIDevice.current.userInterfaceIdiom == .pad else {
             throw XCTSkip("The app supports landscape orientation on iPad only.")
@@ -215,12 +266,13 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
 private extension SofaRemoteiOSUITests {
     @MainActor
-    func launchApp() {
+    func launchApp(scenario: String? = nil) {
         XCTContext.runActivity(named: "Launch UI test app") { _ in
             continueAfterFailure = false
             XCUIDevice.shared.orientation = .portrait
             app = XCUIApplication()
             app.launchArguments = ["--ui-testing"]
+            if let scenario { app.launchArguments.append("--ui-testing-scenario=\(scenario)") }
             app.launch()
         }
     }

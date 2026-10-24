@@ -15,14 +15,45 @@ checks the saved certificate pin before sending its credential. A replacement
 Mac identity requires a new, explicit QR pairing. Remove a device from the Mac
 companion to revoke it. Pairing credentials stay in each platform's Keychain.
 
+Bluetooth LE is available after the same Wi-Fi QR pairing. From the connected
+screen's menu, choose **Switch to Bluetooth LE** to reconnect using the paired
+credential. Enable Bluetooth and allow Bluetooth access in iOS Settings. The
+advertised service UUID is only a discovery hint; the app authenticates the Mac
+before sending control messages. Switching transports disconnects the current
+peer; select the paired Mac again from the setup screen to reconnect. Failures
+stay visible, pending controls are never replayed, and Wi-Fi is not used as a
+silent fallback.
+
 The connected screen defaults to a touchpad that fills the available area,
 without an enclosing page scroll view. Drag one finger to move the desktop
-pointer, tap to left-click, tap with two fingers to right-click, and scroll with
-two fingers. The top menu switches between touchpad and keyboard modes and
-includes the volume toggle and disconnect action. The keyboard includes the
-arrow keys, Return, Escape, Delete, and Space. Compose text locally, then tap
-Send to submit committed Unicode text; intermediate input-method composition
-is not streamed.
+pointer, tap to left-click, double-tap to send a native Mac double-click, tap
+with two fingers to right-click, and scroll with two fingers. On a companion
+that advertises gesture support, three fingers
+drag while holding the Mac's left mouse button, and four-finger swipes request
+Mission Control (up), App Exposé (down), or the previous/next Space (left/right).
+These use public macOS keyboard shortcuts. The matching shortcuts must be enabled
+in System Settings > Keyboard > Keyboard Shortcuts > Mission Control on the Mac;
+custom shortcut assignments can change the result. No private macOS APIs are used.
+
+The remote menu lets you turn three-finger drag, four-finger shortcuts, pressure
+click, and optional haptic feedback on or off. Pressure click works only where
+iOS reports force-capable touch input; ordinary tap remains available on every
+device. Haptics default off. Gesture controls stay disabled when paired to an
+older companion that does not advertise support. If a touch sequence changes
+finger count or is cancelled, it cannot turn into a click; an active drag sends
+button-up on cancellation and is also released by the Mac after disconnect or an
+eight-second lost-release timeout.
+
+The top menu switches between touchpad and keyboard modes and includes the
+volume toggle and disconnect action. The keyboard includes the arrow keys,
+Return, Escape, Delete, and Space. Compose text locally, then tap Send to submit
+committed Unicode text; intermediate input-method composition is not streamed.
+
+Pointer and scroll updates are combined for up to one display interval before
+they are sent. Adjacent deltas retain their sum; clicks and keyboard commands
+remain in order. If the bounded queue overloads, movement after the latest
+click or keyboard command may be cleared and replaced with the newest movement.
+Movement that positions an accepted click stays ahead of that click.
 
 The volume control uses a fixed position at the top of the screen. It starts
 hidden in touchpad mode; use the top menu to change the touchpad's volume-pin
@@ -41,13 +72,30 @@ windows appear in a separate player-source picker. The selected source stays
 independent of the frontmost desktop app. Play/pause, relative seek (5, 10, or
 30 seconds), next/previous where available, and player volume do not retarget
 Mac system input. Player volume follows the selected adapter's reported maximum
-and offers 10% steps with a full-volume detent. The system/player volume scope
+and offers fixed 10-percentage-point steps with a stronger 100% detent, even
+when the maximum is higher. The system/player volume scope
 switch defaults to system volume and changes no volume by itself. Older Macs
 that omit media targets keep the player controls hidden.
 
 Chrome and IINA require separate local setup on the Mac; see their package
 readmes. No adapter is installed automatically, and media transport failure is
 shown to the user without replaying the command after reconnect.
+
+## Connection benchmark
+
+After connecting to a Mac that advertises `roundTripProbe.v1`, choose
+**Connection benchmark** from the remote menu. It runs three warm-up probes and
+then 90 sequential no-op probes in three groups of 30. Each measured exchange
+times out after two seconds; cancellation preserves a partial report. Results
+show minimum, p50, p95, maximum, jitter (`p95 - p50`), and timeout loss. The
+benchmark does not issue desktop or playback controls. Older Mac companions
+without the capability keep normal controls available and show the benchmark as
+unsupported.
+
+Round-trip time is measured on the iPhone or iPad's monotonic clock. The Mac
+shows its own pong-preparation count and latest local processing duration; it
+does not subtract the Mac clock from the mobile clock. The simulator UI fixture
+does not exercise Bluetooth radio, pairing credentials, or real audio.
 
 ## Simulator UI Tests
 

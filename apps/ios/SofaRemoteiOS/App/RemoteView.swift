@@ -10,18 +10,22 @@ enum VolumeScope: Hashable {
 struct RemoteView: View {
     @Bindable var model: RemoteModel
     @State private var showingScanner = false
+    @State private var showingBenchmark = false
     @State private var textToSend = ""
-    @State var volumeValue = 0.5
-    @State var isVolumeEditing = false
-    @State var isPlayerVolumeEditing = false
-    @State var playerVolumeValue = 0.5
     @State var selectedMediaTargetID: String?
     @State var seekInterval: Double = 10
     @State var volumeScope: VolumeScope = .system
     @State private var isTextComposing = false
     @State private var isTextInputFocused = false
+    @State private var localDragActive = false
     @State private var selectedMode: RemoteMode = .touchpad
     @State private var isVolumePinned = false
+    @AppStorage("gesture.threeFingerDrag") private var threeFingerDragEnabled = true
+    @AppStorage("gesture.fourFingerShortcuts") private var fourFingerShortcutsEnabled = true
+    @AppStorage("gesture.forceClick") private var forceClickEnabled = true
+    @AppStorage("gesture.haptics") private var hapticsEnabled = false
+
+    private var gesturesSupported: Bool { model.remoteState?.supportsGestures == true }
 
     private var remoteEnabled: Bool {
         model.isConnected && model.remoteState?.accessibilityGranted == true
@@ -46,7 +50,28 @@ struct RemoteView: View {
             .toolbar {
                 if model.isConnected {
                     ToolbarItem(placement: .topBarTrailing) {
-                        remoteMenu
+                        RemoteActionsMenu(
+                            model: model, selectedMode: $selectedMode,
+                            isVolumePinned: $isVolumePinned,
+                            gesturesSupported: gesturesSupported,
+                            threeFingerDragEnabled: $threeFingerDragEnabled,
+                            fourFingerShortcutsEnabled: $fourFingerShortcutsEnabled,
+                            forceClickEnabled: $forceClickEnabled,
+                            hapticsEnabled: $hapticsEnabled,
+                            onTouchpad: {
+                                selectedMode = .touchpad
+                                isTextInputFocused = false
+                            },
+                            onKeyboard: {
+                                selectedMode = .keyboard
+                            },
+                            onSwitchTransport: {
+                                model.selectTransport(
+                                    model.selectedTransport == .wifi ? .bluetooth : .wifi)
+                                resetInteractionState()
+                            },
+                            onBenchmark: { showingBenchmark = true },
+                            onDisconnect: disconnect)
                     }
                 }
             }
@@ -55,6 +80,9 @@ struct RemoteView: View {
                     showingScanner = false
                     model.pair(invitation: code)
                 }
+            }
+            .sheet(isPresented: $showingBenchmark) {
+                ConnectionBenchmarkSheet(model: model, isPresented: $showingBenchmark)
             }
             .alert(
                 "Connection problem",
@@ -108,44 +136,6 @@ private extension RemoteView {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-    }
-
-    private var remoteMenu: some View {
-        Menu {
-            Button {
-                selectedMode = .touchpad
-                isTextInputFocused = false
-                isVolumeEditing = false
-            } label: {
-                Label(
-                    "Touchpad",
-                    systemImage: selectedMode == .touchpad ? "checkmark" : "cursorarrow")
-            }
-            .accessibilityIdentifier("mode.touchpad")
-            Button {
-                selectedMode = .keyboard
-                isVolumeEditing = false
-            } label: {
-                Label(
-                    "Keyboard",
-                    systemImage: selectedMode == .keyboard ? "checkmark" : "keyboard")
-            }
-            .accessibilityIdentifier("mode.keyboard")
-            Toggle(isOn: $isVolumePinned) {
-                Label("Pin volume over touchpad", systemImage: "speaker.wave.2")
-            }
-            .accessibilityIdentifier("volume.pin")
-            Divider()
-            Button(role: .destructive, action: disconnect) {
-                Label("Disconnect", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-            .accessibilityIdentifier("remote.disconnect")
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-                .frame(minWidth: 44, minHeight: 44)
-        }
-        .accessibilityLabel("Remote controls").accessibilityIdentifier("remote.menu")
     }
 
     private func touchpadMode(availableWidth: CGFloat) -> some View {
@@ -221,10 +211,23 @@ private extension RemoteView {
     private var touchpadCard: some View {
         TouchpadCard(
             isEnabled: remoteEnabled,
+            dragEnabled: gesturesSupported && threeFingerDragEnabled,
+            shortcutsEnabled: gesturesSupported && fourFingerShortcutsEnabled,
+            forceClickEnabled: gesturesSupported && forceClickEnabled,
+            hapticsEnabled: gesturesSupported && hapticsEnabled,
             onMove: { x, y in model.send(RemoteCommand(name: .pointerMove, x: x, y: y)) },
             onScroll: { x, y in model.send(RemoteCommand(name: .pointerScroll, x: x, y: y)) },
             onTap: { model.send(RemoteCommand(name: .pointerClick, button: .left)) },
-            onRightClick: { model.send(RemoteCommand(name: .pointerClick, button: .right)) }
+            onRightClick: { model.send(RemoteCommand(name: .pointerClick, button: .right)) },
+            onDragBegin: {
+                guard gesturesSupported && threeFingerDragEnabled, !localDragActive else { return }
+                localDragActive = model.send(RemoteCommand(name: .pointerButtonDown, button: .left))
+            },
+            onDragEnd: { releaseLocalDrag() },
+            onShortcut: { action in
+                guard gesturesSupported && fourFingerShortcutsEnabled else { return }
+                model.send(RemoteCommand(name: .systemShortcut, shortcut: action))
+            }
         )
     }
 
@@ -299,26 +302,40 @@ private extension RemoteView {
         }
     }
 
+    private var systemVolumeCard: some View {
+        SystemVolumeCard(
+            model: model,
+            volumeScope: $volumeScope,
+            target: selectedMediaTarget,
+            onSetPlayerVolume: { target, value in
+                sendMedia(.setVolume, target: target, value: value)
+            })
+    }
+
     private var canSendText: Bool {
         remoteEnabled && !isTextComposing && !textToSend.isEmpty && textToSend.utf8.count <= 4_096
     }
 
     private func disconnect() {
+        releaseLocalDrag()
         model.disconnect()
         resetInteractionState()
     }
 
     private func resetInteractionState() {
+        releaseLocalDrag()
         selectedMode = .touchpad
         isVolumePinned = false
-        isVolumeEditing = false
-        isPlayerVolumeEditing = false
         volumeScope = .system
         selectedMediaTargetID = nil
-        volumeValue = 0.5
         isTextInputFocused = false
         isTextComposing = false
         textToSend = ""
+    }
+    private func releaseLocalDrag() {
+        guard localDragActive else { return }
+        localDragActive = false
+        if model.isConnected { model.send(RemoteCommand(name: .pointerButtonUp, button: .left)) }
     }
     func keyButton(_ title: String, symbol: String, key: RemoteKey, compact: Bool = false)
         -> some View

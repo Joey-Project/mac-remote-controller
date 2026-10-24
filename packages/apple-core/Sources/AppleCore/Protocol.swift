@@ -6,47 +6,50 @@ public enum MessageType: String, Codable, Sendable, Equatable {
     case command
     case result
     case state
+    case ping
+    case pong
+    case disconnect
 }
 
-public struct RemoteState: Codable, Sendable, Equatable {
-    public var accessibilityGranted: Bool
-    public var systemVolume: Double?
-    public var systemVolumeReason: String?
-    public var deviceName: String
-    public var mediaTargets: [MediaTarget]?
+public enum CommandName: String, Codable, Sendable, Equatable {
+    case pointerMove = "pointer.move"
+    case pointerClick = "pointer.click"
+    case pointerScroll = "pointer.scroll"
+    case pointerButtonDown = "pointer.button.down"
+    case pointerButtonUp = "pointer.button.up"
+    case systemShortcut = "system.shortcut"
+    case keyboardText = "keyboard.text"
+    case keyboardKey = "keyboard.key"
+    case systemVolumeSet = "system.volume.set"
+    case mediaControl = "media.control"
+}
 
-    public init(
-        accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
-        deviceName: String,
-        mediaTargets: [MediaTarget]? = nil
-    ) {
-        self.accessibilityGranted = accessibilityGranted
-        self.systemVolume = systemVolume
-        self.systemVolumeReason = systemVolumeReason
-        self.deviceName = deviceName
-        self.mediaTargets = mediaTargets
-    }
+public enum RemoteKey: String, Codable, Sendable, Equatable {
+    case returnKey = "return"
+    case escape
+    case backspace
+    case space
+    case left
+    case right
+    case up
+    case down
+}
 
-    public func validate() throws {
-        if let systemVolume, !systemVolume.isFinite || !(0...1).contains(systemVolume) {
-            throw WireProtocolError.invalidEnvelope("systemVolume must be finite and within 0...1")
-        }
-        guard !deviceName.isEmpty, deviceName.utf8.count <= WireLimits.maximumDeviceNameBytes else {
-            throw WireProtocolError.invalidEnvelope("deviceName is empty or too long")
-        }
-        if let mediaTargets {
-            guard mediaTargets.count <= WireLimits.maximumMediaTargets else {
-                throw WireProtocolError.invalidEnvelope("too many media targets")
-            }
-            var targetIDs = Set<String>()
-            for target in mediaTargets {
-                try target.validate()
-                guard targetIDs.insert(target.id).inserted else {
-                    throw WireProtocolError.invalidEnvelope("duplicate media target ID")
-                }
-            }
-        }
-    }
+public enum PointerButton: String, Codable, Sendable, Equatable {
+    case left
+    case right
+}
+
+/// Fixed public macOS shortcuts; arbitrary key codes and shell actions are never accepted.
+public enum SystemShortcut: String, Codable, Sendable, Equatable {
+    case missionControl = "mission-control"
+    case appExpose = "app-expose"
+    case previousSpace = "previous-space"
+    case nextSpace = "next-space"
+}
+
+public enum WireCapabilities {
+    public static let roundTripProbe = "roundTripProbe.v1"
 }
 
 public struct RemoteError: Codable, Sendable, Equatable {
@@ -131,6 +134,10 @@ public struct WireMessage: Codable, Sendable, Equatable {
             try validateResult()
         case .state:
             try validateState()
+        case .ping, .pong:
+            try validatePing()
+        case .disconnect:
+            try validateDisconnect()
         }
     }
 
@@ -213,6 +220,29 @@ public struct WireMessage: Codable, Sendable, Equatable {
             throw WireProtocolError.invalidEnvelope(
                 "state contains fields from another message type")
         }
+    }
+
+    private func validatePing() throws {
+        guard let connectionID, !connectionID.isEmpty,
+            connectionID.utf8.count <= WireLimits.maximumIdentityBytes,
+            let requestID, UUID(uuidString: requestID) != nil,
+            let sequence, sequence > 0, sequence <= WireLimits.maximumSequence
+        else {
+            throw WireProtocolError.invalidEnvelope(
+                "ping requires connectionId, requestId, and sequence")
+        }
+        guard authToken == nil, deviceName == nil, command == nil, state == nil, error == nil else {
+            throw WireProtocolError.invalidEnvelope(
+                "ping contains fields from another message type")
+        }
+    }
+
+    private func validateDisconnect() throws {
+        guard let connectionID, !connectionID.isEmpty,
+            connectionID.utf8.count <= WireLimits.maximumIdentityBytes,
+            authToken == nil, deviceName == nil, requestID == nil, sequence == nil,
+            command == nil, state == nil, error == nil
+        else { throw WireProtocolError.invalidEnvelope("disconnect has invalid fields") }
     }
 
     private func validateCommandIdentity() throws {

@@ -1,5 +1,214 @@
 import SwiftUI
 import UIKit
+import AppleCore
+import Foundation
+import Network
+
+extension RemoteModel {
+    func startBluetoothConnection(to mac: PairedMac, attempt: UUID) {
+        connectionSummary = "Connecting over Bluetooth LE…"
+        let name = DeviceName.bounded(UIDevice.current.name)
+        do {
+            let peer = try IOSBLEPeer(mac: mac, deviceName: name)
+            self.peer = peer
+            peer.onStatus = { [weak self] in self?.connectionSummary = $0 }
+            peer.onReady = { [weak self] in
+                guard let self, self.attemptID == attempt else { return }
+                self.connectionSummary = "Authenticating paired Mac…"
+            }
+            peer.onMessage = { [weak self] in self?.receive($0) }
+            peer.onClose = { [weak self] in self?.handleClose($0) }
+            monitorConnection()
+            peer.start()
+        } catch {
+            handleClose("Could not start Bluetooth: \(error.localizedDescription)")
+        }
+    }
+
+    func startBenchmark() {
+        guard isConnected, supportsRoundTripProbe, let target = candidate else { return }
+        guard benchmarkRequestTracker.canBegin else {
+            errorMessage = "Reconnect before running another benchmark to clear retired probes."
+            return
+        }
+        benchmarkTargetID = target.serviceName
+        benchmark = RTTBenchmarkAccumulator(transport: selectedTransport.rawValue)
+        benchmarkRunning = true
+        benchmarkProgress = 0
+        benchmarkResultText = nil
+        sendNextBenchmarkProbe()
+    }
+
+    func cancelBenchmark() {
+        guard benchmarkRunning else { return }
+        benchmarkTimeout?.invalidate()
+        benchmarkTimeout = nil
+        guard benchmarkRequestTracker.retireActive() else {
+            peer?.close()
+            return
+        }
+        benchmarkRequest = nil
+        benchmark?.cancel()
+        finishBenchmark()
+    }
+
+    func advanceBenchmark() {
+        guard benchmarkRunning else { return }
+        if benchmark?.isComplete == true {
+            finishBenchmark()
+        } else if !benchmarkRequestTracker.canBegin {
+            benchmark?.cancel()
+            errorMessage = "Reconnect before running another benchmark to clear retired probes."
+            finishBenchmark()
+        } else {
+            sendNextBenchmarkProbe()
+        }
+    }
+
+    func updateBenchmarkGroupProgress() {
+        guard let benchmark else { benchmarkGroupProgress = ""; return }
+        benchmarkGroupProgress =
+            "Group \(benchmark.currentGroup) · sample \(benchmark.currentSampleInGroup)"
+    }
+
+    private func sendNextBenchmarkProbe() {
+        guard benchmarkRunning, let connectionID, let peer else { return }
+        sequence &+= 1
+        let id = UUID().uuidString
+        let sent = DispatchTime.now().uptimeNanoseconds
+        guard benchmarkRequestTracker.begin(id: id, sequence: sequence) else {
+            peer.close()
+            return
+        }
+        benchmarkRequest = BenchmarkPendingProbe(id: id, sequence: sequence, sentNanoseconds: sent)
+        peer.send(
+            WireMessage(
+                type: .ping, connectionID: connectionID, requestID: id, sequence: sequence))
+        benchmarkTimeout?.invalidate()
+        benchmarkTimeout = Timer.scheduledTimer(
+            withTimeInterval: 2, repeats: false
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.benchmarkRequest?.id == id else { return }
+                guard self.benchmarkRequestTracker.retireActive() else {
+                    self.peer?.close()
+                    return
+                }
+                self.benchmarkRequest = nil
+                self.benchmark?.record(roundTripNanoseconds: nil)
+                self.benchmarkProgress = self.benchmark?.progress ?? 0
+                self.updateBenchmarkGroupProgress()
+                self.advanceBenchmark()
+            }
+        }
+        updateBenchmarkGroupProgress()
+    }
+
+    private func finishBenchmark() {
+        guard let report = benchmark?.report(), let target = benchmarkTargetID else { return }
+        benchmarkRunning = false
+        benchmarkTimeout?.invalidate()
+        benchmarkTimeout = nil
+        let old = benchmarkReports[target, default: []].filter { $0.transport != report.transport }
+        benchmarkReports[target] = Array((old + [report]).suffix(2))
+        benchmarkResultText = benchmarkSummary(report)
+    }
+
+    func benchmarkSummary(_ report: RTTBenchmarkReport) -> String {
+        report.summary
+    }
+
+    func receive(_ message: WireMessage) {
+        switch message.type {
+        case .welcome: acceptWelcome(message)
+        case .state: acceptState(message)
+        case .result: acceptResult(message)
+        case .pong: acceptPong(message)
+        case .ping, .authenticate, .disconnect:
+            if message.type == .disconnect {
+                peer?.close()
+                handleClose("The Mac disconnected.")
+            } else {
+                peer?.close()
+            }
+        default: peer?.close()
+        }
+    }
+
+    private func acceptWelcome(_ message: WireMessage) {
+        guard !isConnected, let id = message.connectionID, let state = message.state,
+            let candidate
+        else { peer?.close(); return }
+        do {
+            let saved = PairedMac(
+                serviceName: candidate.serviceName, name: state.deviceName,
+                certificateSHA256: candidate.certificateSHA256,
+                token: message.authToken ?? candidate.token)
+            var updated = pairedMacs.filter { $0.serviceName != saved.serviceName }
+            updated.append(saved)
+            try SecureStore.save(updated, account: "paired-macs")
+            pairedMacs = updated
+            connectionID = id
+            sequence = 0
+            remoteState = state
+            isConnected = true
+            connectionSummary = "Connected to \(state.deviceName)"
+            discoveredMacs = discoveredMacs.map {
+                $0.id == saved.serviceName
+                    ? DiscoveredMac(id: $0.id, name: saved.name, isPaired: true) : $0
+            }
+        } catch { peer?.close(); errorMessage = error.localizedDescription }
+    }
+
+    private func acceptState(_ message: WireMessage) {
+        guard isConnected, message.connectionID == connectionID else { peer?.close(); return }
+        remoteState = message.state
+    }
+
+    private func acceptResult(_ message: WireMessage) {
+        guard let id = message.requestID, let request = pending[id],
+            request.metadata.matchesResult(message)
+        else { peer?.close(); return }
+        let mustReleaseSession = request.metadata.requiresSessionTeardown(for: message)
+        let otherPendingControlsMayHaveTakenEffect = pending.count > 1
+        pending.removeValue(forKey: id)
+        if let error = message.error { errorMessage = error.message }
+        if mustReleaseSession {
+            disconnect()
+            errorMessage =
+                otherPendingControlsMayHaveTakenEffect
+                ? "Disconnected to release the pointer. Other pending controls may have taken effect; "
+                    + "they were not retried."
+                : "The Mac could not release the pointer. Reconnect to continue."
+            return
+        }
+        flushQueuedCommands()
+    }
+
+    private func acceptPong(_ message: WireMessage) {
+        guard supportsRoundTripProbe, message.connectionID == connectionID,
+            let id = message.requestID, let sequence = message.sequence
+        else { peer?.close(); return }
+        let disposition = benchmarkRequestTracker.consumePong(id: id, sequence: sequence)
+        guard disposition == .active else {
+            if disposition == .retired { return }
+            peer?.close()
+            return
+        }
+        guard let request = benchmarkRequest, request.id == id, request.sequence == sequence else {
+            peer?.close()
+            return
+        }
+        benchmarkTimeout?.invalidate()
+        benchmarkTimeout = nil
+        benchmarkRequest = nil
+        benchmark?.record(
+            roundTripNanoseconds: DispatchTime.now().uptimeNanoseconds &- request.sentNanoseconds)
+        benchmarkProgress = benchmark?.progress ?? 0
+        updateBenchmarkGroupProgress()
+        advanceBenchmark()
+    }
+}
 
 struct ConnectionStatusCard: View {
     @Bindable var model: RemoteModel
@@ -48,29 +257,51 @@ struct PairingPanel: View {
     @FocusState private var invitationFocused: Bool
     let onScan: () -> Void
 
+    private var candidates: [DiscoveredMac] {
+        model.selectedTransport == .wifi ? model.discoveredMacs : model.pairedMacChoices
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Picker(
+                "Connection transport",
+                selection: Binding(
+                    get: { model.selectedTransport },
+                    set: { model.selectTransport($0) })
+            ) {
+                ForEach(RemoteTransportKind.allCases) { transport in
+                    Text(transport.rawValue).tag(transport)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("connection.transport")
+
             HStack {
-                Text("Nearby Macs")
+                Text(model.selectedTransport == .wifi ? "Nearby Macs" : "Paired Macs")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                ProgressView()
-                    .controlSize(.small)
-                    .accessibilityLabel("Searching for Macs")
+                if model.selectedTransport == .wifi {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Searching for Macs")
+                }
             }
 
-            if model.discoveredMacs.isEmpty {
+            if candidates.isEmpty {
                 ContentUnavailableView(
-                    "No Macs found yet",
-                    systemImage: "wifi.slash",
+                    model.selectedTransport == .wifi ? "No Macs found yet" : "No paired Macs yet",
+                    systemImage: model.selectedTransport == .wifi
+                        ? "wifi.slash" : "iphone.radiowaves.left.and.right",
                     description: Text(
-                        "Keep Sofa Remote open on your Mac and make sure both devices use the same network."
+                        model.selectedTransport == .wifi
+                            ? "Keep Sofa Remote open on your Mac and make sure both devices use the same network."
+                            : "Pair with your Mac over Wi-Fi first. Bluetooth is available only for paired Macs."
                     )
                 )
                 .frame(minHeight: 150)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(model.discoveredMacs) { mac in
+                    ForEach(candidates) { mac in
                         Button {
                             model.connectSaved(to: mac)
                         } label: {
@@ -80,13 +311,19 @@ struct PairingPanel: View {
                                     .frame(width: 28)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(mac.name).font(.body.weight(.medium))
-                                    Text(mac.isPaired ? "Paired" : "Unpaired · scan QR code")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    Text(
+                                        model.selectedTransport == .bluetooth
+                                            ? "Paired · Bluetooth LE"
+                                            : (mac.isPaired ? "Paired" : "Unpaired · scan QR code")
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 Image(
-                                    systemName: mac.isPaired ? "arrow.right" : "qrcode.viewfinder"
+                                    systemName: model.selectedTransport == .bluetooth
+                                        || mac.isPaired
+                                        ? "arrow.right" : "qrcode.viewfinder"
                                 )
                                 .foregroundStyle(.secondary)
                             }
@@ -98,10 +335,10 @@ struct PairingPanel: View {
                         .disabled(!mac.isPaired)
                         .accessibilityHint(
                             mac.isPaired
-                                ? "Reconnect to this Mac"
+                                ? "Reconnect to this Mac over \(model.selectedTransport.rawValue)"
                                 : "Scan the pairing QR code shown on this Mac")
 
-                        if mac.id != model.discoveredMacs.last?.id {
+                        if mac.id != candidates.last?.id {
                             Divider()
                         }
                     }
@@ -109,11 +346,16 @@ struct PairingPanel: View {
             }
 
             Button(action: onScan) {
-                Label("Scan pairing QR code", systemImage: "qrcode.viewfinder")
-                    .frame(maxWidth: .infinity)
+                Label(
+                    model.selectedTransport == .wifi
+                        ? "Scan pairing QR code" : "Pair over Wi-Fi first",
+                    systemImage: "qrcode.viewfinder"
+                )
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .disabled(model.selectedTransport == .bluetooth)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Or paste an invitation")
@@ -125,6 +367,7 @@ struct PairingPanel: View {
                         .autocorrectionDisabled()
                         .focused($invitationFocused)
                         .submitLabel(.go)
+                        .disabled(model.selectedTransport == .bluetooth)
                         .onSubmit(pairWithInvitation)
                         .padding(12)
                         .background(
@@ -133,7 +376,10 @@ struct PairingPanel: View {
                     Button("Pair", action: pairWithInvitation)
                         .buttonStyle(.bordered)
                         .disabled(
-                            invitation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            model.selectedTransport == .bluetooth
+                                || invitation.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    .isEmpty
+                        )
                 }
             }
         }
