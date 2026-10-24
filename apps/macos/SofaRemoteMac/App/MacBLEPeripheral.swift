@@ -62,7 +62,7 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
             self.crypto = crypto
             closing = true
             let closingSessionID = sessionID
-            let expireClose: (Timer) -> Void = { [weak self] _ in
+            let expireClose: @Sendable (Timer) -> Void = { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self, self.sessionID == closingSessionID else { return }
                     self.finish("Disconnected")
