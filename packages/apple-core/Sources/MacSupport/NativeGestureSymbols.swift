@@ -21,7 +21,7 @@
     }
 
     final class NativeDockNotification {
-        private typealias Send = @convention(c) (CFString, Int32) -> Int32
+        private typealias Send = @convention(c) (CFString, Int32) -> Void
         private let library: SystemGestureLibrary
         private let sendNotification: Send
 
@@ -35,7 +35,7 @@
             self.sendNotification = send
         }
 
-        func send(_ name: String) -> Bool { sendNotification(name as CFString, 0) == 0 }
+        func send(_ name: String) { sendNotification(name as CFString, 0) }
     }
 
     /// The HID payload is required by macOS 27. No virtual device or driver is created.

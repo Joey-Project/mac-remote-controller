@@ -6,7 +6,7 @@
     /// Executes the fixed remote actions without creating keyboard events.
     @MainActor
     public final class SystemGestureController {
-        private let notifyDock: ((String) -> Bool)?
+        private let notifyDock: ((String) -> Void)?
         private let makeSwipe: (DockSwipeDirection) -> [CGEvent]?
         private let post: (CGEvent) -> Void
 
@@ -27,7 +27,7 @@
         }
 
         init(
-            notifyDock: ((String) -> Bool)?,
+            notifyDock: ((String) -> Void)?,
             makeSwipe: @escaping (DockSwipeDirection) -> [CGEvent]?,
             post: @escaping (CGEvent) -> Void
         ) {
@@ -54,19 +54,15 @@
 
         private func notify(_ name: String) throws {
             guard let notifyDock else { throw SystemGestureError.unavailable }
-            guard notifyDock(name) else { throw SystemGestureError.rejected }
+            notifyDock(name)
         }
     }
 
     public enum SystemGestureError: Error, LocalizedError {
         case unavailable
-        case rejected
 
         public var errorDescription: String? {
-            switch self {
-            case .unavailable: "Native Mac gestures are unavailable on this version of macOS."
-            case .rejected: "macOS could not perform the requested desktop gesture."
-            }
+            "Native Mac gestures are unavailable on this version of macOS."
         }
     }
 #endif

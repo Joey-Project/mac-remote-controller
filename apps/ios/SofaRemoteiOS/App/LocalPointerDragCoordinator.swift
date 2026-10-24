@@ -8,95 +8,6 @@ struct QueuedPlayerVolumeRequest {
     let displayPercent: Double
 }
 
-@MainActor
-final class LocalPointerDragCoordinator {
-    private var resultPolicy = PointerDragResultPolicy()
-    private var movementGate = PointerDragStartGate()
-    private var activeDragID: UUID?
-    private var trackedDragIDs: Set<UUID> = []
-    private var queuedStartIDs: [UUID] = []
-    private var queuedReleaseIDs: [UUID] = []
-
-    func begin(trackResults: Bool, send: (RemoteCommand) -> Bool) -> UUID? {
-        guard activeDragID == nil else { return nil }
-        let dragID = UUID()
-        activeDragID = dragID
-        movementGate.begin(gestureID: dragID.uuidString)
-        if trackResults {
-            resultPolicy.begin(gestureID: dragID.uuidString)
-            trackedDragIDs.insert(dragID)
-            queuedStartIDs.append(dragID)
-        } else {
-            _ = movementGate.acceptStart(gestureID: dragID.uuidString)
-        }
-        guard send(RemoteCommand(name: .pointerButtonDown, button: .left)) else {
-            activeDragID = nil
-            movementGate.finish(gestureID: dragID.uuidString)
-            trackedDragIDs.remove(dragID)
-            queuedStartIDs.removeAll { $0 == dragID }
-            resultPolicy.cancel(gestureID: dragID.uuidString)
-            return nil
-        }
-        return dragID
-    }
-
-    func end(_ dragID: UUID, send: (RemoteCommand) -> Bool) {
-        guard activeDragID == dragID else { return }
-        activeDragID = nil
-        movementGate.finish(gestureID: dragID.uuidString)
-        if trackedDragIDs.contains(dragID) {
-            resultPolicy.expectRelease(gestureID: dragID.uuidString)
-            queuedReleaseIDs.append(dragID)
-        }
-        _ = send(RemoteCommand(name: .pointerButtonUp, button: .left))
-    }
-
-    func permitsMovement(for dragID: UUID) -> Bool {
-        activeDragID == dragID && movementGate.permitsMovement(gestureID: dragID.uuidString)
-    }
-
-    func registerDispatchedCommand(_ command: RemoteCommand, requestID: String) {
-        if command.name == .pointerButtonDown, !queuedStartIDs.isEmpty {
-            let dragID = queuedStartIDs.removeFirst()
-            resultPolicy.registerStart(gestureID: dragID.uuidString, requestID: requestID)
-        } else if command.name == .pointerButtonUp, !queuedReleaseIDs.isEmpty {
-            let dragID = queuedReleaseIDs.removeFirst()
-            resultPolicy.registerRelease(gestureID: dragID.uuidString, requestID: requestID)
-        }
-    }
-
-    func acceptResult(requestID: String, succeeded: Bool) -> PointerDragResultPolicy.Outcome? {
-        let outcome = resultPolicy.acceptResult(requestID: requestID, succeeded: succeeded)
-        switch outcome {
-        case let .startAccepted(gestureID)?:
-            _ = movementGate.acceptStart(gestureID: gestureID)
-        case let .startRejected(gestureID)?:
-            _ = movementGate.rejectStart(gestureID: gestureID)
-            if let dragID = UUID(uuidString: gestureID) {
-                if activeDragID == dragID { activeDragID = nil }
-                if !resultPolicy.contains(gestureID: gestureID) { trackedDragIDs.remove(dragID) }
-            }
-        case let .releaseAccepted(gestureID)?,
-            let .releaseFailureSuppressed(gestureID)?,
-            let .releaseFailureRequiresSessionTeardown(gestureID)?:
-            movementGate.finish(gestureID: gestureID)
-            if let dragID = UUID(uuidString: gestureID) { trackedDragIDs.remove(dragID) }
-        default:
-            break
-        }
-        return outcome
-    }
-
-    func reset() {
-        resultPolicy.reset()
-        movementGate.reset()
-        activeDragID = nil
-        trackedDragIDs.removeAll(keepingCapacity: true)
-        queuedStartIDs.removeAll(keepingCapacity: true)
-        queuedReleaseIDs.removeAll(keepingCapacity: true)
-    }
-}
-
 extension RemoteModel {
     func benchmarkSummary(_ report: RTTBenchmarkReport) -> String {
         report.summary
@@ -116,14 +27,15 @@ extension RemoteModel {
 
     func endLocalPointerDrag(_ dragID: UUID) {
         localPointerDragCoordinator.end(dragID) { [weak self] command in
-            self?.send(command) ?? false
+            self?.send(command, orderedDragInput: true) ?? false
         }
     }
 
     @discardableResult
     func sendLocalPointerDragMove(_ dragID: UUID, x: Double, y: Double) -> Bool {
-        guard localPointerDragCoordinator.permitsMovement(for: dragID) else { return false }
-        return send(RemoteCommand(name: .pointerMove, x: x, y: y))
+        localPointerDragCoordinator.move(dragID, x: x, y: y) { [weak self] command in
+            self?.send(command, orderedDragInput: true) ?? false
+        }
     }
 
     func resolveLocalPointerDragResult(
@@ -193,6 +105,28 @@ extension RemoteModel {
                     type: .command, connectionID: connectionID, requestID: requestID,
                     sequence: sequence, command: command))
         }
+        localPointerDragCoordinator.resume { [weak self] command in
+            self?.send(command, orderedDragInput: true) ?? false
+        }
+    }
+}
+
+extension RemoteModel {
+    func handleQueueRejection(_ command: RemoteCommand, orderedDragInput: Bool) -> Bool {
+        if orderedDragInput { return false }
+        if command.name == .pointerButtonUp {
+            let unknownOutcome = !pending.isEmpty
+            disconnect()
+            errorMessage =
+                unknownOutcome
+                ? "Disconnected to release the pointer safely. "
+                    + "A pending control may have taken effect; it was not retried."
+                : "Disconnected to release the pointer safely. "
+                    + "Reconnect to continue."
+        } else if !InputCommandScheduler.isBestEffortPointerDelta(command) {
+            errorMessage = "The Mac is busy. Wait for the pending controls to finish."
+        }
+        return false
     }
 
     func recordPlayerVolumeResult(requestID: String, succeeded: Bool) {
