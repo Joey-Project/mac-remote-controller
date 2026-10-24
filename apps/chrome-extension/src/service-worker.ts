@@ -35,6 +35,7 @@ const HOST_NAME = 'com.joeyteng.sofaremote';
 const maximumPendingCommands = 8;
 const nativeMessageByteLimit = 64 * 1024;
 const targetRefreshIntervalMilliseconds = 2_000;
+const browserCommandTimeoutMilliseconds = 1_500;
 
 const commandForTab = new Map<string, { tabId: number; targetId: string; timeout: number }>();
 const knownMediaTabs = new Set<number>();
@@ -194,7 +195,7 @@ function receiveNativeMessage(port: chrome.runtime.Port, value: unknown): void {
       false,
       'The browser tab did not respond.',
     );
-  }, 4_000);
+  }, browserCommandTimeoutMilliseconds);
   commandForTab.set(message.requestId!, { tabId, targetId: message.targetId!, timeout });
   try {
     chrome.tabs.sendMessage(

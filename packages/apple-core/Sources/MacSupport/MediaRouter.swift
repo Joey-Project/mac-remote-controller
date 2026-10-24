@@ -19,6 +19,11 @@ public enum MediaRouteError: Error, LocalizedError, Equatable {
     }
 }
 
+enum MediaRouteResultDisposition: Equatable {
+    case completed
+    case retired
+}
+
 public struct RoutedMediaCommand: Codable, Sendable, Equatable {
     public let requestID: String
     public let targetID: String
@@ -47,15 +52,25 @@ public final class MediaRouter {
         let sessionID: String
         let command: RoutedMediaCommand
         let continuation: CheckedContinuation<Void, Error>
+        var delivered = false
+    }
+
+    private struct RetiredResult {
+        let targetID: String
+        let expiresAt: ContinuousClock.Instant
     }
 
     public private(set) var targets: [String: MediaTarget] = [:]
     private var queue: [RoutedMediaCommand] = []
     private var pending: [String: Pending] = [:]
     private var targetLastSeen: [String: ContinuousClock.Instant] = [:]
+    private var retiredResults: [String: RetiredResult] = [:]
+    private var retiredResultOrder: [String] = []
     private let queueLimit: Int
     private let clock = ContinuousClock()
     private static let adapterResponseTimeout: Duration = .seconds(2)
+    private static let retiredResultLifetime: Duration = .seconds(30)
+    private static let maximumRetiredResults = 1_024
 
     public init(queueLimit: Int = 8) {
         self.queueLimit = max(1, queueLimit)
@@ -128,7 +143,8 @@ public final class MediaRouter {
         sessionID: String
     ) async throws {
         try request.validate()
-        guard pending[requestID] == nil else {
+        purgeRetiredResults(at: clock.now)
+        guard pending[requestID] == nil, retiredResults[requestID] == nil else {
             throw WireProtocolError.invalidCommand("duplicate media request ID")
         }
         guard let target = targets[request.targetID] else {
@@ -178,12 +194,12 @@ public final class MediaRouter {
         guard let index = queue.firstIndex(where: { targets[$0.targetID]?.kind == kind }) else {
             return nil
         }
-        return queue.remove(at: index)
+        return takeNext(at: index)
     }
 
     public func takeNext(targetID: String) -> RoutedMediaCommand? {
         guard let index = queue.firstIndex(where: { $0.targetID == targetID }) else { return nil }
-        return queue.remove(at: index)
+        return takeNext(at: index)
     }
 
     @discardableResult
@@ -192,9 +208,23 @@ public final class MediaRouter {
         targetID: String,
         errorMessage: String? = nil
     ) -> Bool {
-        guard let item = pending[requestID], item.command.targetID == targetID else { return false }
-        finish(requestID, error: errorMessage.map(MediaRouteError.adapter))
-        return true
+        completeResult(
+            requestID: requestID, targetID: targetID, errorMessage: errorMessage) == .completed
+    }
+
+    func completeResult(
+        requestID: String,
+        targetID: String,
+        errorMessage: String? = nil
+    ) -> MediaRouteResultDisposition? {
+        purgeRetiredResults(at: clock.now)
+        if let item = pending[requestID] {
+            guard item.delivered, item.command.targetID == targetID else { return nil }
+            finish(requestID, error: errorMessage.map(MediaRouteError.adapter))
+            return .completed
+        }
+        guard retiredResults[requestID]?.targetID == targetID else { return nil }
+        return .retired
     }
 
     public func cancel(sessionID: String) {
@@ -213,10 +243,43 @@ public final class MediaRouter {
         if let expectedIdentity, item.identity != expectedIdentity { return }
         pending.removeValue(forKey: requestID)
         queue.removeAll { $0.requestID == requestID }
+        if item.delivered { retireResult(for: item, at: clock.now) }
         if let error {
             item.continuation.resume(throwing: error)
         } else {
             item.continuation.resume()
         }
+    }
+
+    private func takeNext(at index: Int) -> RoutedMediaCommand? {
+        let command = queue.remove(at: index)
+        guard var item = pending[command.requestID] else { return nil }
+        item.delivered = true
+        pending[command.requestID] = item
+        return command
+    }
+
+    private func retireResult(for item: Pending, at now: ContinuousClock.Instant) {
+        purgeRetiredResults(at: now)
+        let requestID = item.command.requestID
+        guard retiredResults[requestID] == nil else { return }
+        while retiredResults.count >= Self.maximumRetiredResults,
+            let oldest = retiredResultOrder.first
+        {
+            retiredResultOrder.removeFirst()
+            retiredResults.removeValue(forKey: oldest)
+        }
+        retiredResults[requestID] = RetiredResult(
+            targetID: item.command.targetID,
+            expiresAt: now.advanced(by: Self.retiredResultLifetime))
+        retiredResultOrder.append(requestID)
+    }
+
+    private func purgeRetiredResults(at now: ContinuousClock.Instant) {
+        let expired = retiredResults.compactMap { requestID, result in
+            result.expiresAt <= now ? requestID : nil
+        }
+        for requestID in expired { retiredResults.removeValue(forKey: requestID) }
+        retiredResultOrder.removeAll { retiredResults[$0] == nil }
     }
 }

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
+import { stringify as formStringify, parse as formParse } from 'node:querystring';
+import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 import test from 'node:test';
 import {
+  canNavigatePlaylist,
+  createTargetID,
   gainRatioFromMpvPercent,
   effectiveMpvVolumePercent,
   iinaFormData,
@@ -9,6 +14,12 @@ import {
   targetSnapshot,
   validateAction,
 } from '../dist/iina-controls.js';
+
+// This generated non-secret sentinel satisfies the plugin's length guard in
+// the isolated harness; it is never sent to a real bridge.
+const BRIDGE_LENGTH_SENTINEL = Array.from({ length: 32 }, (_, index) =>
+  String.fromCharCode(65 + (index % 26)),
+).join('');
 
 test('IINA state exposes exact target ID and gain-ratio volume range', () => {
   const state = targetSnapshot({
@@ -93,9 +104,137 @@ test('IINA POST data survives the documented form-encoded options.data wire path
     capabilities: { playPause: true },
   };
   const optionsData = iinaFormData(request);
-  const wireBody = new URLSearchParams(optionsData).toString();
+  const wireBody = formStringify(optionsData);
   assert.match(wireBody, /^payload=%7B/);
-  assert.deepEqual(JSON.parse(new URLSearchParams(wireBody).get('payload')), request);
+  assert.deepEqual(JSON.parse(formParse(wireBody).payload), request);
+});
+
+test('IINA target IDs are locally unique routing labels and not browser crypto tokens', () => {
+  const randomValues = [0.25, 0.5, 0.75, 0.125];
+  let index = 0;
+  const first = createTargetID(1_800_000_000_000, () => randomValues[index++]);
+  const second = createTargetID(1_800_000_000_000, () => randomValues[index++]);
+  assert.match(first, /^iina:[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/);
+  assert.notEqual(first, second);
+});
+
+test('IINA target names are UTF-8 byte bounded without browser encoders', () => {
+  const state = targetSnapshot({
+    targetId: 'iina:window-unicode',
+    title: '😀'.repeat(100),
+    idle: false,
+    position: 0,
+    duration: 1,
+    mpvVolumePercent: 0,
+    maximumMpvPercent: 100,
+    muted: false,
+    playlistCount: 1,
+    playlistPosition: 0,
+  });
+  assert.ok(Buffer.byteLength(state.target.name, 'utf8') <= 256);
+  assert.ok(state.target.name.endsWith('😀'));
+});
+
+test('IINA playlist availability is checked against the execution-time position', async () => {
+  assert.equal(canNavigatePlaylist('next', 3, 0), true);
+  assert.equal(canNavigatePlaylist('next', 3, 2), false);
+  assert.equal(canNavigatePlaylist('previous', 3, 0), false);
+  assert.equal(canNavigatePlaylist('previous', 3, 2), true);
+  assert.equal(canNavigatePlaylist('next', 3, Number.NaN), false);
+
+  const mainSource = await readFile(
+    new URL('../dist/SofaRemote.iinaplugin/main.js', import.meta.url),
+    'utf8',
+  );
+  const handlers = new Map();
+  const posts = [];
+  const getCalls = [];
+  let playlistPositionReads = 0;
+  let nextCalls = 0;
+  const iina = {
+    preferences: { get: (key) => (key === 'bridge_port' ? 47623 : BRIDGE_LENGTH_SENTINEL) },
+    event: { on: (name, handler) => handlers.set(name, handler) },
+    http: {
+      post: async (path, options) => {
+        posts.push({ path, options });
+        return { statusCode: 204, data: undefined };
+      },
+      get: async (path, options) => {
+        getCalls.push({ path, options });
+        return {
+          statusCode: 200,
+          data: {
+            command: {
+              requestId: 'request-1',
+              targetId: posts.find((post) => post.path.endsWith('/update'))
+                ? JSON.parse(
+                    posts.find((post) => post.path.endsWith('/update')).options.data.payload,
+                  ).id
+                : '',
+              action: 'next',
+            },
+          },
+        };
+      },
+    },
+    core: {
+      status: { title: 'Episode', idle: false, position: 3, duration: 30, paused: false },
+      audio: { volume: 60, muted: false },
+      pause: () => undefined,
+      resume: () => undefined,
+      seek: () => undefined,
+    },
+    mpv: {
+      getNumber: (name) => {
+        if (name === 'volume-max') return 130;
+        playlistPositionReads += 1;
+        return playlistPositionReads === 1 ? 0 : 2;
+      },
+    },
+    playlist: {
+      count: () => 3,
+      playNext: () => {
+        nextCalls += 1;
+      },
+      playPrevious: () => undefined,
+    },
+  };
+  const context = vm.createContext({
+    iina,
+    setTimeout: () => 1,
+    clearTimeout: () => undefined,
+  });
+  assert.equal('crypto' in context, false);
+  assert.equal('TextEncoder' in context, false);
+  assert.equal('URLSearchParams' in context, false);
+  vm.runInContext(mainSource, context, { timeout: 1_000 });
+
+  for (let attempt = 0; attempt < 20 && getCalls.length === 0; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(getCalls.length, 1);
+  assert.equal(nextCalls, 0);
+  const update = posts.find((post) => post.path.endsWith('/update'));
+  assert.ok(update);
+  const target = JSON.parse(update.options.data.payload);
+  assert.match(target.id, /^iina:/);
+  assert.equal(playlistPositionReads, 2);
+  assert.equal(
+    posts.some((post) => post.path.endsWith('/result')),
+    true,
+  );
+  const result = JSON.parse(
+    posts.find((post) => post.path.endsWith('/result')).options.data.payload,
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error, /no next playlist item/);
+
+  handlers.get('iina.window-will-close')();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(
+    posts.some((post) => post.path.endsWith('/unregister')),
+    true,
+  );
 });
 
 test('IINA snapshots report zero effective volume while muted', () => {

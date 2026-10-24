@@ -47,10 +47,13 @@ superseded_by:
 - PR8 Web review fixes: package checks passed with Node.js 26.12.0 and pnpm
   12.14.0, including 16/16 offline preview tests for native key activation,
   cumulative scroll display, and grapheme-aware text counting.
-- Final workspace validation passed with Node.js 26.12.0 and pnpm 12.14.0:
-  format check, lint, strict typecheck, tests (Chrome 8/8, IINA 4/4, Web
-  preview 9/9), and builds for all three TypeScript packages. `actionlint` and
-  project-journal validation also passed.
+- Final merged-stack validation passed with Node.js 26.12.0 and pnpm 12.14.0:
+  format check, lint, strict typecheck, 41 tests (Chrome 15/15, IINA 10/10,
+  Web preview 16/16), and builds for all three TypeScript packages. The
+  canonical Swift check passed 139 AppleCore tests, strict formatting/lint,
+  macOS and generic iOS Simulator app builds, and generated Info.plist checks.
+  `actionlint` 1.7.12 and project-journal validation passed. This final gate did
+  not run browser UI, iOS Simulator UI, physical devices, or media playback.
 - A desktop in-app-browser smoke of the source-identical built mirror passed:
   the offline/no-Mac banner appeared, a left-click action ran locally, keyboard
   mode switched, text input reached nine characters, the right-arrow counter

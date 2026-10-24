@@ -41,9 +41,7 @@ extension LoopbackMediaBridge {
             send(status: 204, body: Data(), on: connection)
         case ("GET", "/v1/chrome/next") where request.query.isEmpty:
             let command = takeNext(for: .youtube) ?? takeNext(for: .bilibili)
-            send(
-                status: 200, body: try json(["command": command as Any? ?? NSNull()]),
-                on: connection)
+            send(status: 200, body: try commandResponse(command), on: connection)
         case ("POST", "/v1/iina/update") where request.query.isEmpty:
             try updateTarget(from: iinaJSONBody(request), expectedKind: .iina)
             send(status: 204, body: Data(), on: connection)
@@ -52,7 +50,7 @@ extension LoopbackMediaBridge {
         case ("GET", "/v1/iina/next"):
             try pollIINA(request.query, on: connection)
         case ("POST", "/v1/iina/result") where request.query.isEmpty:
-            try handleResult(iinaJSONBody(request))
+            try handleResult(iinaJSONBody(request), expectedTargetPrefix: "iina:")
             send(status: 204, body: Data(), on: connection)
         default:
             send(status: 404, body: ["error": "not_found"], on: connection)
@@ -77,7 +75,7 @@ extension LoopbackMediaBridge {
         else { throw HTTPError.badRequest }
         send(
             status: 200,
-            body: try json(["command": takeNext(targetID: targetID) as Any? ?? NSNull()]),
+            body: try commandResponse(takeNext(targetID: targetID)),
             on: connection)
     }
 
@@ -105,7 +103,7 @@ extension LoopbackMediaBridge {
             guard Set(object.keys).isSubset(of: ["type", "targetId", "requestId", "ok", "error"]),
                 object["type"] as? String == type
             else { throw HTTPError.badRequest }
-            try handleResult(body)
+            try handleResult(body, expectedTargetPrefix: "chrome:")
         default:
             throw HTTPError.badRequest
         }
@@ -159,10 +157,11 @@ extension LoopbackMediaBridge {
         if try router.update(target) { onTargetsChanged?(sortedTargets) }
     }
 
-    func handleResult(_ body: Data) throws {
+    func handleResult(_ body: Data, expectedTargetPrefix: String) throws {
         let object = try strictObject(
             body, allowed: ["type", "targetId", "requestId", "ok", "error"])
         let targetID = try string(object["targetId"], max: WireLimits.maximumMediaTargetIDBytes)
+        guard targetID.hasPrefix(expectedTargetPrefix) else { throw HTTPError.badRequest }
         let requestID = try string(object["requestId"], max: 256)
         guard let succeeded = object["ok"] as? Bool else { throw HTTPError.badRequest }
         let error: String?
@@ -175,9 +174,10 @@ extension LoopbackMediaBridge {
             error = nil
         }
         guard
-            router.complete(
+            router.completeResult(
                 requestID: requestID, targetID: targetID,
                 errorMessage: succeeded ? nil : (error ?? "The media player rejected the command."))
+                != nil
         else {
             throw HTTPError.badRequest
         }
@@ -228,6 +228,17 @@ extension LoopbackMediaBridge {
 
     func json(_ value: Any) throws -> Data {
         try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys])
+    }
+
+    func commandResponse(_ command: RoutedMediaCommand?) throws -> Data {
+        let value: Any
+        if let command {
+            let encodedCommand = try JSONEncoder().encode(command)
+            value = try JSONSerialization.jsonObject(with: encodedCommand)
+        } else {
+            value = NSNull()
+        }
+        return try json(["command": value])
     }
 
     func send(status: Int, body: Any, on connection: NWConnection) {

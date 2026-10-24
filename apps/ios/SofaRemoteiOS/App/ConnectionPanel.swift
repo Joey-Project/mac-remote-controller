@@ -111,11 +111,7 @@ extension RemoteModel {
         benchmarkTimeout = nil
         let old = benchmarkReports[target, default: []].filter { $0.transport != report.transport }
         benchmarkReports[target] = Array((old + [report]).suffix(2))
-        benchmarkResultText = benchmarkSummary(report)
-    }
-
-    func benchmarkSummary(_ report: RTTBenchmarkReport) -> String {
-        report.summary
+        benchmarkResultText = report.summary
     }
 
     func receive(_ message: WireMessage) {
@@ -169,7 +165,8 @@ extension RemoteModel {
         guard let id = message.requestID, let request = pending[id],
             request.metadata.matchesResult(message)
         else { peer?.close(); return }
-        let mustReleaseSession = request.metadata.requiresSessionTeardown(for: message)
+        let mustReleaseSession = requiresSafePointerTeardown(
+            metadata: request.metadata, message: message)
         let otherPendingControlsMayHaveTakenEffect = pending.count > 1
         pending.removeValue(forKey: id)
         if let error = message.error { errorMessage = error.message }
