@@ -134,4 +134,36 @@ final class RemoteControlPolicyTests: XCTestCase {
             .releaseFailureRequiresSessionTeardown(gestureID: "drag-a"))
         XCTAssertTrue(policy.isEmpty)
     }
+
+    func testDragMovementWaitsForMatchingAcceptedButtonDown() {
+        var gate = PointerDragStartGate()
+        gate.begin(gestureID: "drag-pending")
+
+        XCTAssertFalse(gate.permitsMovement(gestureID: "drag-pending"))
+        XCTAssertFalse(gate.acceptStart(gestureID: "other-drag"))
+        XCTAssertFalse(gate.permitsMovement(gestureID: "drag-pending"))
+        XCTAssertTrue(gate.acceptStart(gestureID: "drag-pending"))
+        XCTAssertTrue(gate.permitsMovement(gestureID: "drag-pending"))
+
+        gate.finish(gestureID: "drag-pending")
+        XCTAssertFalse(gate.permitsMovement(gestureID: "drag-pending"))
+        XCTAssertFalse(gate.acceptStart(gestureID: "drag-pending"))
+    }
+
+    func testRejectedOrEndedPendingDragCannotBeRevivedByLateAcceptance() {
+        var gate = PointerDragStartGate()
+        gate.begin(gestureID: "drag-rejected")
+        XCTAssertTrue(gate.rejectStart(gestureID: "drag-rejected"))
+        XCTAssertFalse(gate.permitsMovement(gestureID: "drag-rejected"))
+        XCTAssertFalse(gate.acceptStart(gestureID: "drag-rejected"))
+
+        gate.begin(gestureID: "drag-ended-before-ack")
+        gate.finish(gestureID: "drag-ended-before-ack")
+        XCTAssertFalse(gate.permitsMovement(gestureID: "drag-ended-before-ack"))
+        XCTAssertFalse(gate.acceptStart(gestureID: "drag-ended-before-ack"))
+
+        gate.begin(gestureID: "drag-next-sequence")
+        XCTAssertTrue(gate.acceptStart(gestureID: "drag-next-sequence"))
+        XCTAssertTrue(gate.permitsMovement(gestureID: "drag-next-sequence"))
+    }
 }

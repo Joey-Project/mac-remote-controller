@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class LocalPointerDragCoordinator {
     private var resultPolicy = PointerDragResultPolicy()
+    private var movementGate = PointerDragStartGate()
     private var activeDragID: UUID?
     private var trackedDragIDs: Set<UUID> = []
     private var queuedStartIDs: [UUID] = []
@@ -13,13 +14,17 @@ final class LocalPointerDragCoordinator {
         guard activeDragID == nil else { return nil }
         let dragID = UUID()
         activeDragID = dragID
+        movementGate.begin(gestureID: dragID.uuidString)
         if trackResults {
             resultPolicy.begin(gestureID: dragID.uuidString)
             trackedDragIDs.insert(dragID)
             queuedStartIDs.append(dragID)
+        } else {
+            _ = movementGate.acceptStart(gestureID: dragID.uuidString)
         }
         guard send(RemoteCommand(name: .pointerButtonDown, button: .left)) else {
             activeDragID = nil
+            movementGate.finish(gestureID: dragID.uuidString)
             trackedDragIDs.remove(dragID)
             queuedStartIDs.removeAll { $0 == dragID }
             resultPolicy.cancel(gestureID: dragID.uuidString)
@@ -31,6 +36,7 @@ final class LocalPointerDragCoordinator {
     func end(_ dragID: UUID, send: (RemoteCommand) -> Bool) {
         guard activeDragID == dragID else { return }
         activeDragID = nil
+        movementGate.finish(gestureID: dragID.uuidString)
         if trackedDragIDs.contains(dragID) {
             resultPolicy.expectRelease(gestureID: dragID.uuidString)
             queuedReleaseIDs.append(dragID)
@@ -39,7 +45,7 @@ final class LocalPointerDragCoordinator {
     }
 
     func permitsMovement(for dragID: UUID) -> Bool {
-        activeDragID == dragID
+        activeDragID == dragID && movementGate.permitsMovement(gestureID: dragID.uuidString)
     }
 
     func registerDispatchedCommand(_ command: RemoteCommand, requestID: String) {
@@ -55,7 +61,10 @@ final class LocalPointerDragCoordinator {
     func acceptResult(requestID: String, succeeded: Bool) -> PointerDragResultPolicy.Outcome? {
         let outcome = resultPolicy.acceptResult(requestID: requestID, succeeded: succeeded)
         switch outcome {
+        case let .startAccepted(gestureID)?:
+            _ = movementGate.acceptStart(gestureID: gestureID)
         case let .startRejected(gestureID)?:
+            _ = movementGate.rejectStart(gestureID: gestureID)
             if let dragID = UUID(uuidString: gestureID) {
                 if activeDragID == dragID { activeDragID = nil }
                 if !resultPolicy.contains(gestureID: gestureID) { trackedDragIDs.remove(dragID) }
@@ -63,6 +72,7 @@ final class LocalPointerDragCoordinator {
         case let .releaseAccepted(gestureID)?,
             let .releaseFailureSuppressed(gestureID)?,
             let .releaseFailureRequiresSessionTeardown(gestureID)?:
+            movementGate.finish(gestureID: gestureID)
             if let dragID = UUID(uuidString: gestureID) { trackedDragIDs.remove(dragID) }
         default:
             break
@@ -72,6 +82,7 @@ final class LocalPointerDragCoordinator {
 
     func reset() {
         resultPolicy.reset()
+        movementGate.reset()
         activeDragID = nil
         trackedDragIDs.removeAll(keepingCapacity: true)
         queuedStartIDs.removeAll(keepingCapacity: true)

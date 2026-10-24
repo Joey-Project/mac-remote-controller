@@ -112,16 +112,18 @@ final class DesktopController {
     }
 
     func release(_ buttons: [PointerButton], from held: inout HeldInputState) {
-        guard let source = CGEventSource(stateID: .hidSystemState),
+        guard AXIsProcessTrusted(),
+            let source = CGEventSource(stateID: .hidSystemState),
             let location = CGEvent(source: nil)?.location
         else { return }
         _ = held.release(buttons) { button in
             guard
+                AXIsProcessTrusted(),
                 let event = mouseEvent(
                     button: button, down: false, source: source, location: location)
             else { return false }
             event.post(tap: .cghidEventTap)
-            return true
+            return AXIsProcessTrusted()
         }
     }
 
