@@ -11,7 +11,9 @@ distinguishes windows but is not an authentication secret; the companion-issued
 bridge token authenticates requests. Playback, relative seek, playlist
 next/previous, and player volume use IINA's supported Plugin API. Playlist
 controls are unavailable at the relevant playlist boundary, and availability
-is checked again when a command executes. The plugin converts mpv's
+is checked again when a command executes. Every command also checks that
+playback is still active before changing player state, seeking, navigating, or
+setting volume. The plugin converts mpv's
 percentage-based volume and
 `volume-max` to the protocol's gain ratio (`1.0` means 100%) before reporting
 the current value and maximum. Incoming gain ratios are converted back to mpv

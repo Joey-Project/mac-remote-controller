@@ -117,9 +117,15 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Lint GitHub Actions workflows
         run: actionlint
-      - name: Check repository shell scripts
+      - name: Check media setup shell scripts
         run: |
-          for script in tooling/swift/*.sh apps/android/gradlew scripts/*.sh; do
+          for script in scripts/*.sh; do
             bash -n "$script"
           done
-          shellcheck tooling/swift/*.sh apps/android/gradlew scripts/*.sh
+          shellcheck scripts/*.sh
+      - name: Check repository shell scripts
+        run: |
+          for script in tooling/swift/*.sh apps/android/gradlew; do
+            bash -n "$script"
+          done
+          shellcheck tooling/swift/*.sh apps/android/gradlew

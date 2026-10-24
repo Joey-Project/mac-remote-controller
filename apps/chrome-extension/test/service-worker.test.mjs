@@ -58,6 +58,11 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
       onMessage: nativeMessage,
       onDisconnect: nativeDisconnected,
       sent,
+      disconnectCalls: 0,
+      disconnect() {
+        this.disconnectCalls += 1;
+        nativeDisconnected.dispatch();
+      },
       postMessage(message) {
         nativeMessages.push(message);
         sent.push(message);
@@ -108,8 +113,13 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
       TextEncoder,
       URL,
       setInterval(callback, delay) {
-        intervals.push({ callback, delay });
-        return intervals.length;
+        const id = intervals.length + 1;
+        intervals.push({ id, callback, delay, cleared: false });
+        return id;
+      },
+      clearInterval(id) {
+        const interval = intervals.find((entry) => entry.id === id);
+        if (interval) interval.cleared = true;
       },
       setTimeout(callback, delay) {
         timeoutId += 1;
@@ -131,16 +141,18 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
     timeouts,
     ports,
     get nativeMessage() {
-      return ports[0]?.onMessage;
+      return ports.at(-1)?.onMessage;
     },
     get nativeDisconnected() {
-      return ports[0]?.onDisconnect;
+      return ports.at(-1)?.onDisconnect;
     },
     get connectAttempts() {
       return connectionAttempts;
     },
     tabRemoved,
     tabUpdated,
+    startup,
+    installed,
     workerMessageListener,
     sender,
     snapshot,
@@ -160,21 +172,37 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
         .map((timeout) => timeout.delay)
         .sort((left, right) => left - right);
     },
+    activeIntervals() {
+      return intervals.filter((interval) => !interval.cleared);
+    },
+    fireRefresh() {
+      for (const interval of this.activeIntervals()) interval.callback();
+    },
     setRuntimeLastError(value) {
       runtimeLastError = value;
     },
   };
 }
 
+test('startup and installation stay idle until a supported media tab is discovered', async () => {
+  const harness = await makeHarness();
+  harness.startup.dispatch();
+  harness.installed.dispatch();
+  assert.equal(harness.connectAttempts, 0);
+  assert.equal(harness.ports.length, 0);
+  assert.equal(harness.activeIntervals().length, 0);
+  assert.equal(harness.pendingTimeoutDelays().length, 0);
+});
+
 test('service worker renews registered background targets independently of page timers', async () => {
   const harness = await makeHarness();
-  assert.equal(harness.intervals.length, 1);
-  assert.equal(harness.intervals[0].delay, 2_000);
   harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  assert.equal(harness.activeIntervals().length, 1);
+  assert.equal(harness.activeIntervals()[0].delay, 2_000);
   assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
 
   // Model a hidden page whose own chained timer is throttled: only the worker tick runs.
-  harness.intervals[0].callback();
+  harness.fireRefresh();
 
   assert.equal(harness.tabMessages.length, 1);
   assert.equal(harness.tabMessages[0].tabId, 41);
@@ -183,26 +211,94 @@ test('service worker renews registered background targets independently of page 
   assert.equal(harness.nativeMessages.at(-1).targetId, 'chrome:41');
 });
 
+test('last media tab disconnects the host and the next snapshot reconnects lazily', async () => {
+  const harness = await makeHarness();
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  const oldPort = harness.ports[0];
+  const command = {
+    type: 'media.command',
+    requestId: 'pending-before-last-close',
+    targetId: 'chrome:41',
+    action: 'playPause',
+  };
+  oldPort.onMessage.dispatch(command);
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_500]);
+  assert.equal(harness.tabMessages.at(-1).message.type, 'mediaCommand');
+
+  harness.tabRemoved.dispatch(41);
+
+  assert.equal(oldPort.sent.at(-1).type, 'media.targetUnavailable');
+  assert.equal(oldPort.disconnectCalls, 1);
+  assert.equal(harness.timeouts.size, 0);
+  assert.equal(harness.activeIntervals().length, 0);
+  assert.equal(harness.connectAttempts, 1);
+
+  const messagesBeforeStaleCallback = harness.nativeMessages.length;
+  oldPort.onMessage.dispatch(command);
+  oldPort.onDisconnect.dispatch();
+  assert.equal(harness.nativeMessages.length, messagesBeforeStaleCallback);
+  assert.equal(harness.connectAttempts, 1);
+
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  assert.equal(harness.connectAttempts, 2);
+  assert.equal(harness.ports.length, 2);
+  assert.equal(harness.activeIntervals().length, 1);
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+
+  oldPort.onDisconnect.dispatch();
+  assert.equal(harness.connectAttempts, 2);
+  const nextCommand = { ...command, requestId: 'after-reconnect' };
+  harness.ports[1].onMessage.dispatch(nextCommand);
+  assert.equal(harness.tabMessages.at(-1).message.type, 'mediaCommand');
+  assert.equal(harness.connectAttempts, 2);
+});
+
+test('last tab removal cancels a pending reconnect and stale retry cannot reopen the host', async () => {
+  const harness = await makeHarness({ failedConnectionAttempts: [1] });
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  assert.equal(harness.connectAttempts, 1);
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_000]);
+  const retry = [...harness.timeouts.values()].find((timeout) => timeout.delay === 1_000);
+  assert.ok(retry);
+
+  harness.tabRemoved.dispatch(41);
+  assert.equal(harness.pendingTimeoutDelays().length, 0);
+  assert.equal(harness.activeIntervals().length, 0);
+  retry.callback();
+  assert.equal(harness.connectAttempts, 1);
+  assert.equal(harness.ports.length, 0);
+
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  assert.equal(harness.connectAttempts, 2);
+  assert.equal(harness.ports.length, 1);
+  assert.equal(harness.activeIntervals().length, 1);
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+});
+
 test('unavailable navigation, source removal, and native disconnect stop worker refreshes', async () => {
   const harness = await makeHarness();
   harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
-  harness.intervals[0].callback();
+  harness.fireRefresh();
   assert.equal(harness.tabMessages.length, 1);
 
   harness.tabUpdated.dispatch(41, { url: 'https://example.com/' }, { id: 41 });
   assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUnavailable');
+  assert.equal(harness.ports[0].disconnectCalls, 1);
+  assert.equal(harness.activeIntervals().length, 0);
   harness.intervals[0].callback();
   assert.equal(harness.tabMessages.length, 1);
 
   harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
   harness.tabRemoved.dispatch(41);
   assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUnavailable');
-  harness.intervals[0].callback();
+  assert.equal(harness.ports[1].disconnectCalls, 1);
+  assert.equal(harness.activeIntervals().length, 0);
+  harness.intervals[1].callback();
   assert.equal(harness.tabMessages.length, 1);
 
   harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
   harness.nativeDisconnected.dispatch();
-  harness.intervals[0].callback();
+  harness.fireRefresh();
   assert.equal(harness.tabMessages.length, 1);
 });
 

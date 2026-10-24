@@ -50,13 +50,23 @@ superseded_by:
   exponential backoff capped at 15 seconds. IINA rereads its bridge port and
   token each poll, keeps polling while settings are invalid, and yields after
   each batch of at most eight queued commands.
+- Follow-up review fixes keep commands bound to the selected live player:
+  Chrome resolves controls inside the active site player and rejects actions
+  if that player changes before or during execution; its service worker starts
+  native refresh/reconnect work only while a supported tab is registered and
+  stops it when the last supported tab leaves; IINA rechecks its idle state at
+  command execution and reports failure without changing a player that became
+  idle after its snapshot.
 - The iOS player-volume thumb preserves accepted values through stale state
   snapshots and reconciles exact volume request results per target.
+- CI runs `actionlint` separately, checks `scripts/*.sh` with `bash -n` and
+  ShellCheck in a media setup step, and keeps Swift tooling and the Android
+  wrapper in the repository shell-check step.
 - Final integrated local Swift checks passed 162 AppleCore package tests, the
   macOS app build, generic iOS Simulator build, and generated plist validation. The
   `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
   12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome
-  23/23 and IINA mocks 13/13. `actionlint`, shell syntax checks, ShellCheck
+  35/35 and IINA mocks 15/15. `actionlint`, shell syntax checks, ShellCheck
   0.11.0, and project-journal validation passed. The backend lane reported six
   focused bridge route/lifecycle tests and one localhost HTTP smoke passed.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,
