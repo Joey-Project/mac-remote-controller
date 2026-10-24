@@ -34,12 +34,19 @@ superseded_by:
 - The current native endpoint is not directly usable as a secure Safari client.
   The preview therefore has no endpoint or pairing fields, does not parse
   invitations, opens no Mac control socket, and does not persist preview values.
-- The preview handles one-finger movement and tap, two-finger scroll, pointer
-  capture cancellation, window blur, and page deactivation. Its test boundary
-  rejects network/storage APIs and checks gesture lifecycle hooks.
+- The preview handles one-finger movement and tap, two-finger scroll with a
+  cumulative direction/delta readout, and page-level keyboard shortcuts outside
+  interactive controls. It preserves native control activation and pointer
+  cancellation, window blur, and page-deactivation cleanup. Typed text is
+  counted as grapheme characters when available, with a labeled code-point
+  fallback. Its test boundary rejects network/storage APIs and checks these
+  offline interaction constraints.
 - The root pnpm workspace and CI include the offline preview's lint,
   type-check, tests, and build. The app keeps its package-local generated
   output ignored.
+- PR8 Web review fixes: package checks passed with Node.js 26.12.0 and pnpm
+  12.14.0, including 16/16 offline preview tests for native key activation,
+  cumulative scroll display, and grapheme-aware text counting.
 - Final workspace validation passed with Node.js 26.12.0 and pnpm 12.14.0:
   format check, lint, strict typecheck, tests (Chrome 8/8, IINA 4/4, Web
   preview 9/9), and builds for all three TypeScript packages. `actionlint` and

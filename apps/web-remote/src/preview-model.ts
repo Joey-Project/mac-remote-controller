@@ -17,6 +17,11 @@ export type PreviewSnapshot = Readonly<{
   keyPresses: number;
 }>;
 
+export type TextCountUnit = 'characters' | 'Unicode code points';
+export type TextCount = Readonly<{ count: number; unit: TextCountUnit }>;
+
+export type WindowShortcutTarget = 'page' | 'control';
+
 type ActivePointer = {
   id: number;
   startX: number;
@@ -39,6 +44,39 @@ const ALLOWED_KEYS = new Set([
   'down',
 ]);
 const TAP_DISTANCE = 8;
+const WINDOW_SHORTCUT_KEYS = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Enter',
+  'Escape',
+  'Backspace',
+  ' ',
+]);
+const DEFAULT_GRAPHEME_SEGMENTER =
+  typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    : null;
+
+export function shouldHandleWindowShortcut(key: string, target: WindowShortcutTarget): boolean {
+  return target === 'page' && WINDOW_SHORTCUT_KEYS.has(key);
+}
+
+export function formatScrollDelta(delta: number): string {
+  if (!Number.isFinite(delta) || delta === 0) return 'No scroll yet';
+  return `${delta > 0 ? 'Down' : 'Up'} · ${Math.round(Math.abs(delta))}`;
+}
+
+export function countTextCharacters(
+  text: string,
+  segmenter: Intl.Segmenter | null = DEFAULT_GRAPHEME_SEGMENTER,
+): TextCount {
+  if (segmenter) {
+    return { count: Array.from(segmenter.segment(text)).length, unit: 'characters' };
+  }
+  return { count: Array.from(text).length, unit: 'Unicode code points' };
+}
 
 export class OfflinePreviewModel {
   private readonly pointers = new Map<number, ActivePointer>();

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { OfflinePreviewModel } from '../dist/preview-model.js';
+import {
+  OfflinePreviewModel,
+  countTextCharacters,
+  formatScrollDelta,
+  shouldHandleWindowShortcut,
+} from '../dist/preview-model.js';
 
 const point = (x, y, width = 100, height = 100) => ({ x, y, width, height });
 
@@ -71,4 +76,37 @@ test('preview controls reject invalid values and keep the cursor bounded', () =>
   assert.equal(model.recordScroll(Number.POSITIVE_INFINITY), false);
   assert.equal(model.pressKey('left'), true);
   assert.equal(model.pressKey('delete-all'), false);
+});
+
+test('window shortcuts preserve native activation keys on interactive controls', () => {
+  for (const key of ['Enter', ' ']) {
+    assert.equal(shouldHandleWindowShortcut(key, 'control'), false);
+    assert.equal(shouldHandleWindowShortcut(key, 'page'), true);
+  }
+  assert.equal(shouldHandleWindowShortcut('ArrowLeft', 'control'), false);
+  assert.equal(shouldHandleWindowShortcut('NotAKey', 'page'), false);
+});
+
+test('scroll preview formats the accumulated direction and distance', () => {
+  const model = new OfflinePreviewModel();
+  model.recordScroll(48);
+  model.recordScroll(-12);
+  assert.equal(model.snapshot.scrollDelta, 36);
+  assert.equal(formatScrollDelta(model.snapshot.scrollDelta), 'Down · 36');
+
+  model.recordScroll(-60);
+  assert.equal(formatScrollDelta(model.snapshot.scrollDelta), 'Up · 24');
+  assert.equal(formatScrollDelta(0), 'No scroll yet');
+});
+
+test('text count uses grapheme clusters for emoji and combining marks', () => {
+  const result = countTextCharacters('👋👨‍👩‍👧‍👦e\u0301🇬🇧');
+  assert.equal(result.count, 4);
+  assert.equal(result.unit, 'characters');
+});
+
+test('text count labels the Unicode code-point fallback honestly', () => {
+  const result = countTextCharacters('👋👨‍👩‍👧‍👦', null);
+  assert.equal(result.count, 8);
+  assert.equal(result.unit, 'Unicode code points');
 });

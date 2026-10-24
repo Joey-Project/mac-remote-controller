@@ -15,10 +15,15 @@ to test pairing, security, command delivery, or physical-device behavior.
 - Drag in the touch surface to move the local cursor; a short tap increments the
   local left-click counter.
 - The click buttons, mouse wheel, volume slider, and keyboard buttons update
-  local preview state only.
+  local preview state only. The scroll readout shows its cumulative direction
+  and delta.
 - A second pointer switches the preview to scroll. Additional pointers are
   ignored. Pointer cancellation, lost pointer capture, window blur, and page
   deactivation clear the active gesture.
+- Window keyboard shortcuts run only when focus is outside interactive controls,
+  so Enter and Space keep their browser-native button behavior.
+- The text caption counts grapheme characters when `Intl.Segmenter` is
+  available. Its fallback counts and labels Unicode code points.
 
 ## Development
 

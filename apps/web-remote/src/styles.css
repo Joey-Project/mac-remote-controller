@@ -66,6 +66,7 @@ button {
 .volume-value,
 .range-labels,
 .click-controls,
+.scroll-readout,
 .click-button,
 .privacy-card,
 .last-key,
@@ -404,6 +405,25 @@ h1 {
 .click-controls {
   gap: 10px;
   margin-top: 12px;
+}
+
+.scroll-readout {
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--muted-2);
+  background: var(--panel-2);
+  font-size: 10px;
+}
+
+.scroll-readout strong {
+  color: var(--text);
+  font:
+    10px 'DM Mono',
+    monospace;
 }
 
 .click-button {

@@ -36,3 +36,21 @@ test('the touch surface releases captured gestures on cancel, blur, and page hid
   assert.match(source, /addEventListener\(['"]blur['"], cancelForInterruption\)/);
   assert.match(source, /addEventListener\(['"]visibilitychange['"]/);
 });
+
+test('window shortcuts are scoped away from browser-interactive key targets', () => {
+  assert.match(source, /shouldHandleWindowShortcut\(\s*event\.key/);
+  assert.match(source, /isInteractiveKeyTarget\(event\.target\)/);
+  assert.match(source, /closest\(interactiveKeyTargetSelector\)/);
+  assert.match(source, /a\[href\], button, input, select, textarea/);
+});
+
+test('the rendered touchpad preview consumes the accumulated scroll delta', () => {
+  assert.match(html, /id="scroll-preview"/);
+  assert.match(source, /scrollPreview\.textContent = formatScrollDelta\(state\.scrollDelta\)/);
+});
+
+test('the typed-text caption uses grapheme-aware counting and a labeled fallback', () => {
+  assert.match(source, /countTextCharacters\(localTextInput\.value\)/);
+  assert.match(source, /textCount\.unit/);
+  assert.doesNotMatch(source, /localTextInput\.value\.length/);
+});

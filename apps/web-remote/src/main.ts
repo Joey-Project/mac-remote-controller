@@ -1,5 +1,11 @@
 import './styles.css';
-import { OfflinePreviewModel, type PadPoint } from './preview-model.js';
+import {
+  OfflinePreviewModel,
+  countTextCharacters,
+  formatScrollDelta,
+  shouldHandleWindowShortcut,
+  type PadPoint,
+} from './preview-model.js';
 
 const model = new OfflinePreviewModel();
 
@@ -18,6 +24,7 @@ const cursor = element<HTMLElement>('preview-cursor');
 const coordinate = element<HTMLElement>('stage-coordinate');
 const leftClickCount = element<HTMLElement>('left-click-count');
 const rightClickCount = element<HTMLElement>('right-click-count');
+const scrollPreview = element<HTMLElement>('scroll-preview');
 const activity = element<HTMLElement>('activity');
 const volumeRange = element<HTMLInputElement>('volume-range');
 const volumeValue = element<HTMLElement>('volume-value');
@@ -25,6 +32,16 @@ const lastKey = element<HTMLElement>('last-key');
 const keyCount = element<HTMLElement>('key-count');
 const localTextInput = element<HTMLInputElement>('local-text-input');
 const textCaption = element<HTMLElement>('text-caption');
+const interactiveKeyTargetSelector =
+  'a[href], button, input, select, textarea, summary, [role="button"], [role="checkbox"], [role="link"], [role="menuitem"], [role="radio"], [role="slider"], [role="switch"], [role="tab"]';
+
+function isInteractiveKeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return (
+    (target instanceof HTMLElement && target.isContentEditable) ||
+    target.closest(interactiveKeyTargetSelector) !== null
+  );
+}
 
 function render(): void {
   const state = model.snapshot;
@@ -33,12 +50,14 @@ function render(): void {
   coordinate.textContent = `${Math.round(state.cursorX)} · ${Math.round(state.cursorY)}`;
   leftClickCount.textContent = String(state.leftClicks);
   rightClickCount.textContent = String(state.rightClicks);
+  scrollPreview.textContent = formatScrollDelta(state.scrollDelta);
   activity.textContent = state.lastAction;
   volumeRange.value = String(Math.round(state.volume * 100));
   volumeValue.textContent = `${Math.round(state.volume * 100)}%`;
   lastKey.textContent = state.lastKey;
   keyCount.textContent = `${state.keyPresses} pressed`;
-  textCaption.textContent = `Characters entered in this tab: ${localTextInput.value.length}`;
+  const textCount = countTextCharacters(localTextInput.value);
+  textCaption.textContent = `${textCount.unit} entered in this tab: ${textCount.count}`;
 }
 
 function selectMode(mode: 'touchpad' | 'keyboard'): void {
@@ -129,8 +148,10 @@ const keyboardKeys: Readonly<Record<string, string>> = {
 window.addEventListener('keydown', (event: KeyboardEvent) => {
   if (
     event.repeat ||
-    event.target instanceof HTMLInputElement ||
-    event.target instanceof HTMLTextAreaElement
+    !shouldHandleWindowShortcut(
+      event.key,
+      isInteractiveKeyTarget(event.target) ? 'control' : 'page',
+    )
   ) {
     return;
   }
