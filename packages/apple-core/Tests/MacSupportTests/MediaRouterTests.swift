@@ -10,9 +10,9 @@ final class MediaRouterTests: XCTestCase {
             id: "iina:window-a", name: "IINA · Episode", kind: .iina,
             capabilities: MediaCapabilities(
                 playPause: true, seek: true, next: false, previous: false,
-                playerVolumeMaximum: 130))
+                playerVolumeMaximum: 1.3))
         try router.update(selected)
-        let request = MediaRequest(targetID: selected.id, action: .setVolume, value: 125)
+        let request = MediaRequest(targetID: selected.id, action: .setVolume, value: 1.25)
         let work = Task {
             try await router.execute(request, requestID: "session-a:1", sessionID: "session-a")
         }
@@ -22,7 +22,7 @@ final class MediaRouterTests: XCTestCase {
         XCTAssertTrue(router.complete(requestID: "session-a:1", targetID: selected.id))
         try await work.value
 
-        let invalid = MediaRequest(targetID: selected.id, action: .setVolume, value: 131)
+        let invalid = MediaRequest(targetID: selected.id, action: .setVolume, value: 1.31)
         do {
             try await router.execute(invalid, requestID: "session-a:2", sessionID: "session-a")
             XCTFail("volume above the adapter's advertised maximum must fail")

@@ -4,8 +4,8 @@ export interface SnapshotInput {
   idle: boolean;
   position: number | null;
   duration: number | null;
-  volume: number;
-  maximumVolume: number;
+  mpvVolumePercent: number;
+  maximumMpvPercent: number;
   playlistCount: number;
   playlistPosition: number;
 }
@@ -28,10 +28,33 @@ export interface IINATargetSnapshot {
   position: number | null;
 }
 
+export function gainRatioFromMpvPercent(value: number): number | null {
+  if (!Number.isFinite(value) || value < 0) return null;
+  const ratio = value / 100;
+  return Number.isFinite(ratio) ? ratio : null;
+}
+
+export function mpvPercentFromGainRatio(value: number, maximumMpvPercent: number): number | null {
+  const maximumGainRatio = gainRatioFromMpvPercent(maximumMpvPercent);
+  if (
+    maximumGainRatio === null ||
+    maximumMpvPercent <= 0 ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > maximumGainRatio
+  ) {
+    return null;
+  }
+  if (value === maximumGainRatio) return maximumMpvPercent;
+  const mpvPercent = value * 100;
+  return Number.isFinite(mpvPercent) && mpvPercent <= maximumMpvPercent ? mpvPercent : null;
+}
+
 export function targetSnapshot(input: SnapshotInput): IINATargetSnapshot {
   const title = input.title.trim() || 'IINA';
-  const maximum =
-    Number.isFinite(input.maximumVolume) && input.maximumVolume > 0 ? input.maximumVolume : null;
+  const maximum = gainRatioFromMpvPercent(input.maximumMpvPercent);
+  const maximumGainRatio = maximum !== null && maximum > 0 ? maximum : null;
+  const volume = gainRatioFromMpvPercent(input.mpvVolumePercent);
   const hasFile = !input.idle;
   return {
     target: {
@@ -51,17 +74,16 @@ export function targetSnapshot(input: SnapshotInput): IINATargetSnapshot {
           Number.isInteger(input.playlistPosition) &&
           input.playlistPosition > 0 &&
           input.playlistPosition < input.playlistCount,
-        playerVolumeMaximum: maximum,
+        playerVolumeMaximum: maximumGainRatio,
       },
       playerVolume:
-        maximum !== null &&
-        Number.isFinite(input.volume) &&
-        input.volume >= 0 &&
-        input.volume <= maximum
-          ? input.volume
+        maximumGainRatio !== null &&
+        volume !== null &&
+        input.mpvVolumePercent <= input.maximumMpvPercent
+          ? volume
           : null,
     },
-    volume: Number.isFinite(input.volume) && input.volume >= 0 ? input.volume : null,
+    volume,
     position:
       input.position !== null && Number.isFinite(input.position) && input.position >= 0
         ? input.position
@@ -81,7 +103,7 @@ function truncateUTF8(value: string, maximum: number): string {
 export function validateAction(
   action: string,
   value: number | undefined,
-  maximumVolume: number,
+  maximumMpvPercent: number,
 ): void {
   switch (action) {
     case 'playPause':
@@ -100,12 +122,7 @@ export function validateAction(
       }
       return;
     case 'setVolume':
-      if (
-        typeof value !== 'number' ||
-        !Number.isFinite(value) ||
-        value < 0 ||
-        value > maximumVolume
-      ) {
+      if (typeof value !== 'number' || mpvPercentFromGainRatio(value, maximumMpvPercent) === null) {
         throw new Error('Volume is outside the current IINA player range.');
       }
       return;

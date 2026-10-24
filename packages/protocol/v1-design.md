@@ -246,6 +246,10 @@ configuration controls their availability and meaning.
 Represent volume as a finite gain ratio: `1.0` means 100%. System volume is in
 `0.0...1.0`. A player's actual reported maximum is independent and may exceed
 `1.0`; do not impose a generic 100% or 1000% player limit.
+Adapters normalize their native volume units at the protocol boundary; for
+example, IINA's mpv percentage is divided by 100 when reported and multiplied
+by 100 only when a gain-ratio command is applied. The mobile UI converts the
+gain ratio to percentage values for display and its 10-point slider policy.
 
 Keep system and selected-player volume separately in state. Switching the UI
 mode sends no volume command. Unavailable values are explicit rather than zero.

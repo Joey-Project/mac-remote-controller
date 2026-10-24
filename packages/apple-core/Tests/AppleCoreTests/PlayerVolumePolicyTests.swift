@@ -76,6 +76,56 @@ final class PlayerVolumePolicyTests: XCTestCase {
         XCTAssertNil(PlayerVolumePolicy.snappedValue(proposed: 10, maximum: 0))
     }
 
+    func testChromeAndIINAGainRatiosBecomeUIPercentages() throws {
+        let chromeMaximum = try XCTUnwrap(
+            PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: 1))
+        let iinaMaximum = try XCTUnwrap(
+            PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: 1.3))
+
+        XCTAssertEqual(chromeMaximum, 100)
+        XCTAssertEqual(iinaMaximum, 130)
+        XCTAssertEqual(
+            PlayerVolumePolicy.uiPercent(fromGainRatio: 1, maximumGainRatio: 1), 100)
+        XCTAssertEqual(
+            try XCTUnwrap(
+                PlayerVolumePolicy.uiPercent(fromGainRatio: 1.1, maximumGainRatio: 1.3)),
+            110,
+            accuracy: 1e-12)
+    }
+
+    func testTenPointUIIncrementsRoundTripForChromeAndIINAMaximums() throws {
+        for gainRatioMaximum in [1.0, 1.3] {
+            let uiMaximum = try XCTUnwrap(
+                PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: gainRatioMaximum))
+            let nextPercent = try XCTUnwrap(
+                PlayerVolumePolicy.accessibilityAdjustedValue(
+                    current: 50, increasing: true, maximum: uiMaximum))
+            XCTAssertEqual(nextPercent, 60)
+            XCTAssertEqual(
+                PlayerVolumePolicy.gainRatio(
+                    fromUIPercent: nextPercent, maximumGainRatio: gainRatioMaximum), 0.6)
+        }
+    }
+
+    func testPercent110BecomesGainRatio110PercentForIINA() throws {
+        XCTAssertEqual(
+            try XCTUnwrap(
+                PlayerVolumePolicy.gainRatio(fromUIPercent: 110, maximumGainRatio: 1.3)),
+            1.1)
+    }
+
+    func testGainRatioConversionsRejectInvalidAndOverflowingValues() {
+        XCTAssertNil(PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: .infinity))
+        XCTAssertNil(
+            PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: .greatestFiniteMagnitude))
+        XCTAssertNil(PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: 0))
+        XCTAssertNil(PlayerVolumePolicy.uiPercent(fromGainRatio: .nan, maximumGainRatio: 1))
+        XCTAssertNil(PlayerVolumePolicy.uiPercent(fromGainRatio: 1.1, maximumGainRatio: 1))
+        XCTAssertNil(
+            PlayerVolumePolicy.gainRatio(fromUIPercent: .infinity, maximumGainRatio: 1.3))
+        XCTAssertNil(PlayerVolumePolicy.gainRatio(fromUIPercent: 131, maximumGainRatio: 1.3))
+    }
+
     private func snapped(_ proposed: Double, maximum: Double) throws -> Double {
         try XCTUnwrap(PlayerVolumePolicy.snappedValue(proposed: proposed, maximum: maximum))
     }

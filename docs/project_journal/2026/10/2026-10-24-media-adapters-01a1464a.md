@@ -28,10 +28,13 @@ superseded_by:
   target for each player window. Playback, seek, playlist navigation, and
   player volume are routed to the selected target, independently of frontmost
   application focus. Unsupported controls fail visibly.
-- Local Swift checks passed 109 AppleCore/MacSupport tests, the Mac app build, and the
+- Player volume stays a gain ratio on the wire (`1.0` is 100%). The IINA
+  adapter converts mpv percentage values at its boundary, and iOS converts the
+  ratio to percentage only for its display and 10-point slider policy.
+- Local Swift checks passed 113 AppleCore/MacSupport tests, the Mac app build, and the
   generic iOS Simulator build; the native messaging host product also builds.
   Pinned pnpm format, lint, strict typecheck, tests, and builds passed. Chrome
-  tests passed 8/8 and IINA mock tests passed 2/2.
+  tests passed 8/8 and IINA mock tests passed 4/4.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,
   native messaging registration, IINA plugin, live media site, or device was
   installed or tested; no audio was played. User setup and playback acceptance
