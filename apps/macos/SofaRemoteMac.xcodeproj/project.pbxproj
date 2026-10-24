@@ -83,6 +83,7 @@
 			buildPhases = (
 				000000000000000000000014 /* Sources */,
 				000000000000000000000015 /* Frameworks */,
+				C44000000000000000000001 /* Bundle Media Adapters */,
 				000000000000000000000016 /* Resources */,
 			);
 			buildRules = ();
@@ -138,6 +139,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		C44000000000000000000001 /* Bundle Media Adapters */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			name = "Bundle Media Adapters";
+			outputPaths = ();
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash \"$SRCROOT/../../tooling/swift/bundle-media-adapters.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		000000000000000000000014 /* Sources */ = {

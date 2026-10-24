@@ -1,5 +1,14 @@
 # IINA plugin
 
+Choose **Set Up IINA** in the Mac companion. It installs the bundled plugin and
+writes the bridge port and token into this plugin's private local preferences,
+preserving other settings. No token copying is needed. If IINA is already open,
+choose **Plugin → Reload All Plugins** or restart IINA so it reloads the installed
+plugin and its cached preferences. Open a video, then select its IINA media source
+on the phone.
+
+## Manual development setup
+
 `pnpm --filter @mac-remote-controller/iina-plugin build` creates
 `apps/iina-plugin/dist/SofaRemote.iinaplugin`. Package that directory with IINA's
 CLI, running from the output directory:

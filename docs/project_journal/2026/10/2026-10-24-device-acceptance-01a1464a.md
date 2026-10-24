@@ -60,10 +60,7 @@ superseded_by:
 
 ## Next Steps
 
-- Replace manual IINA token copying and Chrome helper registration with a unified
-  local setup flow. Prefer a companion action that writes the IINA plugin's local
-  preferences, without embedding credentials in distributable plugin packages or
-  exposing the bridge token to Chrome pages or content scripts.
+- Verify the companion's setup buttons interactively after unlocking the Mac.
 
 - Install the touchpad follow-up after the current media acceptance session and
   verify four-finger recognition, Mac actions, and physical tactile feedback.
@@ -87,3 +84,30 @@ superseded_by:
   pass. The existing unpacked Chrome extension was verified to load this tree's
   output directory, reloaded through Chrome, and its Bilibili page refreshed.
   Final phone-side acceptance of the revised Chrome action result is pending.
+
+## Bundled Integration Setup
+
+- Mac builds bundle the Chrome extension, IINA plugin, and separately signed
+  Native Messaging executable. The Apple CI job installs the pinned Node/pnpm
+  dependencies before building, so installers do not depend on a source checkout
+  at runtime.
+- **Set Up IINA** installs the plugin and updates only its bridge port and token,
+  preserving other plugin preferences. Credentials are created with mode `0600`
+  before writing and atomically renamed. IINA's plugin preferences are cached;
+  an already-running IINA needs plugin reload or restart.
+- **Set Up Chrome** copies the extension and helper into stable Application
+  Support paths and registers only the fixed Sofa Remote extension origin.
+  Chrome's first local-extension load remains a browser-confirmed step. No token
+  is included in distributable plugin assets or the Chrome manifest.
+- Four installer regressions cover repeated installation, unrelated settings,
+  private file permissions, and linked destination rejection. All 169 Swift tests,
+  strict Swift format/SwiftLint, Mac packaging, and generic iOS Simulator build pass.
+- The opt-in `LiveMediaUITests` uses the normal app, existing pairing, and real
+  transport. It sends three seeks and requires matched successful results from
+  the Mac without an error alert. The debug-only observation exposes result
+  counts, not credentials, and does not enable fixtures. CI skips this test
+  unless live acceptance is explicitly enabled.
+- A dedicated iPhone simulator was created and a signed normal-mode test build
+  prepared. The desktop later locked; automatic unlock and the user's requested
+  retry both failed. Live GUI acceptance remains unverified. The user authorized
+  continuing implementation and automatic checks while manual unlock is unavailable.

@@ -9,6 +9,7 @@ final class MediaAdapterController {
     private(set) var isEnabled = false
     private(set) var token: String?
     private(set) var message = "Local media bridge is off."
+    private(set) var setupMessage: String?
     let router = MediaRouter()
     var onTargetsChanged: (([MediaTarget]?) -> Void)?
 
@@ -62,6 +63,39 @@ final class MediaAdapterController {
 
     func expireStaleTargets() {
         bridge?.expireStaleTargets()
+    }
+
+    func configureIINA() {
+        if !isEnabled { setEnabled(true) }
+        guard let bridge else { setupMessage = message; return }
+        do {
+            _ = try integrationInstaller().installIINA(configuration: bridge.configuration)
+            setupMessage =
+                "IINA is configured. If IINA is already open, reload its plugins or restart it."
+        } catch { setupMessage = error.localizedDescription }
+    }
+
+    func configureChrome() -> URL? {
+        if !isEnabled { setEnabled(true) }
+        guard bridge != nil else { setupMessage = message; return nil }
+        do {
+            let folder = try integrationInstaller().installChrome()
+            setupMessage =
+                "Chrome helper is configured. In Chrome, enable Developer mode and Load unpacked, "
+                + "then select the revealed ChromeExtension folder. Reload an existing extension and video tabs."
+            return folder
+        } catch { setupMessage = error.localizedDescription; return nil }
+    }
+
+    private func integrationInstaller() throws -> MediaIntegrationInstaller {
+        guard let resources = Bundle.main.resourceURL else {
+            throw IntegrationSetupError.missingResources
+        }
+        return MediaIntegrationInstaller(
+            home: FileManager.default.homeDirectoryForCurrentUser,
+            resources: resources.appendingPathComponent("MediaAdapters"),
+            helper: Bundle.main.bundleURL.appendingPathComponent(
+                "Contents/Helpers/SofaRemoteNativeHost"))
     }
 
     private func removeAllTargets() {

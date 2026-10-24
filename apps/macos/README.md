@@ -3,6 +3,8 @@
 Open `SofaRemoteMac.xcodeproj` in Xcode and run `SofaRemoteMac` on macOS 14 or
 newer. Sofa Remote appears in the menu bar. Allow Local Network access so the
 companion can advertise its Bonjour service and accept connections.
+Building the companion also bundles its media integrations. Install the repository's
+pinned pnpm dependencies first and ensure Node.js 26 or newer is on `PATH`.
 Allow Bluetooth access when macOS requests it. The companion advertises a
 per-Mac Bluetooth LE service UUID only as a scan hint; it accepts a control
 session only after the paired-device handshake authenticates the iPhone or iPad.
@@ -50,6 +52,13 @@ bearer token in `~/Library/Application Support/SofaRemote/media-bridge.json`
 with mode `0600`. The bridge rejects cross-origin requests and does not expose
 desktop input. Copy the token only into the official IINA plugin preferences;
 Chrome uses a Native Messaging helper that reads the protected file directly.
+Use **Set Up IINA** or **Set Up Chrome** for installation and configuration from
+the files bundled with the app. IINA setup preserves other plugin preferences;
+reload IINA plugins if it is already running. Chrome setup installs its helper
+under Application Support and registers its exact extension origin. On first use,
+Chrome still requires **Developer mode → Load unpacked** for the revealed extension
+directory. The app never includes a runtime bridge token in its distributable
+plugin files or exposes it to a browser page.
 See [Chrome setup](../chrome-extension/README.md) and
 [IINA setup](../iina-plugin/README.md). The bridge is optional and stops when
 disabled.
