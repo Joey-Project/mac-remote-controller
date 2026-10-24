@@ -11,7 +11,7 @@ struct PairedDevice: Codable, Identifiable {
 }
 
 @MainActor
-private final class ClientConnection {
+final class ClientConnection {
     let peer: RemotePeer
     var session: ServerSession?
     var inputState = DesktopInputState()
@@ -90,6 +90,31 @@ final class CompanionModel {
             pairing = invitation
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
+    }
+
+    func prepareForTermination() -> Bool {
+        var active = clients.mapValues { $0.inputState.heldInput }
+        let released = HeldInputTermination.prepare(
+            active: &active, pending: &pendingHeldInputReleases,
+            release: { desktop.release(&$0) })
+        for (id, held) in active { clients[id]?.inputState.heldInput = held }
+        guard released else {
+            errorMessage =
+                "The pointer could not be released. Restore Accessibility access and quit again."
+            return false
+        }
+        heldPointerOwner = nil
+        timer?.invalidate()
+        timer = nil
+        listener?.cancel()
+        listener = nil
+        for client in clients.values {
+            client.peer.onClose = nil
+            client.peer.close()
+        }
+        clients.removeAll()
+        connectedCount = 0
+        return true
     }
 
     func closePairing() {
@@ -368,25 +393,4 @@ extension CompanionModel {
         if closePeer { client.peer.close() }
     }
 
-    private func execute(_ command: RemoteCommand, for client: ClientConnection, id: UUID)
-        -> RemoteError?
-    {
-        if PointerOwnershipPolicy.blocks(command, heldBy: heldPointerOwner, requester: id) {
-            return RemoteError(
-                code: "pointer_busy", message: "Another remote session is holding the pointer.")
-        }
-        do {
-            try desktop.execute(command, input: &client.inputState)
-            client.inputState.heldInput.refresh()
-            if command.name == .pointerButtonDown, !client.inputState.heldInput.buttons.isEmpty {
-                heldPointerOwner = id
-            }
-            if command.name == .pointerButtonUp, client.inputState.heldInput.buttons.isEmpty {
-                heldPointerOwner = nil
-            }
-            return nil
-        } catch {
-            return RemoteError(code: "control_unavailable", message: error.localizedDescription)
-        }
-    }
 }

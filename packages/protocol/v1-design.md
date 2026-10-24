@@ -142,8 +142,9 @@ commands except coalesced system-volume updates are ordering barriers, including
 button holds, releases, and system shortcuts. Under overload, only trailing
 motion after the latest barrier may be replaced; accepted motion before a
 barrier is retained, and a new discrete action is rejected if the queue is full.
-If a required button release is rejected, the client closes the session so the
-Mac releases held input during session cleanup.
+A required button release must either remain behind a bounded retry barrier or
+close the session so the Mac releases held input during cleanup; it must never
+be discarded. A release rejected by the Mac closes the session.
 Adjacent unsent absolute-volume updates retain the latest value. Disconnect
 discards pending and unsent input. Missing command results time out after three
 seconds and close the connection without replaying commands.
@@ -204,8 +205,22 @@ Held pointer ownership is limited to one remote session. Conflicting pointer
 commands from another session fail explicitly. A client must release held input
 when a gesture is cancelled or its surface is removed; the server also releases
 on disconnect, revocation, or eight seconds without valid client activity.
-Four-finger actions invoke fixed public macOS shortcuts, so local shortcut
-configuration controls their availability and meaning.
+Four-finger actions request fixed native Dock actions: Mission Control, App
+Exposé, and previous/next Space. The historical `system.shortcut` command name
+remains for wire compatibility; these actions emit no keyboard or modifier
+events and do not depend on local keyboard shortcut assignments. The companion
+checks the undocumented Dock/HID interfaces at runtime and fails visibly when
+unavailable. A successful result acknowledges submission to macOS, not visual
+completion of an animation. No virtual HID device or driver is created.
+
+While a drag's button-down acknowledgement is pending, the client accumulates
+bounded relative displacement. After a successful acknowledgement it sends that
+motion in wire-sized chunks before button-up, including when the fingers have
+already lifted; rejection discards the buffered motion. Later input remains
+behind that release barrier. Backpressure retains unsent drag motion/release;
+the existing command timeout still tears down a stalled connection. Companion
+termination synchronously releases active and pending disconnected-session
+buttons, and cancels termination if a release cannot be posted.
 
 - Desktop input targets the current desktop. It does not change the selected
   media source. Keyboard text contains committed Unicode input, not intermediate

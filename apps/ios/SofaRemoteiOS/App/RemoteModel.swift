@@ -317,7 +317,7 @@ extension RemoteModel {
     }
 
     @discardableResult
-    func send(_ command: RemoteCommand) -> Bool {
+    func send(_ command: RemoteCommand, orderedDragInput: Bool = false) -> Bool {
         guard isConnected else { return false }
         #if DEBUG && targetEnvironment(simulator)
             if isUITesting {
@@ -331,20 +331,13 @@ extension RemoteModel {
         do { try command.validate() } catch {
             errorMessage = "The control value is invalid."; return false
         }
-        guard commandScheduler.enqueue(command) else {
-            if command.name == .pointerButtonUp {
-                let unknownOutcome = !pending.isEmpty
-                disconnect()
-                errorMessage =
-                    unknownOutcome
-                    ? "Disconnected to release the pointer safely. "
-                        + "A pending control may have taken effect; it was not retried."
-                    : "Disconnected to release the pointer safely. "
-                        + "Reconnect to continue."
-            } else if !InputCommandScheduler.isBestEffortPointerDelta(command) {
-                errorMessage = "The Mac is busy. Wait for the pending controls to finish."
-            }
-            return false
+        if !orderedDragInput,
+            let accepted = localPointerDragCoordinator.deferCommandIfNeeded(command)
+        {
+            return accepted
+        }
+        guard commandScheduler.enqueue(command, preservingMotion: orderedDragInput) else {
+            return handleQueueRejection(command, orderedDragInput: orderedDragInput)
         }
         if command.name == .pointerMove || command.name == .pointerScroll
             || command.name == .systemVolumeSet
