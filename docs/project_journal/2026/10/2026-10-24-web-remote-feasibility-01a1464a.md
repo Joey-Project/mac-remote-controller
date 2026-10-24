@@ -56,22 +56,18 @@ superseded_by:
   shortcuts, while keeping unmodified Space and focused control activation.
   Responsive shell padding now includes the horizontal device safe-area insets
   at each existing breakpoint.
-- The current Web integration includes Media commit
-  `cb2adbbd29687183f0f6810fa370d3d2693a55c7`. Node.js 26.12.0 and pnpm
+- The Web integration includes reviewed Media commit
+  `1ecddf96d36375c939f9c2b5af49c866bfd1941f`, including bundled adapter
+  setup and the Chrome delivery acknowledgement fix. Node.js 26.12.0 and pnpm
   12.14.0 passed format check, lint, strict typecheck, tests, and builds for all
-  three TypeScript packages: 70 tests (Chrome 35/35, IINA 15/15, Web preview
-  20/20). The native, AppleCore, protocol, UI-harness, and tooling sources are
-  byte-identical to the previously validated Media `f4bb72dc6f7598c1f9479d503e8a6a05681d0dc1`
-  candidate; its 162 AppleCore tests, strict formatting/lint, macOS and generic
-  iOS Simulator app builds, generated Info.plist checks, and
-  `SofaRemoteNativeHost` release build remain the applicable native evidence.
-  No native build was repeated for this TypeScript parent integration.
-  `actionlint` 1.7.12, shell syntax checks, ShellCheck 0.11.0, and
-  project-journal validation passed. This integration starts from Web commit
-  `063533e09bbf014387a37eeb0c5db0c463fe7777` and includes the keyboard and
-  safe-area fixes above; the earlier clean review covered the base head, so the
-  combined candidate needs a fresh review. This gate did not run browser UI,
-  iOS Simulator UI, physical devices, or media playback.
+  three TypeScript packages: 73 tests (Chrome 38/38, IINA 15/15, Web preview
+  20/20). The refreshed stack passed all 170 Swift package tests, strict Swift
+  formatting/SwiftLint, macOS and generic iOS Simulator builds, generated
+  Info.plist checks, shell/workflow lint, and project-journal validation.
+  The bundled Native Messaging host was checked for both arm64 and x86_64
+  slices and passed signature verification. These native checks were run again
+  after the normal signed integration merge. This validation did not run
+  Safari/iPhone layout or live Web-device interaction, pairing, radio, or playback.
 - A desktop in-app-browser smoke of the source-identical built mirror passed:
   the offline/no-Mac banner appeared, a left-click action ran locally, keyboard
   mode switched, text input reached nine characters, the right-arrow counter
