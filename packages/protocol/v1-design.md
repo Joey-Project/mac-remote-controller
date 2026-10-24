@@ -118,10 +118,18 @@ optional `systemVolumeReason`. Absent volume means unavailable, never zero.
 An independently muted output reports effective volume `0`; a nonzero volume
 command also clears mute. Fractional scroll pixels accumulate per connection,
 and their remainder is discarded on disconnect.
-The server sends state at authentication, after a command, and once per second.
-The client bounds outstanding commands to eight; excess relative input is
-dropped and only the latest unsent absolute volume is retained. It discards all
-pending input on disconnect. Missing command results time out after three
+The server includes an initial snapshot in `welcome`, then sends state once per
+second and immediately after a system-volume command. Pointer and keyboard
+commands receive a correlated `result`; they do not imply a following `state`.
+Clients acknowledge commands using `result` and consume state as independent
+snapshots, without waiting for one snapshot per command.
+The client bounds outstanding commands and its unsent queue to eight each.
+Adjacent relative deltas are combined within the wire bounds, and clicks and
+keyboard commands remain ordering barriers. Under overload, only trailing
+motion after the latest barrier may be replaced; accepted motion before a
+barrier is retained, and a new discrete action is rejected if the queue is full.
+Adjacent unsent absolute-volume updates retain the latest value. Disconnect
+discards pending and unsent input. Missing command results time out after three
 seconds and close the connection without replaying commands.
 
 ## State and future media boundaries
