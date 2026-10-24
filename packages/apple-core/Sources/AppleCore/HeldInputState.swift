@@ -29,22 +29,35 @@ public struct HeldInputState: Sendable, Equatable {
         }
     }
 
-    public mutating func releaseAll() -> [PointerButton] {
-        let held = buttons
-        buttons.removeAll()
-        lastUpdate = nil
-        return held.sorted { $0.rawValue < $1.rawValue }
+    /// Posts releases and removes only buttons whose release callback succeeds.
+    @discardableResult
+    public mutating func release(
+        _ candidates: [PointerButton], posting: (PointerButton) -> Bool
+    ) -> [PointerButton] {
+        for button in candidates.sorted(by: { $0.rawValue < $1.rawValue })
+        where buttons.contains(button) {
+            if posting(button) { buttons.remove(button) }
+        }
+        if buttons.isEmpty { lastUpdate = nil }
+        return sortedButtons
     }
 
     public mutating func refresh(at uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         if !buttons.isEmpty { lastUpdate = uptime }
     }
 
-    public mutating func expire(
+    public func expiredButtons(
         ifOlderThan timeout: TimeInterval, now: TimeInterval = ProcessInfo.processInfo.systemUptime
     ) -> [PointerButton] {
-        guard let lastUpdate, now - lastUpdate >= timeout else { return [] }
-        return releaseAll()
+        guard timeout.isFinite, timeout >= 0,
+            now.isFinite, let lastUpdate, lastUpdate.isFinite,
+            now >= lastUpdate, now - lastUpdate >= timeout
+        else { return [] }
+        return sortedButtons
+    }
+
+    private var sortedButtons: [PointerButton] {
+        buttons.sorted { $0.rawValue < $1.rawValue }
     }
 }
 import Foundation
