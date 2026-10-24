@@ -10,13 +10,55 @@ run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 created_devices=()
 destinations=()
 
+cleanup_created_device() {
+    local device="$1"
+    local candidate
+    local owned=false
+    local failed=0
+    local -a remaining_devices=()
+
+    for candidate in "${created_devices[@]-}"; do
+        if [[ "$candidate" == "$device" ]]; then
+            owned=true
+            break
+        fi
+    done
+    [[ "$owned" == "true" ]] || return 0
+
+    if ! xcrun simctl shutdown "$device" >/dev/null 2>&1; then
+        printf 'Could not shut down temporary simulator %s.\n' "$device" >&2
+        failed=1
+    fi
+    if xcrun simctl delete "$device" >/dev/null 2>&1; then
+        for candidate in "${created_devices[@]-}"; do
+            [[ "$candidate" == "$device" ]] || remaining_devices+=("$candidate")
+        done
+        created_devices=()
+        for candidate in "${remaining_devices[@]-}"; do
+            [[ -n "$candidate" ]] && created_devices+=("$candidate")
+        done
+    else
+        printf 'Could not delete temporary simulator %s.\n' "$device" >&2
+        failed=1
+    fi
+    return "$failed"
+}
+
 cleanup() {
+    local original_status=$?
+    local cleanup_status=0
     local device
+    trap - EXIT
     for device in "${created_devices[@]-}"; do
         [[ -n "$device" ]] || continue
-        xcrun simctl shutdown "$device" >/dev/null 2>&1 || true
-        xcrun simctl delete "$device" >/dev/null 2>&1 || true
+        if ! cleanup_created_device "$device"; then
+            cleanup_status=1
+        fi
     done
+    if [[ "$original_status" -eq 0 && "$cleanup_status" -ne 0 ]]; then
+        original_status=1
+    fi
+    exit "$original_status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -78,6 +120,14 @@ for ((index = 0; index < ${#destinations[@]}; index += 2)); do
             printf 'Could not extract the XCTest summary from %s\n' "$result_bundle" >&2
         fi
         bash "$script_dir/report-ios-ui-failures.sh" "$summary_path" || true
+        if ! cleanup_created_device "$device_id"; then
+            printf 'Temporary simulator cleanup failed after xcodebuild failure for %s.\n' \
+                "$device_id" >&2
+        fi
         exit "$xcodebuild_status"
+    fi
+    if ! cleanup_created_device "$device_id"; then
+        printf 'Temporary simulator cleanup failed after UI tests for %s.\n' "$device_id" >&2
+        exit 1
     fi
 done

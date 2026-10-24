@@ -123,3 +123,5 @@ jobs:
             bash -n "$script"
           done
           shellcheck tooling/swift/*.sh apps/android/gradlew
+      - name: Test iOS simulator lifecycle with mocked tools
+        run: bash tooling/swift/test-ios-ui-lifecycle.sh

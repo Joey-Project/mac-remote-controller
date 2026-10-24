@@ -31,6 +31,13 @@ superseded_by:
 - On UI-test failure, the script preserves the original `xcodebuild` status and
   reports up to ten failure summaries as GitHub annotations. Missing or
   unreadable summaries produce warnings without hiding the test failure.
+- The UI runner shuts down and deletes each temporary simulator after its
+  destination completes, before starting the next destination. The exit trap
+  retries cleanup only for still-owned created devices; explicit UDIDs remain
+  untouched. Cleanup errors fail a successful run and do not replace an
+  existing `xcodebuild` failure status. This removes avoidable simulator
+  overlap but does not establish the cause of earlier Simulator startup
+  failures.
 - actionlint 1.7.12 does not include the documented `stacked` activity. A
   path-specific filter permits only that exact diagnostic in this verifier;
   other invalid activity names remain errors.
@@ -41,6 +48,10 @@ superseded_by:
   whitespace checks pass. A temporary `stacked_typo` negative control remains
   rejected by actionlint. Current-head CI and provider review are recorded
   on the PR.
+- Ordinary repository-hygiene CI runs five mocked Simulator-lifecycle cases:
+  ordered per-device shutdown/deletion, shutdown and delete failures, preserved
+  `xcodebuild` status plus failure annotations, and explicit-UDID preservation.
+  The mocks do not launch Simulator or adjust real audio.
 - Native stack metadata and the `stacked` webhook are GitHub control-plane
   behavior; local YAML validation does not establish successful registration.
 

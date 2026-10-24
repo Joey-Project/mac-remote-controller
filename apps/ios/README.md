@@ -47,9 +47,13 @@ Run the shared `SofaRemoteiOS` scheme's tests in Xcode, or run
 separate serial `xcodebuild` invocation for each simulator. Each invocation uses
 that simulator's UDID for its own DerivedData directory and result bundle, so
 build products cannot be shared across destinations. Before each invocation,
-the runner waits for the simulator to finish booting. The script deletes only
-the temporary devices it created. To reuse existing simulators, pass their
-UDIDs as arguments; those devices are retained.
+the runner waits for the simulator to finish booting. After each destination's
+test and failure reporting complete, the runner shuts down and deletes that
+temporary simulator before booting the next one; the exit trap retries cleanup
+for any created simulator still registered as owned. A cleanup failure fails
+the run, and an existing `xcodebuild` failure status remains the reported exit
+status. To reuse existing simulators, pass their UDIDs as arguments; those
+devices are never shut down or deleted by the script.
 Debug builds use the selected destination's active architecture for both the
 app and its package dependencies.
 
