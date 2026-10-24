@@ -31,16 +31,24 @@ superseded_by:
 - Player volume stays a gain ratio on the wire (`1.0` is 100%). The IINA
   adapter converts mpv percentage values at its boundary, and iOS converts the
   ratio to percentage only for its display and 10-point slider policy.
-- Final integrated local Swift checks passed 124 AppleCore/MacSupport tests, the Mac app
+- IINA sends the plugin API's form-encoded command body and reports effective
+  volume zero while muted; only positive player-volume commands clear mute.
+  The loopback router uses a two-second deadline while its clients allow three
+  seconds, keeps socket and route deadlines independent, and releases capacity
+  after timeout. The Chrome service worker refreshes registered tabs from the
+  current document every two seconds while its native messaging port is
+  connected, so hidden-page timer throttling does not age out an unchanged
+  player source. Muted HTML media also reports effective volume zero.
+- Final integrated local Swift checks passed 129 AppleCore tests, the macOS app
   build, generic iOS Simulator build, and generated plist validation. The
   `SofaRemoteNativeHost` product also builds. Pinned Node 26.12.0/pnpm 12.14.0
-  formatting, lint, strict typecheck, tests, and builds passed. Chrome tests passed
-  8/8 and IINA mock tests passed 4/4. `actionlint`, shell syntax checks, ShellCheck
-  0.11.0, and project-journal validation passed.
+  formatting, lint, strict typecheck, tests, and builds passed: Chrome 12/12 and
+  IINA mocks 7/7. `actionlint`, shell syntax checks, ShellCheck 0.11.0, and
+  project-journal validation passed. One loopback HTTP smoke passed.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,
   native messaging registration, IINA plugin, live media site, or device was
-  installed or tested; no audio was played. User setup and playback acceptance
-  remain pending.
+  installed or tested; no physical radio test or audio playback was performed.
+  User setup and playback acceptance remain pending.
 
 ## Next Steps
 

@@ -34,8 +34,10 @@ interface NativeMediaCommand {
 const HOST_NAME = 'com.joeyteng.sofaremote';
 const maximumPendingCommands = 8;
 const nativeMessageByteLimit = 64 * 1024;
+const targetRefreshIntervalMilliseconds = 2_000;
 
 const commandForTab = new Map<string, { tabId: number; targetId: string; timeout: number }>();
+const knownMediaTabs = new Set<number>();
 let nativePort: chrome.runtime.Port | undefined;
 
 function allowedKindForURL(url: string | undefined): 'youtube' | 'bilibili' | undefined {
@@ -81,6 +83,22 @@ function postToNative(message: unknown): boolean {
   } catch {
     if (nativePort === port) nativePort = undefined;
     return false;
+  }
+}
+
+function markTargetUnavailable(tabId: number): void {
+  knownMediaTabs.delete(tabId);
+  postToNative({ type: 'media.targetUnavailable', targetId: `chrome:${tabId}` });
+}
+
+function refreshKnownTargets(): void {
+  if (!nativePort || knownMediaTabs.size === 0) return;
+  for (const tabId of knownMediaTabs) {
+    try {
+      void chrome.tabs.sendMessage(tabId, { type: 'mediaRefresh' }).catch(() => undefined);
+    } catch {
+      markTargetUnavailable(tabId);
+    }
   }
 }
 
@@ -225,11 +243,12 @@ chrome.runtime.onMessage.addListener(
 
     if (message?.type === 'mediaState') {
       if (message.snapshot === null) {
-        postToNative({ type: 'media.targetUnavailable', targetId: `chrome:${tabId}` });
+        markTargetUnavailable(tabId);
         return false;
       }
       const snapshot = validateSnapshot(message.snapshot, expectedKind);
       if (!snapshot) return false;
+      knownMediaTabs.add(tabId);
       postToNative({ type: 'media.targetUpdate', targetId: `chrome:${tabId}`, target: snapshot });
       return false;
     }
@@ -246,8 +265,16 @@ chrome.runtime.onMessage.addListener(
 );
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  postToNative({ type: 'media.targetUnavailable', targetId: `chrome:${tabId}` });
+  markTargetUnavailable(tabId);
 });
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (knownMediaTabs.has(tabId) && changeInfo.url && !allowedKindForURL(changeInfo.url)) {
+    markTargetUnavailable(tabId);
+  }
+});
+
+setInterval(refreshKnownTargets, targetRefreshIntervalMilliseconds);
 
 chrome.runtime.onStartup.addListener(() => {
   ensureNativePort();

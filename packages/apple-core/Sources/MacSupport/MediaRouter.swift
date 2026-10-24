@@ -43,6 +43,7 @@ public struct RoutedMediaCommand: Codable, Sendable, Equatable {
 @MainActor
 public final class MediaRouter {
     private struct Pending {
+        let identity: UUID
         let sessionID: String
         let command: RoutedMediaCommand
         let continuation: CheckedContinuation<Void, Error>
@@ -54,6 +55,7 @@ public final class MediaRouter {
     private var targetLastSeen: [String: ContinuousClock.Instant] = [:]
     private let queueLimit: Int
     private let clock = ContinuousClock()
+    private static let adapterResponseTimeout: Duration = .seconds(2)
 
     public init(queueLimit: Int = 8) {
         self.queueLimit = max(1, queueLimit)
@@ -126,6 +128,9 @@ public final class MediaRouter {
         sessionID: String
     ) async throws {
         try request.validate()
+        guard pending[requestID] == nil else {
+            throw WireProtocolError.invalidCommand("duplicate media request ID")
+        }
         guard let target = targets[request.targetID] else {
             throw MediaRouteError.targetUnavailable
         }
@@ -142,22 +147,29 @@ public final class MediaRouter {
         let command = RoutedMediaCommand(
             requestID: requestID, targetID: request.targetID, action: request.action,
             value: request.value)
+        let pendingIdentity = UUID()
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 pending[requestID] = Pending(
-                    sessionID: sessionID, command: command, continuation: continuation)
+                    identity: pendingIdentity, sessionID: sessionID, command: command,
+                    continuation: continuation)
                 queue.append(command)
                 Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .seconds(5))
-                    guard let self, self.pending[requestID] != nil else { return }
+                    try? await Task.sleep(for: Self.adapterResponseTimeout)
+                    guard let self, self.pending[requestID]?.identity == pendingIdentity else {
+                        return
+                    }
                     self.finish(
                         requestID,
+                        expectedIdentity: pendingIdentity,
                         error: MediaRouteError.adapter("The media player did not respond."))
                 }
             }
         } onCancel: {
             Task { @MainActor [weak self] in
-                self?.finish(requestID, error: MediaRouteError.cancelled)
+                self?.finish(
+                    requestID, expectedIdentity: pendingIdentity,
+                    error: MediaRouteError.cancelled)
             }
         }
     }
@@ -192,8 +204,14 @@ public final class MediaRouter {
         for requestID in requestIDs { finish(requestID, error: MediaRouteError.cancelled) }
     }
 
-    private func finish(_ requestID: String, error: Error?) {
-        guard let item = pending.removeValue(forKey: requestID) else { return }
+    private func finish(
+        _ requestID: String,
+        expectedIdentity: UUID? = nil,
+        error: Error?
+    ) {
+        guard let item = pending[requestID] else { return }
+        if let expectedIdentity, item.identity != expectedIdentity { return }
+        pending.removeValue(forKey: requestID)
         queue.removeAll { $0.requestID == requestID }
         if let error {
             item.continuation.resume(throwing: error)

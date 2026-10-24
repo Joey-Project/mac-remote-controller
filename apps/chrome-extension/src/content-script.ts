@@ -7,6 +7,10 @@ interface MediaCommandMessage {
   value?: number;
 }
 
+interface MediaRefreshMessage {
+  type: 'mediaRefresh';
+}
+
 let lastSnapshot = '';
 let scheduledRefresh: number | undefined;
 const observedVideos = new WeakSet<HTMLVideoElement>();
@@ -44,8 +48,14 @@ function observeVideo(): void {
   }
 }
 
-chrome.runtime.onMessage.addListener((message: MediaCommandMessage) => {
-  if (!message || message.type !== 'mediaCommand') return;
+chrome.runtime.onMessage.addListener((message: MediaCommandMessage | MediaRefreshMessage) => {
+  if (!message) return;
+  if (message.type === 'mediaRefresh') {
+    observeVideo();
+    refreshTarget(true);
+    return false;
+  }
+  if (message.type !== 'mediaCommand') return;
   void executeMediaAction(document, location.href, message.action, message.value)
     .then(() => {
       notifyWorker({
