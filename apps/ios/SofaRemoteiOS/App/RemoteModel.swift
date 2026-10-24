@@ -40,6 +40,7 @@ final class RemoteModel {
     var benchmarkResultText: String?
     var benchmarkGroupProgress = ""
     var benchmarkReports: [String: [RTTBenchmarkReport]] = [:]
+    var playerVolumeDisplayStates: [String: PlayerVolumeDisplayState] = [:]
 
     #if DEBUG && targetEnvironment(simulator)
         @ObservationIgnored private let uiTestFixture = UITestFixture()
@@ -62,6 +63,8 @@ final class RemoteModel {
     var connectionID: String?
     var sequence: UInt64 = 0
     var pending: [String: (metadata: PendingCommandMetadata, sent: ContinuousClock.Instant)] = [:]
+    var queuedPlayerVolumeRequests: [QueuedPlayerVolumeRequest] = []
+    var pendingPlayerVolumeRequests: [String: QueuedPlayerVolumeRequest] = [:]
     @ObservationIgnored var commandScheduler = InputCommandScheduler(capacity: 8)
     @ObservationIgnored var localPointerDragCoordinator = LocalPointerDragCoordinator()
     var rejectedLocalDragID: UUID?
@@ -260,6 +263,9 @@ final class RemoteModel {
         remoteState = nil
         connectionID = nil
         pending.removeAll()
+        queuedPlayerVolumeRequests.removeAll(keepingCapacity: true)
+        pendingPlayerVolumeRequests.removeAll()
+        playerVolumeDisplayStates.removeAll(keepingCapacity: true)
         commandScheduler.reset()
         resetLocalDragTracking()
         coalescingTimer?.invalidate()
@@ -305,6 +311,9 @@ extension RemoteModel {
         connectionID = nil
         remoteState = nil
         pending.removeAll()
+        queuedPlayerVolumeRequests.removeAll(keepingCapacity: true)
+        pendingPlayerVolumeRequests.removeAll()
+        playerVolumeDisplayStates.removeAll(keepingCapacity: true)
         commandScheduler.reset()
         resetLocalDragTracking()
         connectionSummary = "Disconnected"

@@ -15,7 +15,9 @@ struct MediaBridgeView: View {
                 model.mediaAdapters.message
             )
             .font(.caption).foregroundStyle(.secondary)
-            if model.mediaAdapters.isEnabled, let token = model.mediaAdapters.token {
+            if model.mediaAdapters.isEnabled, let token = model.mediaAdapters.token,
+                let port = model.mediaAdapters.port
+            {
                 Button("Copy token for IINA setup") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(token, forType: .string)
@@ -25,7 +27,7 @@ struct MediaBridgeView: View {
                 }
                 .help("Paste into the Sofa Remote plugin preferences in IINA.")
                 Text(
-                    "In IINA Preferences → Plugins → Sofa Remote, paste the copied token. The bridge port is 47623."
+                    "In IINA Preferences → Plugins → Sofa Remote, paste the copied token. The bridge port is \(port)."
                 )
                 .font(.caption2).foregroundStyle(.secondary)
                 Text("Load the built Chrome extension and install its native messaging helper.")

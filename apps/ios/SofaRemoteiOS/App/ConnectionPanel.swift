@@ -147,6 +147,7 @@ extension RemoteModel {
             connectionID = id
             sequence = 0
             remoteState = state
+            reconcilePlayerVolumeDisplayStates(with: state)
             isConnected = true
             connectionSummary = "Connected to \(state.deviceName)"
             discoveredMacs = discoveredMacs.map {
@@ -159,6 +160,7 @@ extension RemoteModel {
     private func acceptState(_ message: WireMessage) {
         guard isConnected, message.connectionID == connectionID else { peer?.close(); return }
         remoteState = message.state
+        if let state = message.state { reconcilePlayerVolumeDisplayStates(with: state) }
     }
 
     private func acceptResult(_ message: WireMessage) {
@@ -169,6 +171,7 @@ extension RemoteModel {
             metadata: request.metadata, message: message)
         let otherPendingControlsMayHaveTakenEffect = pending.count > 1
         pending.removeValue(forKey: id)
+        recordPlayerVolumeResult(requestID: id, succeeded: message.error == nil)
         if let error = message.error { errorMessage = error.message }
         if mustReleaseSession {
             disconnect()

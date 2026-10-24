@@ -78,8 +78,7 @@ public final class LoopbackMediaBridge {
     public var onFailure: ((String) -> Void)?
 
     var listener: NWListener?
-    var rateWindow = ContinuousClock.now
-    var requestCount = 0
+    var requestQuota = AuthenticatedRequestQuota()
     private var activeConnectionsByID: [UUID: ActiveConnection] = [:]
     private var connectionIDByObject: [ObjectIdentifier: UUID] = [:]
 
