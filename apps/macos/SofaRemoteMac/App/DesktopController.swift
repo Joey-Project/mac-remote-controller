@@ -45,6 +45,7 @@ final class DesktopController {
             try post(CGEvent(keyboardEventSource: source, virtualKey: key.code, keyDown: true))
             try post(CGEvent(keyboardEventSource: source, virtualKey: key.code, keyDown: false))
         case .systemVolumeSet: break
+        case .mediaControl: throw ControlError.invalidCommand
         }
     }
 

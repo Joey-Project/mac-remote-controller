@@ -2,12 +2,23 @@ import AppleCore
 import SwiftUI
 import UIKit
 
+enum VolumeScope: Hashable {
+    case system
+    case player
+}
+
 struct RemoteView: View {
     @Bindable var model: RemoteModel
     @State private var showingScanner = false
     @State private var textToSend = ""
-    @State private var volumeValue = 0.5
-    @State private var isVolumeEditing = false
+    @State var volumeValue = 0.5
+    @State var isVolumeEditing = false
+    @State var isPlayerVolumeEditing = false
+    @State var playerVolumeValue = 0.5
+    @State var playerVolumeDetentActive = false
+    @State var selectedMediaTargetID: String?
+    @State var seekInterval: Double = 10
+    @State var volumeScope: VolumeScope = .system
     @State private var isTextComposing = false
     @State private var isTextInputFocused = false
     @State private var selectedMode: RemoteMode = .touchpad
@@ -59,6 +70,12 @@ struct RemoteView: View {
             }
             .onChange(of: model.isConnected) { _, connected in
                 if !connected { resetInteractionState() }
+            }
+            .onChange(of: mediaTargetIDs) { _, ids in
+                if let selectedMediaTargetID, ids?.contains(selectedMediaTargetID) == true {
+                    return
+                }
+                selectedMediaTargetID = nil
             }
         }
         .tint(.accentColor)
@@ -150,6 +167,7 @@ private extension RemoteView {
 
                 touchpadCard
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                mediaControlsCard
             }
             .padding(.horizontal, horizontalInset(for: availableWidth))
             .padding(.top, 8)
@@ -168,6 +186,7 @@ private extension RemoteView {
 
     private func keyboardMode(availableWidth: CGFloat) -> some View {
         VStack(spacing: 10) {
+            mediaControlsCard
             systemVolumeCard
                 .padding(.horizontal, horizontalInset(for: availableWidth))
                 .padding(.top, 8)
@@ -279,67 +298,6 @@ private extension RemoteView {
         }
     }
 
-    private var systemVolumeCard: some View {
-        let systemVolume = model.remoteState?.systemVolume
-        let volumeText =
-            systemVolume?.formatted(.percent.precision(.fractionLength(0)))
-            ?? "Unavailable"
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Label("Mac volume", systemImage: "speaker.wave.2")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(volumeText)
-                    .font(.subheadline.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(systemVolume == nil ? .secondary : .primary)
-                    .accessibilityLabel(systemVolume == nil ? "Volume unavailable" : volumeText)
-            }
-            HStack(spacing: 10) {
-                Image(systemName: "speaker.fill").foregroundStyle(.secondary)
-                Slider(
-                    value: Binding(
-                        get: { isVolumeEditing ? volumeValue : systemVolume ?? volumeValue },
-                        set: {
-                            volumeValue = $0
-                            model.send(RemoteCommand(name: .systemVolumeSet, value: $0))
-                        }
-                    ), in: 0...1,
-                    onEditingChanged: { editing in
-                        isVolumeEditing = editing
-                        if !editing {
-                            syncSystemVolumeFromRemote()
-                        }
-                    }
-                )
-                .disabled(!model.isConnected || systemVolume == nil)
-                .accessibilityLabel("Mac system volume").accessibilityIdentifier("volume.slider")
-                Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
-            }
-            if systemVolume == nil {
-                Text(
-                    model.remoteState?.systemVolumeReason
-                        ?? "System volume control is unavailable on this Mac."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: 620, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .frame(maxWidth: .infinity).accessibilityElement(children: .contain)
-        .accessibilityIdentifier("volume.card")
-        .onAppear(perform: syncSystemVolumeFromRemote)
-        .onChange(of: model.remoteState?.systemVolume) { _, _ in
-            syncSystemVolumeFromRemote()
-        }
-        .onDisappear {
-            isVolumeEditing = false
-            syncSystemVolumeFromRemote()
-        }
-    }
-
     private var canSendText: Bool {
         remoteEnabled && !isTextComposing && !textToSend.isEmpty && textToSend.utf8.count <= 4_096
     }
@@ -353,6 +311,9 @@ private extension RemoteView {
         selectedMode = .touchpad
         isVolumePinned = false
         isVolumeEditing = false
+        isPlayerVolumeEditing = false
+        volumeScope = .system
+        selectedMediaTargetID = nil
         volumeValue = 0.5
         isTextInputFocused = false
         isTextComposing = false
@@ -393,8 +354,4 @@ private extension RemoteView {
         return true
     }
 
-    func syncSystemVolumeFromRemote() {
-        guard !isVolumeEditing, let systemVolume = model.remoteState?.systemVolume else { return }
-        volumeValue = systemVolume
-    }
 }

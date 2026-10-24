@@ -35,6 +35,8 @@ private struct CompanionView: View {
                     Text(reason).font(.caption).foregroundStyle(.secondary)
                 }
                 Divider()
+                MediaBridgeView(model: model)
+                Divider()
                 if let invitation = model.invitation {
                     Text("Scan with Sofa Remote on iPhone or iPad.")
                     if let image = qrImage(invitation) {

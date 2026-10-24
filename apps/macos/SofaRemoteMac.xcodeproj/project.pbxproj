@@ -11,6 +11,8 @@
 		000000000000000000000024 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000025; };
 		000000000000000000000026 /* DesktopController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
 		000000000000000000000028 /* MacSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000029; };
+		C40000000000000000000001 /* MediaBridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000002 /* MediaBridgeView.swift */; };
+		C41000000000000000000001 /* MediaAdapterController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41000000000000000000002 /* MediaAdapterController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +20,8 @@
 		000000000000000000000011 /* SofaRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SofaRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000025 /* CompanionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionModel.swift; sourceTree = "<group>"; };
 		000000000000000000000027 /* DesktopController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopController.swift; sourceTree = "<group>"; };
+		C40000000000000000000002 /* MediaBridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaBridgeView.swift; sourceTree = "<group>"; };
+		C41000000000000000000002 /* MediaAdapterController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAdapterController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,6 +51,8 @@
 				000000000000000000000010 /* SofaRemoteMacApp.swift */,
 				000000000000000000000025 /* CompanionModel.swift */,
 				000000000000000000000027 /* DesktopController.swift */,
+				C40000000000000000000002 /* MediaBridgeView.swift */,
+				C41000000000000000000002 /* MediaAdapterController.swift */,
 			);
 			path = SofaRemoteMac/App;
 			sourceTree = "<group>";
@@ -132,6 +138,8 @@
 				000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */,
 				000000000000000000000024 /* CompanionModel.swift in Sources */,
 				000000000000000000000026 /* DesktopController.swift in Sources */,
+				C40000000000000000000001 /* MediaBridgeView.swift in Sources */,
+				C41000000000000000000001 /* MediaAdapterController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

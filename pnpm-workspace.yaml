@@ -1,4 +1,5 @@
 packages:
   - apps/chrome-extension
+  - apps/iina-plugin
 allowBuilds:
   esbuild: true
