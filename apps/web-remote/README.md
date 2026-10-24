@@ -15,13 +15,20 @@ to test pairing, security, command delivery, or physical-device behavior.
 - Drag in the touch surface to move the local cursor; a short tap increments the
   local left-click counter.
 - The click buttons, mouse wheel, volume slider, and keyboard buttons update
-  local preview state only. The scroll readout shows its cumulative direction
-  and delta.
+  local preview state only. The scroll readout shows cumulative direction and
+  distance in CSS pixels. Pixel wheel input is preserved; line input uses the
+  touch surface's explicit 24 CSS-pixel preview line, and page input uses the
+  document layout viewport height.
 - A second pointer switches the preview to scroll. Additional pointers are
   ignored. Pointer cancellation, lost pointer capture, window blur, and page
   deactivation clear the active gesture.
-- Window keyboard shortcuts run only when focus is outside interactive controls,
-  so Enter and Space keep their browser-native button behavior.
+- Window keyboard shortcuts run only when focus is outside interactive controls
+  and no Alt, Control, or Command modifier is held. Enter and Space keep their
+  browser-native button behavior, and modified browser shortcuts remain
+  untouched.
+- The touch surface accepts primary-button pointer input. Secondary and middle
+  mouse/pen buttons do not count as taps; multiple touch pointers remain
+  available for two-finger scroll preview.
 - The text caption counts grapheme characters when `Intl.Segmenter` is
   available. Its fallback counts and labels Unicode code points.
 

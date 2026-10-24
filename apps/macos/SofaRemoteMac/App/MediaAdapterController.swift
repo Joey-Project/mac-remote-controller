@@ -15,6 +15,7 @@ final class MediaAdapterController {
     private var bridge: LoopbackMediaBridge?
 
     var isRunning: Bool { bridge?.isRunning == true }
+    var port: UInt16? { bridge?.configuration.port }
     var mediaTargets: [MediaTarget]? {
         guard isRunning else { return nil }
         return router.targets.values.sorted { $0.id < $1.id }

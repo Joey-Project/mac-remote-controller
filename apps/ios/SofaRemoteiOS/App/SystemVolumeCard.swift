@@ -5,7 +5,7 @@ struct SystemVolumeCard: View {
     @Bindable var model: RemoteModel
     @Binding var volumeScope: VolumeScope
     let target: MediaTarget?
-    let onSetPlayerVolume: (MediaTarget, Double) -> Void
+    let onSetPlayerVolume: (MediaTarget, Double, Double, String) -> Bool
 
     @State private var volumeValue = 0.5
     @State private var isEditing = false
@@ -122,9 +122,10 @@ struct SystemVolumeCard: View {
     private var playerVolumeControl: some View {
         if let target, let maximum = playerMaximum {
             PlayerVolumeSliderControl(
-                target: target, maximum: maximum, isConnected: model.isConnected
-            ) { value in
-                onSetPlayerVolume(target, value)
+                target: target, maximum: maximum, isConnected: model.isConnected,
+                displayState: model.playerVolumeDisplayStates[target.id]
+            ) { value, displayPercent, requestID in
+                onSetPlayerVolume(target, value, displayPercent, requestID)
             }
             .id(target.id)
             .accessibilityLabel("Selected player volume")
@@ -174,7 +175,8 @@ private struct PlayerVolumeSliderControl: View {
     let target: MediaTarget
     let maximum: Double
     let isConnected: Bool
-    let onSetVolume: (Double) -> Void
+    let displayState: PlayerVolumeDisplayState?
+    let onSetVolume: (Double, Double, String) -> Bool
 
     private var currentVolumePercent: Double? {
         guard let maximumGainRatio = target.capabilities.playerVolumeMaximum,
@@ -186,17 +188,19 @@ private struct PlayerVolumeSliderControl: View {
 
     @State private var sliderValue: Double
     @State private var isEditing = false
-    @State private var lastSentValue: Double?
 
     init(
         target: MediaTarget, maximum: Double, isConnected: Bool,
-        onSetVolume: @escaping (Double) -> Void
+        displayState: PlayerVolumeDisplayState?,
+        onSetVolume: @escaping (Double, Double, String) -> Bool
     ) {
         self.target = target
         self.maximum = maximum
         self.isConnected = isConnected
+        self.displayState = displayState
         self.onSetVolume = onSetVolume
-        _sliderValue = State(initialValue: Self.uiPercent(for: target) ?? 0)
+        let initialValue = displayState?.displayedValue ?? Self.uiPercent(for: target)
+        _sliderValue = State(initialValue: initialValue ?? 0)
     }
 
     var body: some View {
@@ -207,16 +211,20 @@ private struct PlayerVolumeSliderControl: View {
         .disabled(!isConnected || currentVolumePercent == nil)
         .accessibilityAdjustableAction(adjustForAccessibility)
         .onChange(of: currentVolumePercent) { _, newValue in syncRemoteVolume(newValue) }
+        .onChange(of: maximum) { _, _ in syncRemoteVolume(currentVolumePercent) }
+        .onChange(of: isConnected) { _, _ in syncRemoteVolume(currentVolumePercent) }
+        .onChange(of: displayState) { _, newValue in
+            guard !isEditing else { return }
+            sliderValue = newValue?.displayedValue ?? currentVolumePercent ?? 0
+        }
     }
 
     private func updateEditingState(_ editing: Bool) {
         isEditing = editing
         if editing {
-            sliderValue = currentVolumePercent ?? sliderValue
-            lastSentValue = nil
-        } else if let current = currentVolumePercent {
-            sliderValue = current
-            if current != lastSentValue { lastSentValue = nil }
+            sliderValue = displayValue ?? sliderValue
+        } else {
+            sliderValue = displayValue ?? sliderValue
         }
     }
 
@@ -230,25 +238,29 @@ private struct PlayerVolumeSliderControl: View {
 
     private func setVolume(_ proposed: Double) {
         guard let snapped = PlayerVolumePolicy.snappedValue(proposed: proposed, maximum: maximum),
-            snapped != sliderValue
+            snapped != sliderValue,
+            PlayerVolumePolicy.shouldSend(
+                value: snapped, current: displayValue, previouslySent: nil)
         else { return }
-        sliderValue = snapped
         guard let maximumGainRatio = target.capabilities.playerVolumeMaximum,
             let gainRatio = PlayerVolumePolicy.gainRatio(
                 fromUIPercent: snapped, maximumGainRatio: maximumGainRatio)
         else { return }
-        guard
-            PlayerVolumePolicy.shouldSend(
-                value: snapped, current: currentVolumePercent, previouslySent: lastSentValue)
-        else { return }
-        lastSentValue = snapped
-        onSetVolume(gainRatio)
+        let requestID = UUID().uuidString
+        if onSetVolume(gainRatio, snapped, requestID) {
+            sliderValue = snapped
+        } else {
+            sliderValue = displayValue ?? currentVolumePercent ?? snapped
+        }
     }
 
     private func syncRemoteVolume(_ newValue: Double?) {
-        guard !isEditing, let newValue else { return }
-        sliderValue = newValue
-        if newValue != lastSentValue { lastSentValue = nil }
+        guard !isEditing else { return }
+        sliderValue = displayValue ?? newValue ?? 0
+    }
+
+    private var displayValue: Double? {
+        displayState?.displayedValue ?? currentVolumePercent
     }
 
     private static func uiPercent(for target: MediaTarget) -> Double? {

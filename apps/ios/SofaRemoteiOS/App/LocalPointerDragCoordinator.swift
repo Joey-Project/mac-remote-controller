@@ -1,6 +1,13 @@
 import AppleCore
 import Foundation
 
+struct QueuedPlayerVolumeRequest {
+    let requestID: String
+    let targetID: String
+    let gainRatio: Double
+    let displayPercent: Double
+}
+
 @MainActor
 final class LocalPointerDragCoordinator {
     private var resultPolicy = PointerDragResultPolicy()
@@ -174,11 +181,111 @@ extension RemoteModel {
                     sequence: sequence, command: command),
                 sent: ContinuousClock.now
             )
+            if command.name == .mediaControl,
+                command.mediaRequest?.action == .setVolume,
+                !queuedPlayerVolumeRequests.isEmpty
+            {
+                pendingPlayerVolumeRequests[requestID] = queuedPlayerVolumeRequests.removeFirst()
+            }
             localPointerDragCoordinator.registerDispatchedCommand(command, requestID: requestID)
             peer.send(
                 WireMessage(
                     type: .command, connectionID: connectionID, requestID: requestID,
                     sequence: sequence, command: command))
         }
+    }
+
+    func recordPlayerVolumeResult(requestID: String, succeeded: Bool) {
+        guard let request = pendingPlayerVolumeRequests.removeValue(forKey: requestID),
+            var displayState = playerVolumeDisplayStates[request.targetID]
+        else { return }
+        displayState.complete(
+            targetID: request.targetID, requestID: request.requestID,
+            value: request.displayPercent, succeeded: succeeded)
+        playerVolumeDisplayStates[request.targetID] = displayState
+    }
+
+    @discardableResult
+    func sendPlayerVolume(
+        targetID: String, gainRatio: Double, displayPercent: Double, requestID: String
+    ) -> Bool {
+        #if DEBUG && targetEnvironment(simulator)
+            if isUITesting {
+                return send(
+                    RemoteCommand(
+                        name: .mediaControl,
+                        mediaRequest: MediaRequest(
+                            targetID: targetID, action: .setVolume, value: gainRatio)))
+            }
+        #endif
+        guard let maximumPercent = currentPlayerVolumeMaximumPercent(targetID: targetID) else {
+            return false
+        }
+        queuedPlayerVolumeRequests.append(
+            QueuedPlayerVolumeRequest(
+                requestID: requestID, targetID: targetID, gainRatio: gainRatio,
+                displayPercent: displayPercent))
+        let accepted = send(
+            RemoteCommand(
+                name: .mediaControl,
+                mediaRequest: MediaRequest(
+                    targetID: targetID, action: .setVolume, value: gainRatio)))
+        if !accepted,
+            let index = queuedPlayerVolumeRequests.firstIndex(where: {
+                $0.requestID == requestID
+            })
+        {
+            queuedPlayerVolumeRequests.remove(at: index)
+        } else if accepted {
+            var displayState =
+                playerVolumeDisplayStates[targetID]
+                ?? PlayerVolumeDisplayState(
+                    targetID: targetID, maximum: maximumPercent,
+                    remoteValue: currentPlayerVolumePercent(targetID: targetID))
+            displayState.configure(
+                targetID: targetID, maximum: maximumPercent,
+                remoteValue: currentPlayerVolumePercent(targetID: targetID), isConnected: true)
+            displayState.request(id: requestID, value: displayPercent, wasAccepted: true)
+            playerVolumeDisplayStates[targetID] = displayState
+        }
+        return accepted
+    }
+
+    func reconcilePlayerVolumeDisplayStates(with state: RemoteState) {
+        for targetID in Array(playerVolumeDisplayStates.keys) {
+            guard let target = state.mediaTargets?.first(where: { $0.id == targetID }),
+                let maximumGainRatio = target.capabilities.playerVolumeMaximum,
+                let maximum = PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: maximumGainRatio),
+                let playerVolume = target.playerVolume,
+                let remoteValue = PlayerVolumePolicy.uiPercent(
+                    fromGainRatio: playerVolume, maximumGainRatio: maximumGainRatio)
+            else {
+                playerVolumeDisplayStates.removeValue(forKey: targetID)
+                continue
+            }
+            var displayState = playerVolumeDisplayStates[targetID]
+            displayState?.configure(
+                targetID: targetID, maximum: maximum, remoteValue: remoteValue,
+                isConnected: true)
+            if let displayState { playerVolumeDisplayStates[targetID] = displayState }
+        }
+    }
+
+    private func currentPlayerVolumePercent(targetID: String) -> Double? {
+        guard let target = remoteState?.mediaTargets?.first(where: { $0.id == targetID }),
+            let maximumGainRatio = target.capabilities.playerVolumeMaximum,
+            let playerVolume = target.playerVolume
+        else { return nil }
+        return PlayerVolumePolicy.uiPercent(
+            fromGainRatio: playerVolume, maximumGainRatio: maximumGainRatio)
+    }
+
+    private func currentPlayerVolumeMaximumPercent(targetID: String) -> Double? {
+        guard
+            let maximumGainRatio = remoteState?.mediaTargets?.first(where: {
+                $0.id == targetID
+            })?.capabilities.playerVolumeMaximum
+        else { return nil }
+        return PlayerVolumePolicy.uiMaximumPercent(fromGainRatio: maximumGainRatio)
     }
 }

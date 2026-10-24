@@ -44,16 +44,21 @@ superseded_by:
 - The root pnpm workspace and CI include the offline preview's lint,
   type-check, tests, and build. The app keeps its package-local generated
   output ignored.
-- PR8 Web review fixes: package checks passed with Node.js 26.12.0 and pnpm
-  12.14.0, including 16/16 offline preview tests for native key activation,
-  cumulative scroll display, and grapheme-aware text counting.
+- PR8 Web review fixes: focused package checks passed with Node.js 26.12.0 and
+  pnpm 12.14.0, including 20/20 offline preview tests for native key
+  activation, browser-shortcut preservation, primary-button and multitouch
+  handling, normalized CSS-pixel scrolling, and grapheme-aware text counting.
+  Line-mode wheel input uses an explicit 24 CSS-pixel preview line; page-mode
+  input uses the layout viewport height. This package-only validation does not
+  replace the full merged-stack gate.
 - Final merged-stack validation passed with Node.js 26.12.0 and pnpm 12.14.0:
-  format check, lint, strict typecheck, 49 tests (Chrome 20/20, IINA 13/13,
-  Web preview 16/16), and builds for all three TypeScript packages. The
-  canonical Swift check passed 154 AppleCore tests, strict formatting/lint,
-  macOS and generic iOS Simulator app builds, and generated Info.plist checks.
-  `actionlint` 1.7.12 and project-journal validation passed. This final gate did
-  not run browser UI, iOS Simulator UI, physical devices, or media playback.
+  format check, lint, strict typecheck, 56 tests (Chrome 23/23, IINA 13/13,
+  Web preview 20/20), and builds for all three TypeScript packages. The
+  canonical Swift check passed 162 AppleCore tests, strict formatting/lint,
+  macOS and generic iOS Simulator app builds, generated Info.plist checks, and
+  the `SofaRemoteNativeHost` release build. `actionlint` 1.7.12 and
+  project-journal validation passed. This final gate did not run browser UI,
+  iOS Simulator UI, physical devices, or media playback.
 - A desktop in-app-browser smoke of the source-identical built mirror passed:
   the offline/no-Mac banner appeared, a left-click action ran locally, keyboard
   mode switched, text input reached nine characters, the right-arrow counter

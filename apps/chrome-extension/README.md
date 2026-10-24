@@ -4,7 +4,8 @@ The Manifest V3 extension exposes typed playback, relative seek, player-volume,
 and site-provided episode navigation for HTTPS `www.youtube.com`,
 `www.bilibili.com`, and `bilibili.com` tabs. A tab is an explicit media source;
 desktop focus does not select or switch the player. The extension reports next
-and previous only when the site's episode controls exist, and returns a visible
+and previous only when the site's episode controls are rendered and enabled,
+and checks the selected control again before invoking it. It returns a visible
 failure if a control disappears after selection.
 
 The service worker connects to the separately built native messaging host. The

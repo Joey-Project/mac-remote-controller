@@ -336,6 +336,8 @@ h1 {
 }
 
 .touch-surface {
+  --preview-wheel-line-height: 24px;
+
   position: relative;
   display: grid;
   height: clamp(190px, 34vh, 260px);

@@ -3,6 +3,37 @@ import CoreFoundation
 import Foundation
 import Network
 
+enum AuthenticatedRequestAdmission: Equatable {
+    case allowed
+    case unauthorized
+    case rateLimited
+}
+
+struct AuthenticatedRequestQuota {
+    static let maximumRequestsPerWindow = 1_024
+    private static let windowDuration: Duration = .seconds(1)
+
+    private var windowStart: ContinuousClock.Instant
+    private(set) var requestCount = 0
+
+    init(windowStart: ContinuousClock.Instant = ContinuousClock.now) {
+        self.windowStart = windowStart
+    }
+
+    mutating func admit(
+        isAuthorized: Bool, at now: ContinuousClock.Instant
+    ) -> AuthenticatedRequestAdmission {
+        guard isAuthorized else { return .unauthorized }
+        if now - windowStart >= Self.windowDuration {
+            windowStart = now
+            requestCount = 0
+        }
+        guard requestCount < Self.maximumRequestsPerWindow else { return .rateLimited }
+        requestCount += 1
+        return .allowed
+    }
+}
+
 extension LoopbackMediaBridge {
     func handle(_ request: HTTPRequest, on connection: NWConnection) {
         guard allowRequest(request, on: connection) else { return }
@@ -14,23 +45,26 @@ extension LoopbackMediaBridge {
     }
 
     private func allowRequest(_ request: HTTPRequest, on connection: NWConnection) -> Bool {
-        let now = ContinuousClock.now
-        if now - rateWindow >= .seconds(1) {
-            rateWindow = now
-            requestCount = 0
-        }
-        requestCount += 1
-        guard requestCount <= 1_024 else {
+        switch admission(for: request, at: ContinuousClock.now) {
+        case .allowed:
+            return true
+        case .rateLimited:
             send(status: 429, body: ["error": "rate_limited"], on: connection)
             return false
-        }
-        guard request.host == "127.0.0.1:\(configuration.port)", request.origin == nil,
-            request.authorization.map(constantTimeMatches) == true
-        else {
+        case .unauthorized:
             send(status: 401, body: ["error": "unauthorized"], on: connection)
             return false
         }
-        return true
+    }
+
+    func admission(
+        for request: HTTPRequest, at now: ContinuousClock.Instant
+    ) -> AuthenticatedRequestAdmission {
+        let isAuthorized =
+            request.host == "127.0.0.1:\(configuration.port)"
+            && request.origin == nil
+            && request.authorization.map(constantTimeMatches) == true
+        return requestQuota.admit(isAuthorized: isAuthorized, at: now)
     }
 
     private func route(_ request: HTTPRequest, on connection: NWConnection) throws {

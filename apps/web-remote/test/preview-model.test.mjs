@@ -4,6 +4,8 @@ import {
   OfflinePreviewModel,
   countTextCharacters,
   formatScrollDelta,
+  normalizeWheelDeltaY,
+  shouldAcceptPointerButton,
   shouldHandleWindowShortcut,
 } from '../dist/preview-model.js';
 
@@ -85,6 +87,48 @@ test('window shortcuts preserve native activation keys on interactive controls',
   }
   assert.equal(shouldHandleWindowShortcut('ArrowLeft', 'control'), false);
   assert.equal(shouldHandleWindowShortcut('NotAKey', 'page'), false);
+  for (const modifiers of [
+    { altKey: true, ctrlKey: false, metaKey: false },
+    { altKey: false, ctrlKey: true, metaKey: false },
+    { altKey: false, ctrlKey: false, metaKey: true },
+  ]) {
+    assert.equal(shouldHandleWindowShortcut('ArrowLeft', 'page', modifiers), false);
+    assert.equal(shouldHandleWindowShortcut('Enter', 'page', modifiers), false);
+  }
+  assert.equal(
+    shouldHandleWindowShortcut('ArrowLeft', 'page', {
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+    }),
+    true,
+  );
+});
+
+test('pointer input accepts the primary button without excluding additional touch pointers', () => {
+  assert.equal(shouldAcceptPointerButton(0), true);
+  assert.equal(shouldAcceptPointerButton(1), false);
+  assert.equal(shouldAcceptPointerButton(2), false);
+  assert.equal(shouldAcceptPointerButton(5), false);
+
+  const model = new OfflinePreviewModel();
+  assert.equal(shouldAcceptPointerButton(0), true);
+  assert.equal(model.beginPointer(1, point(20, 20)), true);
+  assert.equal(shouldAcceptPointerButton(0), true);
+  assert.equal(model.beginPointer(2, point(40, 20)), true);
+  assert.equal(model.endPointer(2), 'scroll');
+  assert.equal(model.snapshot.leftClicks, 0);
+});
+
+test('wheel deltas normalize pixel, line, and page units into CSS pixels', () => {
+  assert.equal(normalizeWheelDeltaY(12, 0, 24, 800), 12);
+  assert.equal(normalizeWheelDeltaY(2, 1, 24, 800), 48);
+  assert.equal(normalizeWheelDeltaY(-0.5, 2, 24, 800), -400);
+  assert.equal(normalizeWheelDeltaY(Number.NaN, 0, 24, 800), null);
+  assert.equal(normalizeWheelDeltaY(1, 3, 24, 800), null);
+  assert.equal(normalizeWheelDeltaY(1, 1, 0, 800), null);
+  assert.equal(normalizeWheelDeltaY(1, 2, 24, Number.POSITIVE_INFINITY), null);
+  assert.equal(normalizeWheelDeltaY(Number.MAX_VALUE, 2, 24, 2), null);
 });
 
 test('scroll preview formats the accumulated direction and distance', () => {

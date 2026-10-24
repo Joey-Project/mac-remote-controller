@@ -92,12 +92,33 @@ function clampToSeekableRanges(target: number, direction: number, ranges: Seekab
   return previous?.end ?? target;
 }
 
+function isRendered(element: HTMLElement): boolean {
+  if (!element.isConnected) return false;
+  const view = element.ownerDocument.defaultView;
+  if (!view) return false;
+
+  for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor.hasAttribute('hidden')) return false;
+    const style = view.getComputedStyle(ancestor);
+    if (style.display === 'none' || style.getPropertyValue('content-visibility') === 'hidden') {
+      return false;
+    }
+    const opacity = Number.parseFloat(style.opacity);
+    if (Number.isFinite(opacity) && opacity <= 0) return false;
+  }
+
+  const visibility = view.getComputedStyle(element).visibility;
+  if (visibility === 'hidden' || visibility === 'collapse') return false;
+  return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
+}
+
 function findFirst(document: Document, selectors: readonly string[]): HTMLElement | undefined {
   for (const selector of selectors) {
     const element = document.querySelector<HTMLElement>(selector);
     if (
       element &&
       typeof element.click === 'function' &&
+      isRendered(element) &&
       !element.hasAttribute('disabled') &&
       element.getAttribute('aria-disabled') !== 'true'
     ) {

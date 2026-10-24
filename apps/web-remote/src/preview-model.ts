@@ -21,6 +21,11 @@ export type TextCountUnit = 'characters' | 'Unicode code points';
 export type TextCount = Readonly<{ count: number; unit: TextCountUnit }>;
 
 export type WindowShortcutTarget = 'page' | 'control';
+export type WindowShortcutModifiers = Readonly<{
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+}>;
 
 type ActivePointer = {
   id: number;
@@ -59,8 +64,42 @@ const DEFAULT_GRAPHEME_SEGMENTER =
     ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
     : null;
 
-export function shouldHandleWindowShortcut(key: string, target: WindowShortcutTarget): boolean {
-  return target === 'page' && WINDOW_SHORTCUT_KEYS.has(key);
+export function shouldHandleWindowShortcut(
+  key: string,
+  target: WindowShortcutTarget,
+  modifiers: WindowShortcutModifiers = { altKey: false, ctrlKey: false, metaKey: false },
+): boolean {
+  return (
+    target === 'page' &&
+    !modifiers.altKey &&
+    !modifiers.ctrlKey &&
+    !modifiers.metaKey &&
+    WINDOW_SHORTCUT_KEYS.has(key)
+  );
+}
+
+export function shouldAcceptPointerButton(button: number): boolean {
+  return button === 0;
+}
+
+// WheelEvent.deltaMode uses 0 for CSS pixels, 1 for lines, and 2 for pages.
+export function normalizeWheelDeltaY(
+  deltaY: number,
+  deltaMode: number,
+  lineHeightPx: number,
+  pageHeightPx: number,
+): number | null {
+  if (!Number.isFinite(deltaY)) return null;
+
+  let multiplier: number;
+  if (deltaMode === 0) multiplier = 1;
+  else if (deltaMode === 1) multiplier = lineHeightPx;
+  else if (deltaMode === 2) multiplier = pageHeightPx;
+  else return null;
+
+  if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+  const normalized = deltaY * multiplier;
+  return Number.isFinite(normalized) ? normalized : null;
 }
 
 export function formatScrollDelta(delta: number): string {

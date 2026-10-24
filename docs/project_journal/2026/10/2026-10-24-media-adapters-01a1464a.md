@@ -50,11 +50,13 @@ superseded_by:
   exponential backoff capped at 15 seconds. IINA rereads its bridge port and
   token each poll, keeps polling while settings are invalid, and yields after
   each batch of at most eight queued commands.
-- Final integrated local Swift checks passed 154 AppleCore package tests, the macOS app
-  build, generic iOS Simulator build, and generated plist validation. The
+- The iOS player-volume thumb preserves accepted values through stale state
+  snapshots and reconciles exact volume request results per target.
+- Final integrated local Swift checks passed 162 AppleCore package tests, the
+  macOS app build, generic iOS Simulator build, and generated plist validation. The
   `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
   12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome
-  20/20 and IINA mocks 13/13. `actionlint`, shell syntax checks, ShellCheck
+  23/23 and IINA mocks 13/13. `actionlint`, shell syntax checks, ShellCheck
   0.11.0, and project-journal validation passed. The backend lane reported six
   focused bridge route/lifecycle tests and one localhost HTTP smoke passed.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,

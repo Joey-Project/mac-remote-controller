@@ -324,8 +324,10 @@ private extension RemoteView {
             model: model,
             volumeScope: $volumeScope,
             target: selectedMediaTarget,
-            onSetPlayerVolume: { target, value in
-                sendMedia(.setVolume, target: target, value: value)
+            onSetPlayerVolume: { target, value, displayPercent, requestID in
+                model.sendPlayerVolume(
+                    targetID: target.id, gainRatio: value, displayPercent: displayPercent,
+                    requestID: requestID)
             })
     }
 

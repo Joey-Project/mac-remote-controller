@@ -3,6 +3,8 @@ import {
   OfflinePreviewModel,
   countTextCharacters,
   formatScrollDelta,
+  normalizeWheelDeltaY,
+  shouldAcceptPointerButton,
   shouldHandleWindowShortcut,
   type PadPoint,
 } from './preview-model.js';
@@ -80,11 +82,23 @@ function localPoint(event: PointerEvent): PadPoint {
   };
 }
 
+function readCSSPixelValue(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed.endsWith('px')) return null;
+  const pixels = Number.parseFloat(trimmed.slice(0, -2));
+  return Number.isFinite(pixels) && pixels > 0 ? pixels : null;
+}
+
 touchpadMode.addEventListener('click', () => selectMode('touchpad'));
 keyboardMode.addEventListener('click', () => selectMode('keyboard'));
 
 touchSurface.addEventListener('pointerdown', (event: PointerEvent) => {
-  if (!model.beginPointer(event.pointerId, localPoint(event))) return;
+  if (
+    !shouldAcceptPointerButton(event.button) ||
+    !model.beginPointer(event.pointerId, localPoint(event))
+  ) {
+    return;
+  }
   touchSurface.setPointerCapture(event.pointerId);
   render();
 });
@@ -112,8 +126,18 @@ touchSurface.addEventListener('lostpointercapture', (event: PointerEvent) => {
 touchSurface.addEventListener(
   'wheel',
   (event: WheelEvent) => {
+    const lineHeight = readCSSPixelValue(
+      getComputedStyle(touchSurface).getPropertyValue('--preview-wheel-line-height'),
+    );
+    const scrollDelta = normalizeWheelDeltaY(
+      event.deltaY,
+      event.deltaMode,
+      lineHeight ?? Number.NaN,
+      document.documentElement.clientHeight,
+    );
+    if (scrollDelta === null) return;
     event.preventDefault();
-    if (model.recordScroll(event.deltaY)) render();
+    if (model.recordScroll(scrollDelta)) render();
   },
   { passive: false },
 );
@@ -151,6 +175,7 @@ window.addEventListener('keydown', (event: KeyboardEvent) => {
     !shouldHandleWindowShortcut(
       event.key,
       isInteractiveKeyTarget(event.target) ? 'control' : 'page',
+      { altKey: event.altKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey },
     )
   ) {
     return;
