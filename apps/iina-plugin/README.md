@@ -27,6 +27,14 @@ routes. Chrome continues to send JSON directly.
 
 The token is stored only in local plugin preferences and companion-owned
 mode-0600 configuration. It is not sent to web pages and is not written to
-plugin logs. The plugin retries the local bridge after it is unavailable and
-unregisters its window target when IINA closes it. Automated checks use mocks;
-they do not launch IINA or play audio.
+plugin logs. Each polling cycle rereads the port and token preferences. Missing
+or invalid settings cause no bridge request; the plugin keeps waiting and uses
+updated settings on its next cycle, so fixing the preference does not require
+reinstalling or restarting the plugin.
+
+When the queue is empty, the plugin polls every 250 ms. Each poll refreshes the
+target and drains up to eight queued commands without a per-command polling
+delay. A full batch yields to IINA's event loop before another bounded batch;
+the plugin does not locally replay completed commands. It retries the local
+bridge after it is unavailable and unregisters its window target when IINA
+closes it. Automated checks use mocks; they do not launch IINA or play audio.

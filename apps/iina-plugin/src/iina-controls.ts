@@ -29,6 +29,27 @@ export interface IINATargetSnapshot {
   position: number | null;
 }
 
+export interface BridgeConfiguration {
+  port: number;
+  token: string;
+}
+
+export const maximumCommandsPerPoll = 8;
+
+export function bridgeConfiguration(port: unknown, token: unknown): BridgeConfiguration | null {
+  if (
+    typeof port !== 'number' ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65_535 ||
+    typeof token !== 'string' ||
+    token.length < 32
+  ) {
+    return null;
+  }
+  return { port, token };
+}
+
 export function gainRatioFromMpvPercent(value: number): number | null {
   if (!Number.isFinite(value) || value < 0) return null;
   const ratio = value / 100;

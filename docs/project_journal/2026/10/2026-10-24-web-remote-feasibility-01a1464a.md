@@ -48,7 +48,7 @@ superseded_by:
   12.14.0, including 16/16 offline preview tests for native key activation,
   cumulative scroll display, and grapheme-aware text counting.
 - Final merged-stack validation passed with Node.js 26.12.0 and pnpm 12.14.0:
-  format check, lint, strict typecheck, 41 tests (Chrome 15/15, IINA 10/10,
+  format check, lint, strict typecheck, 49 tests (Chrome 20/20, IINA 13/13,
   Web preview 16/16), and builds for all three TypeScript packages. The
   canonical Swift check passed 154 AppleCore tests, strict formatting/lint,
   macOS and generic iOS Simulator app builds, and generated Info.plist checks.

@@ -4,11 +4,13 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import test from 'node:test';
 import {
+  bridgeConfiguration,
   canNavigatePlaylist,
   createTargetID,
   gainRatioFromMpvPercent,
   effectiveMpvVolumePercent,
   iinaFormData,
+  maximumCommandsPerPoll,
   mpvPercentFromGainRatio,
   shouldUnmuteForGainRatio,
   targetSnapshot,
@@ -20,6 +22,114 @@ import {
 const BRIDGE_LENGTH_SENTINEL = Array.from({ length: 32 }, (_, index) =>
   String.fromCharCode(65 + (index % 26)),
 ).join('');
+
+function createMainHarness({ port, token, commands = [], httpLatency = 0 }) {
+  let now = 1_800_000_000_000;
+  let targetId = '';
+  let paused = false;
+  let activeRequests = 0;
+  let maximumConcurrentRequests = 0;
+  const calls = [];
+  const results = [];
+  const handlers = new Map();
+  const timers = [];
+  const preferences = { bridge_port: port, bridge_token: token };
+  const record = async (method, path, options) => {
+    activeRequests += 1;
+    maximumConcurrentRequests = Math.max(maximumConcurrentRequests, activeRequests);
+    now += httpLatency;
+    const call = { method, path, options };
+    calls.push(call);
+    if (path.endsWith('/update')) {
+      targetId = JSON.parse(options.data.payload).id;
+    }
+    if (path.endsWith('/result')) results.push(JSON.parse(options.data.payload));
+    await Promise.resolve();
+    activeRequests -= 1;
+    if (method === 'get') {
+      return {
+        statusCode: 200,
+        data: { command: commands.shift() ?? undefined },
+      };
+    }
+    return { statusCode: 204, data: undefined };
+  };
+  const iina = {
+    preferences: { get: (key) => preferences[key] },
+    event: { on: (name, handler) => handlers.set(name, handler) },
+    http: {
+      post: (path, options) => record('post', path, options),
+      get: (path, options) => record('get', path, options),
+    },
+    core: {
+      status: {
+        title: 'Episode',
+        idle: false,
+        position: 5,
+        duration: 60,
+        get paused() {
+          return paused;
+        },
+      },
+      audio: { volume: 60, muted: false },
+      pause: () => {
+        paused = true;
+      },
+      resume: () => {
+        paused = false;
+      },
+      seek: () => undefined,
+    },
+    mpv: { getNumber: (name) => (name === 'volume-max' ? 130 : 0) },
+    playlist: { count: () => 1, playNext: () => undefined, playPrevious: () => undefined },
+  };
+  const context = vm.createContext({
+    iina,
+    Date: { now: () => now },
+    setTimeout: (resolve, delay) => {
+      timers.push({ resolve, delay });
+      return timers.length;
+    },
+  });
+  return {
+    calls,
+    commands,
+    context,
+    handlers,
+    maximumConcurrentRequests: () => maximumConcurrentRequests,
+    preferences,
+    results,
+    targetID: () => targetId,
+    advanceTime: (milliseconds) => {
+      now += milliseconds;
+    },
+    timers,
+    time: () => now,
+  };
+}
+
+async function loadMainSource() {
+  return readFile(new URL('../dist/SofaRemote.iinaplugin/main.js', import.meta.url), 'utf8');
+}
+
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 100 && !predicate(); attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(predicate(), true, 'Expected asynchronous IINA work to complete');
+}
+
+async function resolveNextTimer(harness) {
+  await waitFor(() => harness.timers.length > 0);
+  const [{ resolve, delay }] = harness.timers.splice(0, 1);
+  harness.advanceTime(delay);
+  resolve();
+  return delay;
+}
+
+function commandFor(targetId, index) {
+  return { requestId: `request-${index}`, targetId, action: 'playPause' };
+}
 
 test('IINA state exposes exact target ID and gain-ratio volume range', () => {
   const state = targetSnapshot({
@@ -135,6 +245,89 @@ test('IINA target names are UTF-8 byte bounded without browser encoders', () => 
   assert.ok(state.target.name.endsWith('😀'));
 });
 
+test('IINA bridge settings are re-read and an invalid setup stays recoverable', async () => {
+  const mainSource = await loadMainSource();
+  const harness = createMainHarness({ port: 0, token: '' });
+  vm.runInContext(mainSource, harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.timers.length === 1);
+  assert.equal(harness.calls.length, 0);
+
+  // The window-loaded event must not start a second poll loop.
+  harness.handlers.get('iina.window-loaded')();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(harness.timers.length, 1);
+  assert.equal(harness.calls.length, 0);
+
+  harness.preferences.bridge_port = 47623;
+  harness.preferences.bridge_token = BRIDGE_LENGTH_SENTINEL;
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.calls.length === 2 && harness.timers.length === 1);
+
+  const rotatedToken = BRIDGE_LENGTH_SENTINEL.split('').reverse().join('');
+  harness.preferences.bridge_port = 47624;
+  harness.preferences.bridge_token = rotatedToken;
+  harness.handlers.get('iina.window-loaded')();
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.calls.length === 4 && harness.timers.length === 1);
+
+  const updates = harness.calls.filter((call) => call.path.endsWith('/update'));
+  assert.equal(updates.length, 2);
+  assert.match(updates[0].path, /^http:\/\/127\.0\.0\.1:47623\//);
+  assert.equal(updates[0].options.headers.Authorization, `Bearer ${BRIDGE_LENGTH_SENTINEL}`);
+  assert.match(updates[1].path, /^http:\/\/127\.0\.0\.1:47624\//);
+  assert.equal(updates[1].options.headers.Authorization, `Bearer ${rotatedToken}`);
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+
+  harness.handlers.get('iina.window-will-close')();
+  await waitFor(() => harness.calls.some((call) => call.path.endsWith('/unregister')));
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+});
+
+test('IINA drains eight queued commands within the deadline without replay', async () => {
+  const mainSource = await loadMainSource();
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    httpLatency: 100,
+  });
+  vm.runInContext(mainSource, harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.calls.length === 2 && harness.timers.length === 1);
+  const queuedAt = harness.time();
+  for (let index = 0; index < maximumCommandsPerPoll; index += 1) {
+    harness.commands.push(commandFor(harness.targetID(), index));
+  }
+
+  await resolveNextTimer(harness);
+  await waitFor(
+    () => harness.results.length === maximumCommandsPerPoll && harness.timers.length === 1,
+  );
+  assert.ok(harness.time() - queuedAt < 2_000);
+  assert.equal(harness.results.length, 8);
+  assert.deepEqual(
+    harness.results.map((result) => result.requestId),
+    Array.from({ length: 8 }, (_, index) => `request-${index}`),
+  );
+  assert.equal(harness.timers[0].delay, 0);
+
+  // The next bounded poll observes an empty queue and does not replay results.
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.calls.filter((call) => call.path.includes('/next?')).length === 10);
+  assert.equal(harness.results.length, 8);
+  assert.equal(harness.commands.length, 0);
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+});
+
+test('IINA rejects invalid bridge settings without making a loopback request', () => {
+  assert.equal(bridgeConfiguration(0, BRIDGE_LENGTH_SENTINEL), null);
+  assert.equal(bridgeConfiguration(65_536, BRIDGE_LENGTH_SENTINEL), null);
+  assert.equal(bridgeConfiguration(47623.5, BRIDGE_LENGTH_SENTINEL), null);
+  assert.equal(bridgeConfiguration(47623, ''), null);
+  assert.deepEqual(bridgeConfiguration(47623, BRIDGE_LENGTH_SENTINEL), {
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+  });
+});
+
 test('IINA playlist availability is checked against the execution-time position', async () => {
   assert.equal(canNavigatePlaylist('next', 3, 0), true);
   assert.equal(canNavigatePlaylist('next', 3, 2), false);
@@ -150,6 +343,7 @@ test('IINA playlist availability is checked against the execution-time position'
   const posts = [];
   const getCalls = [];
   let playlistPositionReads = 0;
+  let commandReturned = false;
   let nextCalls = 0;
   const iina = {
     preferences: { get: (key) => (key === 'bridge_port' ? 47623 : BRIDGE_LENGTH_SENTINEL) },
@@ -161,6 +355,8 @@ test('IINA playlist availability is checked against the execution-time position'
       },
       get: async (path, options) => {
         getCalls.push({ path, options });
+        if (commandReturned) return { statusCode: 200, data: {} };
+        commandReturned = true;
         return {
           statusCode: 200,
           data: {
@@ -212,7 +408,7 @@ test('IINA playlist availability is checked against the execution-time position'
   for (let attempt = 0; attempt < 20 && getCalls.length === 0; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.equal(getCalls.length, 1);
+  assert.equal(getCalls.length, 2);
   assert.equal(nextCalls, 0);
   const update = posts.find((post) => post.path.endsWith('/update'));
   assert.ok(update);

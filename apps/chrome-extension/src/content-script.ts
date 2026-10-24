@@ -3,6 +3,7 @@ import { executeMediaAction, readMediaTarget, type MediaAction } from './site-co
 interface MediaCommandMessage {
   type: 'mediaCommand';
   requestId: string;
+  dispatchId: number;
   action: MediaAction;
   value?: number;
 }
@@ -61,6 +62,7 @@ chrome.runtime.onMessage.addListener((message: MediaCommandMessage | MediaRefres
       notifyWorker({
         type: 'mediaCommandResult',
         requestId: message.requestId,
+        dispatchId: message.dispatchId,
         ok: true,
       });
     })
@@ -68,6 +70,7 @@ chrome.runtime.onMessage.addListener((message: MediaCommandMessage | MediaRefres
       notifyWorker({
         type: 'mediaCommandResult',
         requestId: message.requestId,
+        dispatchId: message.dispatchId,
         ok: false,
         error: error instanceof Error ? error.message : 'The media action failed.',
       });
