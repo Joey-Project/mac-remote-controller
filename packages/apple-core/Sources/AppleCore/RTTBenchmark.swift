@@ -24,12 +24,92 @@ public struct RTTBenchmarkReport: Equatable, Sendable {
         return p95 - p50
     }
 
+    public var summary: String {
+        let statistics: String
+        if let minimum = minimumMilliseconds, let p50 = medianMilliseconds,
+            let p95 = p95Milliseconds, let maximum = maximumMilliseconds,
+            let jitter = jitterMilliseconds
+        {
+            statistics = String(
+                format: "min %.2f ms · p50 %.2f ms · p95 %.2f ms · max %.2f ms · jitter %.2f ms",
+                minimum, p50, p95, maximum, jitter)
+        } else {
+            statistics = "No successful probes"
+        }
+        let status = cancelled ? "Partial · cancelled" : "Complete"
+        return "\(transport) · \(status) · \(measuredAttemptCount)/\(expectedAttemptCount) · "
+            + "\(statistics) · loss \(timeoutCount) (\(Int(lossRate * 100))%)"
+    }
+
     fileprivate func percentile(_ fraction: Double) -> Double? {
         guard !successfulRoundTripsNanoseconds.isEmpty else { return nil }
         let values = successfulRoundTripsNanoseconds.sorted()
         let index = min(
             values.count - 1, Int(ceil(fraction * Double(values.count))) - (fraction == 0 ? 0 : 1))
         return Double(values[index]) / 1_000_000
+    }
+}
+
+public struct RTTBenchmarkRequestTracker: Sendable {
+    public struct Key: Equatable, Hashable, Sendable {
+        public let id: String
+        public let sequence: UInt64
+
+        public init(id: String, sequence: UInt64) {
+            self.id = id
+            self.sequence = sequence
+        }
+    }
+
+    public enum PongDisposition: Equatable, Sendable {
+        case active
+        case retired
+        case unexpected
+    }
+
+    public static let defaultRetiredCapacity = 128
+
+    private let retiredCapacity: Int
+    private var active: Key?
+    private var retired: Set<Key> = []
+
+    public init(retiredCapacity: Int = Self.defaultRetiredCapacity) {
+        self.retiredCapacity = max(0, retiredCapacity)
+    }
+
+    public var canBegin: Bool { active == nil && retired.count < retiredCapacity }
+    public var retiredCount: Int { retired.count }
+
+    @discardableResult
+    public mutating func begin(id: String, sequence: UInt64) -> Bool {
+        let key = Key(id: id, sequence: sequence)
+        guard canBegin, !retired.contains(key) else { return false }
+        active = key
+        return true
+    }
+
+    @discardableResult
+    public mutating func retireActive() -> Bool {
+        guard let key = active else { return true }
+        guard retired.count < retiredCapacity else { return false }
+        active = nil
+        retired.insert(key)
+        return true
+    }
+
+    public mutating func consumePong(id: String, sequence: UInt64) -> PongDisposition {
+        let key = Key(id: id, sequence: sequence)
+        if active == key {
+            active = nil
+            return .active
+        }
+        if retired.remove(key) != nil { return .retired }
+        return .unexpected
+    }
+
+    public mutating func reset() {
+        active = nil
+        retired.removeAll()
     }
 }
 

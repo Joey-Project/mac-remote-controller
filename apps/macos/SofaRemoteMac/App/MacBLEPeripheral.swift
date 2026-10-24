@@ -14,8 +14,11 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
     private let serviceName: String
     private let pairedTokens: () -> [(id: String, token: String)]
     private var manager: CBPeripheralManager!
+    private var service: CBMutableService?
     private var input: CBMutableCharacteristic?
     private var output: CBMutableCharacteristic?
+    private var serviceIsPublished = false
+    private var isAdvertising = false
     private var central: CBCentral?
     private var decoder = BLEFrameDecoder()
     private var handshake: BLEHandshake.Server?
@@ -29,6 +32,7 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
     private var handshakeDeadline: Timer?
     private var frameDeadline: Timer?
     private var closeDeadline: Timer?
+    private var sessionID = UUID()
 
     init(serviceName: String, pairedTokens: @escaping () -> [(id: String, token: String)]) {
         self.serviceName = serviceName
@@ -57,47 +61,65 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
                 crypto.seal(WireMessage(type: .disconnect, connectionID: connectionID)))
             self.crypto = crypto
             closing = true
+            let closingSessionID = sessionID
+            let expireClose: (Timer) -> Void = { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.sessionID == closingSessionID else { return }
+                    self.finish("Disconnected")
+                }
+            }
             closeDeadline = Timer.scheduledTimer(
-                timeInterval: 2, target: self,
-                selector: #selector(disconnectDeadlineDidFire), userInfo: nil, repeats: false)
+                withTimeInterval: 2, repeats: false, block: expireClose)
             enqueueFragments(frame, maximum: central?.maximumUpdateValueLength ?? 20)
         } catch { finish("Disconnected") }
-    }
-
-    @objc private func disconnectDeadlineDidFire() {
-        finish("Disconnected")
     }
 
     private var activeConnectionID: String?
 
     func setConnectionID(_ value: String) { activeConnectionID = value }
 
+}
+
+extension MacBLEPeripheral: @MainActor CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         switch peripheral.state {
         case .poweredOn:
             publishService()
             onStatus?("Bluetooth ready")
         case .poweredOff:
+            isAdvertising = false
+            clearPublishedService()
             handleUnavailableState(
                 status: "Bluetooth is off", reason: "Bluetooth became unavailable",
-                shouldClose: crypto != nil)
+                shouldClose: hasActiveSession)
         case .unauthorized:
+            isAdvertising = false
             handleUnavailableState(
                 status: "Bluetooth permission is denied in System Settings",
-                reason: "Bluetooth permission is unavailable", shouldClose: crypto != nil)
+                reason: "Bluetooth permission is unavailable", shouldClose: hasActiveSession)
         case .unsupported:
+            isAdvertising = false
             handleUnavailableState(
                 status: "This Mac does not support Bluetooth LE",
-                reason: "Bluetooth LE is unsupported", shouldClose: crypto != nil)
+                reason: "Bluetooth LE is unsupported", shouldClose: hasActiveSession)
         case .resetting:
+            isAdvertising = false
             handleUnavailableState(
                 status: "Bluetooth is restarting", reason: "Bluetooth is restarting",
-                shouldClose: crypto != nil || handshake != nil)
+                shouldClose: hasActiveSession)
         case .unknown:
+            isAdvertising = false
             onStatus?("Waiting for Bluetooth")
+            if hasActiveSession { finish("Bluetooth state became unavailable") }
         @unknown default:
+            isAdvertising = false
             onStatus?("Bluetooth is unavailable")
+            if hasActiveSession { finish("Bluetooth state became unavailable") }
         }
+    }
+
+    private var hasActiveSession: Bool {
+        central != nil || isSubscribed || handshake != nil || crypto != nil
     }
 
     private func handleUnavailableState(status: String, reason: String, shouldClose: Bool) {
@@ -106,7 +128,11 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
     }
 
     private func publishService() {
-        guard manager.state == .poweredOn, input == nil else { return }
+        guard manager.state == .poweredOn else { return }
+        if let service {
+            if serviceIsPublished { startAdvertising(service) }
+            return
+        }
         // The pairing ID only narrows the scan candidate; BLEHandshake proves identity.
         let service = CBMutableService(type: CBUUID(string: serviceName), primary: true)
         let input = CBMutableCharacteristic(
@@ -115,8 +141,10 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
         let output = CBMutableCharacteristic(
             type: CBUUID(string: BLETransportConstants.outputCharacteristicUUID),
             properties: [.notify], value: nil, permissions: [.readable])
+        self.service = service
         self.input = input
         self.output = output
+        serviceIsPublished = false
         service.characteristics = [input, output]
         manager.add(service)
     }
@@ -124,18 +152,38 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
     func peripheralManager(
         _ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?
     ) {
-        guard error == nil else { onStatus?("Could not publish Bluetooth service"); return }
-        peripheral.startAdvertising([
+        guard self.service === service else { return }
+        guard error == nil else {
+            clearPublishedService()
+            onStatus?("Could not publish Bluetooth service")
+            return
+        }
+        serviceIsPublished = true
+        startAdvertising(service)
+        onStatus?("Ready for paired Bluetooth devices")
+    }
+
+    private func startAdvertising(_ service: CBService) {
+        guard manager.state == .poweredOn, serviceIsPublished, !isAdvertising else { return }
+        manager.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [service.uuid]
         ])
-        onStatus?("Ready for paired Bluetooth devices")
+        isAdvertising = true
+    }
+
+    private func clearPublishedService() {
+        isAdvertising = false
+        service = nil
+        input = nil
+        output = nil
+        serviceIsPublished = false
     }
 
     func peripheralManager(
         _ peripheral: CBPeripheralManager, central: CBCentral,
         didSubscribeTo characteristic: CBCharacteristic
     ) {
-        guard characteristic.uuid == output?.uuid else { return }
+        guard characteristic === output else { return }
         if let existing = self.central, existing.identifier != central.identifier { return }
         self.central = central
         isSubscribed = true
@@ -145,11 +193,16 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
         crypto = nil
         activeConnectionID = nil
         closed = false
+        let sessionID = UUID()
+        self.sessionID = sessionID
         handshakeDeadline?.invalidate()
         handshakeDeadline = Timer.scheduledTimer(
             withTimeInterval: 12, repeats: false
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.finish("Bluetooth authentication timed out") }
+            MainActor.assumeIsolated {
+                guard let self, self.sessionID == sessionID else { return }
+                self.finish("Bluetooth authentication timed out")
+            }
         }
     }
 
@@ -157,10 +210,10 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
         _ peripheral: CBPeripheralManager, central: CBCentral,
         didUnsubscribeFrom characteristic: CBCharacteristic
     ) {
-        guard central.identifier == self.central?.identifier else { return }
-        isSubscribed = false
+        guard characteristic === output,
+            central.identifier == self.central?.identifier
+        else { return }
         finish("Bluetooth disconnected")
-        self.central = nil
     }
 
     func peripheralManager(
@@ -175,7 +228,7 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
         }
         guard let first = requests.first,
             requests.allSatisfy({
-                $0.characteristic.uuid == input?.uuid
+                $0.characteristic === input
                     && $0.central.identifier == central?.identifier
             })
         else {
@@ -190,10 +243,14 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
         do {
             let frames = try decoder.append(value)
             frameDeadline?.invalidate()
+            let sessionID = self.sessionID
             frameDeadline =
                 decoder.bufferedByteCount > 0
                 ? Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.finish("Bluetooth frame timed out") }
+                    MainActor.assumeIsolated {
+                        guard let self, self.sessionID == sessionID else { return }
+                        self.finish("Bluetooth frame timed out")
+                    }
                 }
                 : nil
             for frame in frames { try receiveFrame(frame) }
@@ -239,6 +296,7 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
         guard !closed else { return }
         closed = true
         closing = false
+        sessionID = UUID()
         handshakeDeadline?.invalidate()
         handshakeDeadline = nil
         frameDeadline?.invalidate()
@@ -247,16 +305,19 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
         closeDeadline = nil
         notificationQueue.removeAll(keepingCapacity: false)
         queuedBytes = 0
+        decoder = BLEFrameDecoder()
+        awaitingFinish = false
         crypto = nil
         handshake = nil
+        activeConnectionID = nil
+        central = nil
+        isSubscribed = false
         onClose?(reason)
         onReady = nil
         onMessage = nil
         onClose = nil
     }
 }
-
-extension MacBLEPeripheral: @MainActor CBPeripheralManagerDelegate {}
 
 private extension MacBLEPeripheral {
     func enqueueHandshake(_ payload: Data) throws {
