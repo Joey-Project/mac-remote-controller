@@ -27,12 +27,15 @@ extension RemoteModel {
 
     func startBenchmark() {
         guard isConnected, supportsRoundTripProbe, let target = candidate else { return }
+        guard benchmarkRequestTracker.canBegin else {
+            errorMessage = "Reconnect before running another benchmark to clear retired probes."
+            return
+        }
         benchmarkTargetID = target.serviceName
         benchmark = RTTBenchmarkAccumulator(transport: selectedTransport.rawValue)
         benchmarkRunning = true
         benchmarkProgress = 0
         benchmarkResultText = nil
-        expiredBenchmarkRequestIDs.removeAll()
         sendNextBenchmarkProbe()
     }
 
@@ -40,6 +43,10 @@ extension RemoteModel {
         guard benchmarkRunning else { return }
         benchmarkTimeout?.invalidate()
         benchmarkTimeout = nil
+        guard benchmarkRequestTracker.retireActive() else {
+            peer?.close()
+            return
+        }
         benchmarkRequest = nil
         benchmark?.cancel()
         finishBenchmark()
@@ -48,6 +55,10 @@ extension RemoteModel {
     func advanceBenchmark() {
         guard benchmarkRunning else { return }
         if benchmark?.isComplete == true {
+            finishBenchmark()
+        } else if !benchmarkRequestTracker.canBegin {
+            benchmark?.cancel()
+            errorMessage = "Reconnect before running another benchmark to clear retired probes."
             finishBenchmark()
         } else {
             sendNextBenchmarkProbe()
@@ -65,6 +76,10 @@ extension RemoteModel {
         sequence &+= 1
         let id = UUID().uuidString
         let sent = DispatchTime.now().uptimeNanoseconds
+        guard benchmarkRequestTracker.begin(id: id, sequence: sequence) else {
+            peer.close()
+            return
+        }
         benchmarkRequest = BenchmarkPendingProbe(id: id, sequence: sequence, sentNanoseconds: sent)
         peer.send(
             WireMessage(
@@ -75,8 +90,11 @@ extension RemoteModel {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.benchmarkRequest?.id == id else { return }
+                guard self.benchmarkRequestTracker.retireActive() else {
+                    self.peer?.close()
+                    return
+                }
                 self.benchmarkRequest = nil
-                self.expiredBenchmarkRequestIDs.insert(id)
                 self.benchmark?.record(roundTripNanoseconds: nil)
                 self.benchmarkProgress = self.benchmark?.progress ?? 0
                 self.updateBenchmarkGroupProgress()
@@ -97,22 +115,7 @@ extension RemoteModel {
     }
 
     func benchmarkSummary(_ report: RTTBenchmarkReport) -> String {
-        let duration: String
-        if let p50 = report.medianMilliseconds, let p95 = report.p95Milliseconds,
-            let jitter = report.jitterMilliseconds
-        {
-            duration = String(
-                format: "p50 %.2f ms · p95 %.2f ms · jitter %.2f ms", p50, p95, jitter)
-        } else {
-            duration = "No successful probes"
-        }
-        let state = report.cancelled ? "Partial · cancelled" : "Complete"
-        return [
-            "\(report.transport) · \(state) · "
-                + "\(report.measuredAttemptCount)/\(report.expectedAttemptCount) · ",
-            "\(duration) · loss \(report.timeoutCount) "
-                + "(\(Int(report.lossRate * 100))%)"
-        ].joined()
+        report.summary
     }
 
     func receive(_ message: WireMessage) {
@@ -163,22 +166,36 @@ extension RemoteModel {
     }
 
     private func acceptResult(_ message: WireMessage) {
-        guard message.connectionID == connectionID, let id = message.requestID,
-            let request = pending[id], request.sequence == message.sequence
+        guard let id = message.requestID, let request = pending[id],
+            request.metadata.matchesResult(message)
         else { peer?.close(); return }
+        let mustReleaseSession = request.metadata.requiresSessionTeardown(for: message)
+        let otherPendingControlsMayHaveTakenEffect = pending.count > 1
         pending.removeValue(forKey: id)
         if let error = message.error { errorMessage = error.message }
+        if mustReleaseSession {
+            disconnect()
+            errorMessage =
+                otherPendingControlsMayHaveTakenEffect
+                ? "Disconnected to release the pointer. Other pending controls may have taken effect; "
+                    + "they were not retried."
+                : "The Mac could not release the pointer. Reconnect to continue."
+            return
+        }
         flushQueuedCommands()
     }
 
     private func acceptPong(_ message: WireMessage) {
         guard supportsRoundTripProbe, message.connectionID == connectionID,
-            let id = message.requestID
+            let id = message.requestID, let sequence = message.sequence
         else { peer?.close(); return }
-        guard let request = benchmarkRequest, request.id == id,
-            request.sequence == message.sequence
-        else {
-            if expiredBenchmarkRequestIDs.remove(id) != nil { return }
+        let disposition = benchmarkRequestTracker.consumePong(id: id, sequence: sequence)
+        guard disposition == .active else {
+            if disposition == .retired { return }
+            peer?.close()
+            return
+        }
+        guard let request = benchmarkRequest, request.id == id, request.sequence == sequence else {
             peer?.close()
             return
         }

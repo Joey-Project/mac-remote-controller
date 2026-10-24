@@ -363,7 +363,7 @@ extension CompanionModel {
     private func execute(_ command: RemoteCommand, for client: ClientConnection, id: UUID)
         -> RemoteError?
     {
-        if command.targetsPointer, let owner = heldPointerOwner, owner != id {
+        if PointerOwnershipPolicy.blocks(command, heldBy: heldPointerOwner, requester: id) {
             return RemoteError(
                 code: "pointer_busy", message: "Another remote session is holding the pointer.")
         }
@@ -382,15 +382,4 @@ extension CompanionModel {
         }
     }
 
-}
-
-private extension RemoteCommand {
-    var targetsPointer: Bool {
-        switch name {
-        case .pointerMove, .pointerClick, .pointerScroll, .pointerButtonDown,
-            .pointerButtonUp, .systemShortcut:
-            true
-        default: false
-        }
-    }
 }

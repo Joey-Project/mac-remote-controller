@@ -31,10 +31,12 @@ superseded_by:
 - Player volume stays a gain ratio on the wire (`1.0` is 100%). The IINA
   adapter converts mpv percentage values at its boundary, and iOS converts the
   ratio to percentage only for its display and 10-point slider policy.
-- Local Swift checks passed 113 AppleCore/MacSupport tests, the Mac app build, and the
-  generic iOS Simulator build; the native messaging host product also builds.
-  Pinned pnpm format, lint, strict typecheck, tests, and builds passed. Chrome
-  tests passed 8/8 and IINA mock tests passed 4/4.
+- Final integrated local Swift checks passed 124 AppleCore/MacSupport tests, the Mac app
+  build, generic iOS Simulator build, and generated plist validation. The
+  `SofaRemoteNativeHost` product also builds. Pinned Node 26.12.0/pnpm 12.14.0
+  formatting, lint, strict typecheck, tests, and builds passed. Chrome tests passed
+  8/8 and IINA mock tests passed 4/4. `actionlint`, shell syntax checks, ShellCheck
+  0.11.0, and project-journal validation passed.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,
   native messaging registration, IINA plugin, live media site, or device was
   installed or tested; no audio was played. User setup and playback acceptance

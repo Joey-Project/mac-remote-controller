@@ -61,13 +61,13 @@ final class RemoteModel {
     var benchmarkTargetID: String?
     var connectionID: String?
     var sequence: UInt64 = 0
-    var pending: [String: (sequence: UInt64, sent: ContinuousClock.Instant)] = [:]
+    var pending: [String: (metadata: PendingCommandMetadata, sent: ContinuousClock.Instant)] = [:]
     private var commandScheduler = InputCommandScheduler(capacity: 8)
     private var deadline: Timer?
     private var coalescingTimer: Timer?
     var benchmark: RTTBenchmarkAccumulator?
     var benchmarkRequest: BenchmarkPendingProbe?
-    var expiredBenchmarkRequestIDs: Set<String> = []
+    var benchmarkRequestTracker = RTTBenchmarkRequestTracker()
     var benchmarkTimeout: Timer?
 
     var pairedMacChoices: [DiscoveredMac] {
@@ -252,6 +252,7 @@ final class RemoteModel {
     func handleClose(_ reason: String) {
         let unknown = !pending.isEmpty
         if benchmarkRunning { cancelBenchmark() }
+        benchmarkRequestTracker.reset()
         attemptID = nil
         isConnected = false
         remoteState = nil
@@ -279,6 +280,7 @@ extension RemoteModel {
                 isConnected = false
                 connectionID = nil
                 remoteState = nil
+                benchmarkRequestTracker.reset()
                 connectionSummary = "Disconnected"
                 errorMessage = nil
                 return
@@ -306,6 +308,7 @@ extension RemoteModel {
             ? "Disconnected with a pending control. Its outcome is unknown; it was not retried."
             : nil
         if benchmarkRunning { cancelBenchmark() }
+        benchmarkRequestTracker.reset()
     }
 
     @discardableResult
@@ -371,7 +374,12 @@ extension RemoteModel {
         for command in commandScheduler.dequeue(maximumCount: available) {
             sequence += 1
             let requestID = UUID().uuidString
-            pending[requestID] = (sequence, ContinuousClock.now)
+            pending[requestID] = (
+                metadata: PendingCommandMetadata(
+                    connectionID: connectionID, requestID: requestID,
+                    sequence: sequence, command: command),
+                sent: ContinuousClock.now
+            )
             peer.send(
                 WireMessage(
                     type: .command, connectionID: connectionID, requestID: requestID,
