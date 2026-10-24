@@ -6,6 +6,7 @@ import { TextEncoder } from 'node:util';
 
 function makeContext() {
   const sent = [];
+  const receipts = [];
   const windowListeners = new Map();
   const scheduled = new Map();
   let mutationCallback;
@@ -128,13 +129,14 @@ function makeContext() {
   return {
     context,
     sent,
+    receipts,
     scheduled,
     windowListeners,
     refresh() {
-      runtimeMessageListener({ type: 'mediaRefresh' });
+      runtimeMessageListener({ type: 'mediaRefresh' }, {}, (reply) => receipts.push(reply));
     },
     sendCommand(message) {
-      runtimeMessageListener(message);
+      runtimeMessageListener(message, {}, (reply) => receipts.push(reply));
     },
     mutate() {
       mutationCallback();
@@ -200,6 +202,55 @@ test('content script echoes the dispatch id on its asynchronous command result',
   assert.equal(result.requestId, 'dispatch-id-check');
   assert.equal(result.dispatchId, 29);
   assert.equal(result.ok, true);
+});
+
+test('content script acknowledges delivery before its asynchronous command result', async () => {
+  const source = await readFile(new URL('../dist/content-script.js', import.meta.url), 'utf8');
+  const harness = makeContext();
+  vm.runInContext(source, harness.context);
+
+  harness.sendCommand({
+    type: 'mediaCommand',
+    requestId: 'delivery-receipt',
+    dispatchId: 30,
+    action: 'setVolume',
+    value: 0.6,
+  });
+
+  // Chrome reports a closed response port when a callback-based send receives
+  // neither a synchronous reply nor a retained asynchronous response channel.
+  assert.equal(harness.receipts.length, 1);
+  assert.equal(harness.receipts[0].received, true);
+  assert.equal(harness.receipts[0].dispatchId, 30);
+  assert.equal(harness.sent.filter((message) => message.type === 'mediaCommandResult').length, 0);
+
+  await Promise.resolve();
+  const results = harness.sent.filter((message) => message.type === 'mediaCommandResult');
+  assert.equal(results.length, 1);
+  assert.equal(results[0].ok, true);
+  assert.equal(results[0].requestId, 'delivery-receipt');
+});
+
+test('delivery acknowledgement does not turn a rejected media action into success', async () => {
+  const source = await readFile(new URL('../dist/content-script.js', import.meta.url), 'utf8');
+  const harness = makeContext();
+  vm.runInContext(source, harness.context);
+
+  harness.sendCommand({
+    type: 'mediaCommand',
+    requestId: 'invalid-volume',
+    dispatchId: 31,
+    action: 'setVolume',
+    value: 2,
+  });
+  assert.equal(harness.receipts.length, 1);
+  assert.equal(harness.receipts[0].received, true);
+  await Promise.resolve();
+  await Promise.resolve();
+  const results = harness.sent.filter((message) => message.type === 'mediaCommandResult');
+  assert.equal(results.length, 1);
+  assert.equal(results[0].ok, false);
+  assert.equal(results[0].dispatchId, 31);
 });
 
 test('service-worker refresh messages report the current tab video without a page timer', async () => {

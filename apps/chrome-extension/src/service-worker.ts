@@ -296,7 +296,7 @@ function receiveNativeMessage(port: chrome.runtime.Port, value: unknown): void {
             message.requestId!,
             pending.targetId,
             false,
-            'The selected browser tab is closed.',
+            'The browser tab could not receive the command. Refresh the tab and try again.',
           );
         }
       },
@@ -310,7 +310,7 @@ function receiveNativeMessage(port: chrome.runtime.Port, value: unknown): void {
         message.requestId!,
         pending.targetId,
         false,
-        'The selected browser tab is closed.',
+        'The browser tab could not receive the command. Refresh the tab and try again.',
       );
     }
   }

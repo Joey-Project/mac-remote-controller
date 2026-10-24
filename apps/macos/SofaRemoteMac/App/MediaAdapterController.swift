@@ -9,10 +9,15 @@ final class MediaAdapterController {
     private(set) var isEnabled = false
     private(set) var token: String?
     private(set) var message = "Local media bridge is off."
+    private(set) var setupMessage: String?
     let router = MediaRouter()
     var onTargetsChanged: (([MediaTarget]?) -> Void)?
 
     private var bridge: LoopbackMediaBridge?
+
+    func restoreEnabled() {
+        if UserDefaults.standard.bool(forKey: "mediaBridgeEnabled") { setEnabled(true) }
+    }
 
     var isRunning: Bool { bridge?.isRunning == true }
     var port: UInt16? { bridge?.configuration.port }
@@ -22,6 +27,7 @@ final class MediaAdapterController {
     }
 
     func setEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "mediaBridgeEnabled")
         guard enabled != isEnabled else { return }
         if !enabled {
             bridge?.stop()
@@ -62,6 +68,42 @@ final class MediaAdapterController {
 
     func expireStaleTargets() {
         bridge?.expireStaleTargets()
+    }
+
+    func configureIINA() -> URL? {
+        if !isEnabled { setEnabled(true) }
+        guard let bridge else { setupMessage = message; return nil }
+        do {
+            let package = try integrationInstaller().prepareIINA(
+                configuration: bridge.configuration)
+            setupMessage =
+                "Bridge settings are saved. Confirm installation and permissions in IINA. "
+                + "For an existing installation, approve replacement, then reload plugins or restart IINA."
+            return package
+        } catch { setupMessage = error.localizedDescription; return nil }
+    }
+
+    func configureChrome() -> URL? {
+        if !isEnabled { setEnabled(true) }
+        guard bridge != nil else { setupMessage = message; return nil }
+        do {
+            let folder = try integrationInstaller().installChrome()
+            setupMessage =
+                "Chrome helper is configured. In Chrome, enable Developer mode and Load unpacked, "
+                + "then select the revealed ChromeExtension folder. Reload an existing extension and video tabs."
+            return folder
+        } catch { setupMessage = error.localizedDescription; return nil }
+    }
+
+    private func integrationInstaller() throws -> MediaIntegrationInstaller {
+        guard let resources = Bundle.main.resourceURL else {
+            throw IntegrationSetupError.missingResources
+        }
+        return MediaIntegrationInstaller(
+            home: FileManager.default.homeDirectoryForCurrentUser,
+            resources: resources.appendingPathComponent("MediaAdapters"),
+            helper: Bundle.main.bundleURL.appendingPathComponent(
+                "Contents/Helpers/SofaRemoteNativeHost"))
     }
 
     private func removeAllTargets() {

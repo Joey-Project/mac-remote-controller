@@ -8,11 +8,26 @@ and previous only when the site's episode controls are rendered and enabled,
 and checks the selected control again before invoking it. It returns a visible
 failure if a control disappears after selection.
 
+The content script acknowledges command delivery on Chrome's response channel
+before executing the asynchronous action. Its separate, correlated result
+message determines success or failure; the delivery acknowledgement alone
+never completes a media command.
+
 The service worker connects to the separately built native messaging host. The
 host reads the local bridge token from the companion's mode-0600 configuration
 file and proxies only validated media messages over authenticated loopback
 HTTP. The token never enters the extension, page, or content script. The bridge
 accepts no desktop-input commands.
+
+In the Mac companion, choose **Set Up Chrome**. The app installs the bundled
+extension into `~/Library/Application Support/SofaRemote/Integrations/ChromeExtension`
+and registers its bundled Native Messaging helper automatically. Chrome opens
+its extensions page and Finder reveals the extension directory. For first
+installation, enable **Developer mode**, choose **Load unpacked**, and select
+that directory. Chrome requires this browser confirmation for local extensions.
+For updates, reload the existing extension and refresh open video tabs.
+
+## Manual development setup
 
 From the repository root, install the pinned workspace dependencies and build.
 These commands require Node.js 26 or newer and the pnpm version declared in the

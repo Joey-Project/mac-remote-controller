@@ -10,6 +10,16 @@ struct SofaRemoteiOSApp: App {
     var body: some Scene {
         WindowGroup {
             RemoteView(model: model)
+                #if DEBUG
+                    .overlay(alignment: .topLeading) {
+                        if model.isLiveMediaTesting {
+                            Text("\(model.liveSuccessfulResults):\(model.liveFailedResults)")
+                            .frame(width: 1, height: 1).opacity(0.01)
+                            .accessibilityIdentifier("live.results")
+                            .allowsHitTesting(false)
+                        }
+                    }
+                #endif
                 #if DEBUG && targetEnvironment(simulator)
                     .overlay(alignment: .topLeading) {
                         if model.isUITesting {

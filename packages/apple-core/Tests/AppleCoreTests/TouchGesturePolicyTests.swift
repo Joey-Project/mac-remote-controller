@@ -272,3 +272,54 @@ final class TouchGesturePolicyTests: XCTestCase {
         XCTAssertEqual(policy.state, .idle)
     }
 }
+
+final class TouchSequencePromotionTests: XCTestCase {
+    func testFourthFingerCanPromotePointerScrollOrDragIntoShortcut() {
+        for initialCount in 1...3 {
+            var sequence = TouchSequencePolicy()
+            XCTAssertEqual(sequence.begin(adding: initialCount), .started)
+            sequence.activate()
+            XCTAssertEqual(
+                sequence.begin(adding: 4 - initialCount, allowsShortcutPromotion: true),
+                .promotedToShortcut)
+            XCTAssertEqual(sequence.initialCount, 4)
+            XCTAssertTrue(sequence.isPending)
+            XCTAssertFalse(sequence.isActive)
+
+            sequence.activate()
+            XCTAssertFalse(sequence.cancelsMovementAfterTouchCountChange(currentTouchCount: 4))
+            XCTAssertEqual(
+                sequence.end(removing: 1, dragEnabled: true, shortcutsEnabled: true), .cancelled)
+            XCTAssertEqual(
+                sequence.end(removing: 3, dragEnabled: true, shortcutsEnabled: true), .ignored)
+        }
+    }
+
+    func testShortcutPromotionDoesNotAllowOtherActiveFingerCountChanges() {
+        for finalCount in [2, 3, 5] {
+            var sequence = TouchSequencePolicy()
+            _ = sequence.begin(adding: 1)
+            sequence.activate()
+            XCTAssertEqual(
+                sequence.begin(adding: finalCount - 1, allowsShortcutPromotion: true), .cancelled)
+            XCTAssertFalse(sequence.isPending)
+            XCTAssertFalse(sequence.isActive)
+        }
+        var disabled = TouchSequencePolicy()
+        _ = disabled.begin(adding: 3)
+        disabled.activate()
+        XCTAssertEqual(disabled.begin(adding: 1, allowsShortcutPromotion: false), .cancelled)
+    }
+
+    func testFourthFingerCannotReviveSequenceAfterPartialLift() {
+        var sequence = TouchSequencePolicy()
+        _ = sequence.begin(adding: 4)
+        sequence.activate()
+        XCTAssertEqual(
+            sequence.end(removing: 1, dragEnabled: true, shortcutsEnabled: true), .cancelled)
+        XCTAssertEqual(
+            sequence.begin(adding: 1, allowsShortcutPromotion: true), .ignored)
+        XCTAssertFalse(sequence.isPending)
+        XCTAssertFalse(sequence.isActive)
+    }
+}

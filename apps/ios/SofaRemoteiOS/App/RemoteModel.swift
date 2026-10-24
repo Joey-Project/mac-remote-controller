@@ -42,6 +42,14 @@ final class RemoteModel {
     var benchmarkReports: [String: [RTTBenchmarkReport]] = [:]
     var playerVolumeDisplayStates: [String: PlayerVolumeDisplayState] = [:]
 
+    #if DEBUG
+        var liveSuccessfulResults = 0
+        var liveFailedResults = 0
+        var isLiveMediaTesting: Bool {
+            ProcessInfo.processInfo.arguments.contains("--live-media-test")
+        }
+    #endif
+
     #if DEBUG && targetEnvironment(simulator)
         @ObservationIgnored private let uiTestFixture = UITestFixture()
         private var uiTestLogRevision = 0

@@ -49,34 +49,40 @@ function observeVideo(): void {
   }
 }
 
-chrome.runtime.onMessage.addListener((message: MediaCommandMessage | MediaRefreshMessage) => {
-  if (!message) return;
-  if (message.type === 'mediaRefresh') {
-    observeVideo();
-    refreshTarget(true);
+chrome.runtime.onMessage.addListener(
+  (message: MediaCommandMessage | MediaRefreshMessage, _sender, sendResponse) => {
+    if (!message) return;
+    if (message.type === 'mediaRefresh') {
+      sendResponse({ received: true });
+      observeVideo();
+      refreshTarget(true);
+      return false;
+    }
+    if (message.type !== 'mediaCommand') return;
+    // The action result uses its own correlated runtime message. Acknowledge
+    // delivery on Chrome's response channel so closing it is not a send error.
+    sendResponse({ received: true, dispatchId: message.dispatchId });
+    void executeMediaAction(document, location.href, message.action, message.value)
+      .then(() => {
+        notifyWorker({
+          type: 'mediaCommandResult',
+          requestId: message.requestId,
+          dispatchId: message.dispatchId,
+          ok: true,
+        });
+      })
+      .catch((error: unknown) => {
+        notifyWorker({
+          type: 'mediaCommandResult',
+          requestId: message.requestId,
+          dispatchId: message.dispatchId,
+          ok: false,
+          error: error instanceof Error ? error.message : 'The media action failed.',
+        });
+      });
     return false;
-  }
-  if (message.type !== 'mediaCommand') return;
-  void executeMediaAction(document, location.href, message.action, message.value)
-    .then(() => {
-      notifyWorker({
-        type: 'mediaCommandResult',
-        requestId: message.requestId,
-        dispatchId: message.dispatchId,
-        ok: true,
-      });
-    })
-    .catch((error: unknown) => {
-      notifyWorker({
-        type: 'mediaCommandResult',
-        requestId: message.requestId,
-        dispatchId: message.dispatchId,
-        ok: false,
-        error: error instanceof Error ? error.message : 'The media action failed.',
-      });
-    });
-  return false;
-});
+  },
+);
 
 function installObservers(): void {
   if (!document.documentElement) {

@@ -183,6 +183,7 @@ public struct TouchFingerMovementTracker<Identifier: Hashable & Sendable>: Senda
 public enum TouchSequenceOutcome: Sendable, Equatable {
     case started
     case joined
+    case promotedToShortcut
     case cancelled
     case partialPendingLift
     case ended(TouchGestureKind, tapAllowed: Bool)
@@ -208,7 +209,9 @@ public struct TouchSequencePolicy: Sendable, Equatable {
         isActive && currentTouchCount != initialCount
     }
 
-    public mutating func begin(adding count: Int, at time: TimeInterval = 0)
+    public mutating func begin(
+        adding count: Int, at time: TimeInterval = 0, allowsShortcutPromotion: Bool = false
+    )
         -> TouchSequenceOutcome
     {
         guard count > 0 else { return .ignored }
@@ -227,6 +230,12 @@ public struct TouchSequencePolicy: Sendable, Equatable {
             return .cancelled
         }
         if isPending { initialCount = touchCount; return .joined }
+        if isActive, allowsShortcutPromotion, touchCount == 4, initialCount < 4 {
+            initialCount = touchCount
+            isPending = true
+            isActive = false
+            return .promotedToShortcut
+        }
         if isActive { isActive = false; isPending = false; return .cancelled }
         return .ignored
     }

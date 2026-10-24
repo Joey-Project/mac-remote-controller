@@ -61,6 +61,7 @@ final class CompanionModel {
             mediaAdapters.onTargetsChanged = { [weak self] targets in
                 self?.remoteState.mediaTargets = targets
             }
+            mediaAdapters.restoreEnabled()
             try startListener()
             let pairedTokens: () -> [(id: String, token: String)] = { [weak self] in
                 self?.pairedDevices.map { (id: $0.id, token: $0.token) } ?? []

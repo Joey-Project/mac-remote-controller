@@ -25,7 +25,8 @@ superseded_by:
   omit the capability and the iOS app keeps the new gestures disabled.
 - Touch sequences allow staggered finger placement and release while pending;
   threshold crossing preserves the full initial movement delta. After movement
-  begins, a finger-count change cancels the sequence. Active
+  begins, other finger-count changes cancel, except promotion into a four-finger
+  shortcut when enabled. Promotion releases an active drag first. Active
   drags release on cancellation, surface teardown, and Mac session close/revoke.
   The Mac attempts release after eight seconds without valid client activity.
   It removes a held button only after creating and posting its release event;
@@ -33,7 +34,9 @@ superseded_by:
   cleanup retains pending button state and pointer ownership until release posts.
 - Pressure click requires iOS to report Force Touch capability and falls back
   to an ordinary tap. Haptic feedback is separately configurable and defaults
-  off.
+  off. When enabled, ordinary taps, right-clicks, drag acquisition, and recognized
+  shortcuts also emit prepared local feedback. Four-finger shortcuts fire once
+  at the distance threshold instead of waiting for fingers to lift.
 - The Mac marks nearby same-button taps within the system double-click interval
   as native double-click events, tracked independently per remote session.
   iOS taps carry a bounded monotonic touch timestamp so queue and transport
