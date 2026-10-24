@@ -18,7 +18,9 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
     private var input: CBMutableCharacteristic?
     private var output: CBMutableCharacteristic?
     private var serviceIsPublished = false
-    private var isAdvertising = false
+    private var advertisingLifecycle = BLEAdvertisingLifecycle()
+    private var advertisingRetryTimer: Timer?
+    private var serviceGeneration = UUID()
     private var central: CBCentral?
     private var decoder = BLEFrameDecoder()
     private var handshake: BLEHandshake.Server?
@@ -82,39 +84,31 @@ final class MacBLEPeripheral: NSObject, RemotePeer {
 
 extension MacBLEPeripheral: @MainActor CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
+        guard peripheral === manager else { return }
+        if peripheral.state != .poweredOn && peripheral.state != .poweredOff { resetAdvertising() }
         switch peripheral.state {
         case .poweredOn:
             publishService()
-            onStatus?("Bluetooth ready")
+            if advertisingLifecycle.phase == .idle { onStatus?("Bluetooth is on") }
         case .poweredOff:
-            isAdvertising = false
             clearPublishedService()
             handleUnavailableState(
-                status: "Bluetooth is off", reason: "Bluetooth became unavailable",
-                shouldClose: hasActiveSession)
+                status: "Bluetooth is off", reason: "Bluetooth became unavailable")
         case .unauthorized:
-            isAdvertising = false
             handleUnavailableState(
                 status: "Bluetooth permission is denied in System Settings",
-                reason: "Bluetooth permission is unavailable", shouldClose: hasActiveSession)
+                reason: "Bluetooth permission is unavailable")
         case .unsupported:
-            isAdvertising = false
             handleUnavailableState(
                 status: "This Mac does not support Bluetooth LE",
-                reason: "Bluetooth LE is unsupported", shouldClose: hasActiveSession)
+                reason: "Bluetooth LE is unsupported")
         case .resetting:
-            isAdvertising = false
             handleUnavailableState(
-                status: "Bluetooth is restarting", reason: "Bluetooth is restarting",
-                shouldClose: hasActiveSession)
+                status: "Bluetooth is restarting", reason: "Bluetooth is restarting")
         case .unknown:
-            isAdvertising = false
-            onStatus?("Waiting for Bluetooth")
-            if hasActiveSession { finish("Bluetooth state became unavailable") }
+            handleUnavailableState(status: "Waiting for Bluetooth")
         @unknown default:
-            isAdvertising = false
-            onStatus?("Bluetooth is unavailable")
-            if hasActiveSession { finish("Bluetooth state became unavailable") }
+            handleUnavailableState(status: "Bluetooth is unavailable")
         }
     }
 
@@ -122,9 +116,11 @@ extension MacBLEPeripheral: @MainActor CBPeripheralManagerDelegate {
         central != nil || isSubscribed || handshake != nil || crypto != nil
     }
 
-    private func handleUnavailableState(status: String, reason: String, shouldClose: Bool) {
+    private func handleUnavailableState(
+        status: String, reason: String = "Bluetooth state became unavailable"
+    ) {
         onStatus?(status)
-        if shouldClose { finish(reason) }
+        if hasActiveSession { finish(reason) }
     }
 
     private func publishService() {
@@ -152,7 +148,7 @@ extension MacBLEPeripheral: @MainActor CBPeripheralManagerDelegate {
     func peripheralManager(
         _ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?
     ) {
-        guard self.service === service else { return }
+        guard peripheral === manager, self.service === service else { return }
         guard error == nil else {
             clearPublishedService()
             onStatus?("Could not publish Bluetooth service")
@@ -160,19 +156,67 @@ extension MacBLEPeripheral: @MainActor CBPeripheralManagerDelegate {
         }
         serviceIsPublished = true
         startAdvertising(service)
-        onStatus?("Ready for paired Bluetooth devices")
     }
 
     private func startAdvertising(_ service: CBService) {
-        guard manager.state == .poweredOn, serviceIsPublished, !isAdvertising else { return }
+        guard manager.state == .poweredOn, serviceIsPublished, self.service === service,
+            advertisingLifecycle.beginStart()
+        else { return }
         manager.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [service.uuid]
         ])
-        isAdvertising = true
+    }
+
+    func peripheralManagerDidStartAdvertising(
+        _ peripheral: CBPeripheralManager, error: Error?
+    ) {
+        guard peripheral === manager, advertisingLifecycle.phase == .starting else { return }
+        guard peripheral.state == .poweredOn, serviceIsPublished else {
+            resetAdvertising()
+            return
+        }
+
+        let result = advertisingLifecycle.completeStart(
+            successfully: error == nil && peripheral.isAdvertising)
+        advertisingRetryTimer?.invalidate()
+        advertisingRetryTimer = nil
+        switch result {
+        case .started:
+            onStatus?("Ready for paired Bluetooth devices")
+        case .retry:
+            onStatus?("Bluetooth advertising failed; retrying once")
+            scheduleAdvertisingRetry()
+        case .failed:
+            onStatus?("Bluetooth advertising failed")
+        case .ignored: return
+        }
+    }
+
+    private func scheduleAdvertisingRetry() {
+        guard advertisingRetryTimer == nil else { return }
+        let generation = serviceGeneration
+        let retryAdvertising: @Sendable (Timer) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.serviceGeneration == generation,
+                    let service = self.service
+                else { return }
+                self.advertisingRetryTimer = nil
+                self.startAdvertising(service)
+            }
+        }
+        advertisingRetryTimer = Timer.scheduledTimer(
+            withTimeInterval: 2, repeats: false, block: retryAdvertising)
+    }
+
+    private func resetAdvertising() {
+        advertisingRetryTimer?.invalidate()
+        advertisingRetryTimer = nil
+        serviceGeneration = UUID()
+        advertisingLifecycle.reset()
     }
 
     private func clearPublishedService() {
-        isAdvertising = false
+        resetAdvertising()
         service = nil
         input = nil
         output = nil
