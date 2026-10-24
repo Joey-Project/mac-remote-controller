@@ -68,4 +68,70 @@ final class RemoteControlPolicyTests: XCTestCase {
             PointerOwnershipPolicy.blocks(
                 shortcut, heldBy: pointerOwner, requester: otherClient))
     }
+
+    func testRejectedDragStartWithAndWithoutQueuedReleaseNeverRequiresTeardown() {
+        var withoutRelease = PointerDragResultPolicy()
+        withoutRelease.begin(gestureID: "drag-a")
+        withoutRelease.registerStart(gestureID: "drag-a", requestID: "down-a")
+        XCTAssertEqual(
+            withoutRelease.acceptResult(requestID: "down-a", succeeded: false),
+            .startRejected(gestureID: "drag-a"))
+        XCTAssertTrue(withoutRelease.isEmpty)
+
+        var withRelease = PointerDragResultPolicy()
+        withRelease.begin(gestureID: "drag-b")
+        withRelease.registerStart(gestureID: "drag-b", requestID: "down-b")
+        withRelease.expectRelease(gestureID: "drag-b")
+        withRelease.registerRelease(gestureID: "drag-b", requestID: "up-b")
+        XCTAssertEqual(
+            withRelease.acceptResult(requestID: "down-b", succeeded: false),
+            .startRejected(gestureID: "drag-b"))
+        XCTAssertEqual(
+            withRelease.acceptResult(requestID: "up-b", succeeded: false),
+            .releaseFailureSuppressed(gestureID: "drag-b"))
+        XCTAssertTrue(withRelease.isEmpty)
+    }
+
+    func testEarlyReleaseFailureWaitsForDragStartResult() {
+        var rejectedStart = PointerDragResultPolicy()
+        rejectedStart.begin(gestureID: "drag-rejected")
+        rejectedStart.registerStart(gestureID: "drag-rejected", requestID: "down-rejected")
+        rejectedStart.expectRelease(gestureID: "drag-rejected")
+        rejectedStart.registerRelease(gestureID: "drag-rejected", requestID: "up-rejected")
+        XCTAssertEqual(
+            rejectedStart.acceptResult(requestID: "up-rejected", succeeded: false),
+            .releaseFailureDeferred(gestureID: "drag-rejected"))
+        XCTAssertEqual(
+            rejectedStart.acceptResult(requestID: "down-rejected", succeeded: false),
+            .releaseFailureSuppressed(gestureID: "drag-rejected"))
+
+        var acceptedStart = PointerDragResultPolicy()
+        acceptedStart.begin(gestureID: "drag-accepted")
+        acceptedStart.registerStart(gestureID: "drag-accepted", requestID: "down-accepted")
+        acceptedStart.expectRelease(gestureID: "drag-accepted")
+        acceptedStart.registerRelease(gestureID: "drag-accepted", requestID: "up-accepted")
+        XCTAssertEqual(
+            acceptedStart.acceptResult(requestID: "up-accepted", succeeded: false),
+            .releaseFailureDeferred(gestureID: "drag-accepted"))
+        XCTAssertEqual(
+            acceptedStart.acceptResult(requestID: "down-accepted", succeeded: true),
+            .releaseFailureRequiresSessionTeardown(gestureID: "drag-accepted"))
+        XCTAssertTrue(acceptedStart.isEmpty)
+    }
+
+    func testAcceptedDragStartStillRequiresTeardownForFailedRelease() {
+        var policy = PointerDragResultPolicy()
+        policy.begin(gestureID: "drag-a")
+        policy.registerStart(gestureID: "drag-a", requestID: "down-a")
+        policy.expectRelease(gestureID: "drag-a")
+        policy.registerRelease(gestureID: "drag-a", requestID: "up-a")
+
+        XCTAssertEqual(
+            policy.acceptResult(requestID: "down-a", succeeded: true),
+            .startAccepted(gestureID: "drag-a"))
+        XCTAssertEqual(
+            policy.acceptResult(requestID: "up-a", succeeded: false),
+            .releaseFailureRequiresSessionTeardown(gestureID: "drag-a"))
+        XCTAssertTrue(policy.isEmpty)
+    }
 }

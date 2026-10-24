@@ -2,6 +2,32 @@ import XCTest
 @testable import AppleCore
 
 final class TouchGesturePolicyTests: XCTestCase {
+    func testInstructionsOnlyAdvertiseEnabledGestureCapabilities() {
+        let disabled = TouchGesturePolicy.instructions(dragEnabled: false, shortcutsEnabled: false)
+        XCTAssertEqual(disabled.caption, "1 finger move/tap · 2 fingers scroll/right-click")
+        XCTAssertFalse(disabled.accessibilityHint.contains("three fingers"))
+        XCTAssertFalse(disabled.accessibilityHint.contains("four fingers"))
+
+        let dragOnly = TouchGesturePolicy.instructions(dragEnabled: true, shortcutsEnabled: false)
+        XCTAssertTrue(dragOnly.caption.contains("3 drag"))
+        XCTAssertFalse(dragOnly.caption.contains("4 swipe"))
+        XCTAssertTrue(dragOnly.accessibilityHint.contains("three fingers drag"))
+        XCTAssertFalse(dragOnly.accessibilityHint.contains("four fingers"))
+
+        let shortcutsOnly = TouchGesturePolicy.instructions(
+            dragEnabled: false, shortcutsEnabled: true)
+        XCTAssertFalse(shortcutsOnly.caption.contains("3 drag"))
+        XCTAssertTrue(shortcutsOnly.caption.contains("4 swipe"))
+        XCTAssertFalse(shortcutsOnly.accessibilityHint.contains("three fingers"))
+        XCTAssertTrue(shortcutsOnly.accessibilityHint.contains("four fingers"))
+
+        let both = TouchGesturePolicy.instructions(dragEnabled: true, shortcutsEnabled: true)
+        XCTAssertTrue(both.caption.contains("3 drag"))
+        XCTAssertTrue(both.caption.contains("4 swipe"))
+        XCTAssertTrue(both.accessibilityHint.contains("three fingers drag"))
+        XCTAssertTrue(both.accessibilityHint.contains("four fingers open Mac window controls"))
+    }
+
     func testTouchCountsSelectOnlyEnabledGestureKinds() {
         XCTAssertEqual(
             TouchGesturePolicy.kind(touchCount: 1, dragEnabled: false, shortcutsEnabled: false),

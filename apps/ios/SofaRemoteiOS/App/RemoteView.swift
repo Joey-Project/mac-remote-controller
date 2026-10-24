@@ -9,7 +9,7 @@ struct RemoteView: View {
     @State private var textToSend = ""
     @State private var isTextComposing = false
     @State private var isTextInputFocused = false
-    @State private var localDragActive = false
+    @State private var localDragID: UUID?
     @State private var selectedMode: RemoteMode = .touchpad
     @State private var isVolumePinned = false
     @AppStorage("gesture.threeFingerDrag") private var threeFingerDragEnabled = true
@@ -89,6 +89,9 @@ struct RemoteView: View {
             }
             .onChange(of: model.isConnected) { _, connected in
                 if !connected { resetInteractionState() }
+            }
+            .onChange(of: model.rejectedLocalDragID) { _, rejectedID in
+                if localDragID == rejectedID { localDragID = nil }
             }
         }
         .tint(.accentColor)
@@ -202,8 +205,10 @@ private extension RemoteView {
             onTap: { model.send(RemoteCommand(name: .pointerClick, button: .left)) },
             onRightClick: { model.send(RemoteCommand(name: .pointerClick, button: .right)) },
             onDragBegin: {
-                guard gesturesSupported && threeFingerDragEnabled, !localDragActive else { return }
-                localDragActive = model.send(RemoteCommand(name: .pointerButtonDown, button: .left))
+                guard gesturesSupported && threeFingerDragEnabled, localDragID == nil else {
+                    return
+                }
+                localDragID = model.beginLocalPointerDrag()
             },
             onDragEnd: { releaseLocalDrag() },
             onShortcut: { action in
@@ -305,9 +310,9 @@ private extension RemoteView {
         textToSend = ""
     }
     private func releaseLocalDrag() {
-        guard localDragActive else { return }
-        localDragActive = false
-        if model.isConnected { model.send(RemoteCommand(name: .pointerButtonUp, button: .left)) }
+        guard let dragID = localDragID else { return }
+        localDragID = nil
+        model.endLocalPointerDrag(dragID)
     }
     func keyButton(_ title: String, symbol: String, key: RemoteKey, compact: Bool = false)
         -> some View
