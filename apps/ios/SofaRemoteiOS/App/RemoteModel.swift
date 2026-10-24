@@ -61,7 +61,7 @@ final class RemoteModel {
     var benchmarkTargetID: String?
     var connectionID: String?
     var sequence: UInt64 = 0
-    var pending: [String: (sequence: UInt64, sent: ContinuousClock.Instant)] = [:]
+    var pending: [String: (metadata: PendingCommandMetadata, sent: ContinuousClock.Instant)] = [:]
     private var commandScheduler = InputCommandScheduler(capacity: 8)
     private var deadline: Timer?
     private var coalescingTimer: Timer?
@@ -371,7 +371,12 @@ extension RemoteModel {
         for command in commandScheduler.dequeue(maximumCount: available) {
             sequence += 1
             let requestID = UUID().uuidString
-            pending[requestID] = (sequence, ContinuousClock.now)
+            pending[requestID] = (
+                metadata: PendingCommandMetadata(
+                    connectionID: connectionID, requestID: requestID,
+                    sequence: sequence, command: command),
+                sent: ContinuousClock.now
+            )
             peer.send(
                 WireMessage(
                     type: .command, connectionID: connectionID, requestID: requestID,

@@ -38,10 +38,16 @@ superseded_by:
   false right-click, while centroid movement can still start scrolling. Held
   right-button movement emits a native right drag. If queue saturation rejects
   a required button release, iOS closes the session so Mac cleanup releases it.
+- Tap history survives staggered finger lifts; a replacement finger after
+  lifting begins cancels the sequence. Taps must finish within 0.5 seconds,
+  while holding and later moving can still start scrolling or dragging.
+- A matching failed button-release result also closes the session immediately.
+  Pointer ownership covers pointer actions, while system keyboard shortcuts
+  remain available to another authenticated remote.
 - Four-finger actions emit public macOS keyboard shortcuts. The matching system
   shortcuts must be enabled on the Mac; custom mappings can change the action.
   No private macOS API or arbitrary keyboard code is sent over the wire.
-- Local validation passes strict Swift format/SwiftLint, 89 AppleCore/MacSupport
+- Local validation passes strict Swift format/SwiftLint, 97 AppleCore/MacSupport
   tests, and macOS plus generic iOS Simulator app builds. The extracted volume
   card is included in the app target's explicit source list. The UI assertions
   and per-device execution evidence are tracked in the corresponding PR;

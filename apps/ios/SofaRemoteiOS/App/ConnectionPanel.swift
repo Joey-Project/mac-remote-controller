@@ -163,11 +163,22 @@ extension RemoteModel {
     }
 
     private func acceptResult(_ message: WireMessage) {
-        guard message.connectionID == connectionID, let id = message.requestID,
-            let request = pending[id], request.sequence == message.sequence
+        guard let id = message.requestID, let request = pending[id],
+            request.metadata.matchesResult(message)
         else { peer?.close(); return }
+        let mustReleaseSession = request.metadata.requiresSessionTeardown(for: message)
+        let otherPendingControlsMayHaveTakenEffect = pending.count > 1
         pending.removeValue(forKey: id)
         if let error = message.error { errorMessage = error.message }
+        if mustReleaseSession {
+            disconnect()
+            errorMessage =
+                otherPendingControlsMayHaveTakenEffect
+                ? "Disconnected to release the pointer. Other pending controls may have taken effect; "
+                    + "they were not retried."
+                : "The Mac could not release the pointer. Reconnect to continue."
+            return
+        }
         flushQueuedCommands()
     }
 
