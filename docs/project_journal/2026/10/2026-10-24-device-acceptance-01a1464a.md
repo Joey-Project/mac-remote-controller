@@ -138,3 +138,9 @@ superseded_by:
   a 15-second delay, ignored stale/malformed acknowledgements, and continued
   exponential retry for immediate disconnects. The recovery regression failed
   against the old worker before the fix.
+- The bundle phase declares every embedded adapter/helper output so Xcode's
+  incremental code signing follows resource changes. This addresses a detected
+  stale outer resource seal after an extension rebuild; the candidate was not
+  installed while invalid.
+  Apple checks build the Mac app twice with ad hoc signing and verify both outer
+  and nested signatures after each build, requiring no CI account credentials.
