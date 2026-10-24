@@ -12,6 +12,7 @@ struct DesktopInputState {
 @MainActor
 final class DesktopController {
     private let volumeController = SystemVolumeController()
+    private let systemGestures = SystemGestureController()
 
     var state: RemoteState {
         let volume = volumeController.read()
@@ -35,6 +36,10 @@ final class DesktopController {
             return
         }
         guard AXIsProcessTrusted() else { throw ControlError.accessibilityDenied }
+        if command.name == .systemShortcut {
+            try systemGestures.perform(require(command.shortcut))
+            return
+        }
         guard let source = CGEventSource(stateID: .hidSystemState),
             let location = CGEvent(source: nil)?.location
         else { throw ControlError.eventUnavailable }
@@ -45,9 +50,7 @@ final class DesktopController {
                 input: &input)
         case .keyboardText, .keyboardKey:
             try executeKeyboard(command, source: source)
-        case .systemShortcut:
-            try perform(command.shortcut, source: source)
-        case .systemVolumeSet:
+        case .systemShortcut, .systemVolumeSet:
             break
         }
     }
@@ -164,22 +167,9 @@ final class DesktopController {
             mouseButton: button == .left ? .left : .right)
     }
 
-    private func perform(_ shortcut: SystemShortcut?, source: CGEventSource) throws {
-        guard let shortcut else { throw ControlError.invalidCommand }
-        let key: CGKeyCode =
-            switch shortcut {
-            case .missionControl: 126  // Control-Up
-            case .appExpose: 125  // Control-Down
-            case .previousSpace: 123  // Control-Left
-            case .nextSpace: 124  // Control-Right
-            }
-        try emitKeyboardPair(key: key, source: source, flags: .maskControl)
-    }
-
     private func emitKeyboardPair(
         key: CGKeyCode,
         source: CGEventSource,
-        flags: CGEventFlags? = nil,
         text: [UniChar]? = nil
     ) throws {
         guard
@@ -193,7 +183,6 @@ final class DesktopController {
                         event.keyboardSetUnicodeString(
                             stringLength: units.count, unicodeString: &units)
                     }
-                    if let flags { event.flags = flags }
                 },
                 post: { $0.post(tap: .cghidEventTap) })
         else { throw ControlError.eventUnavailable }
