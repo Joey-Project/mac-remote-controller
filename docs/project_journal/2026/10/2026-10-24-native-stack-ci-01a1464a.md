@@ -23,6 +23,14 @@ superseded_by:
   feature-base PRs still needs native stack registration.
 - Stack registration does not merge any PR. Each feature head retains its
   own CI and review requirements.
+- The iPhone/iPad UI-test step has a 40-minute cap inside the Apple job's
+  50-minute cap. UI tests use a bounded 240-second per-test allowance. One PR5
+  result artifact recorded successful actions at 117 seconds, before the prior
+  120-second allowance. This is one timing observation; it does not establish
+  the cause or recurrence of PR9's earlier exit-65 run.
+- On UI-test failure, the script preserves the original `xcodebuild` status and
+  reports up to ten failure summaries as GitHub annotations. Missing or
+  unreadable summaries produce warnings without hiding the test failure.
 - actionlint 1.7.12 does not include the documented `stacked` activity. A
   path-specific filter permits only that exact diagnostic in this verifier;
   other invalid activity names remain errors.
