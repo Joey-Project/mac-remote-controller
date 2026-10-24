@@ -9,6 +9,7 @@
 		100000000000000000000044 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = 100000000000000000000002; remoteInfo = SofaRemoteiOS; };
 /* End PBXContainerItemProxy section */
 /* Begin PBXBuildFile section */
+		A32000000000000000000001 /* TrackpadGestureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A32000000000000000000002 /* TrackpadGestureView.swift */; };
 		100000000000000000000012 /* SofaRemoteiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000010 /* SofaRemoteiOSApp.swift */; };
 		100000000000000000000013 /* AppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000018 /* AppleCore */; };
 		100000000000000000000025 /* RemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000024 /* RemoteView.swift */; };
@@ -27,6 +28,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A32000000000000000000002 /* TrackpadGestureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackpadGestureView.swift; sourceTree = "<group>"; };
 		100000000000000000000010 /* SofaRemoteiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SofaRemoteiOSApp.swift; sourceTree = "<group>"; };
 		100000000000000000000011 /* SofaRemoteiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SofaRemoteiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000024 /* RemoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteView.swift; sourceTree = "<group>"; };
@@ -81,6 +83,7 @@
 				B20000000000000000000002 /* RemoteActionsMenu.swift */,
 				B20000000000000000000004 /* ConnectionBenchmarkSheet.swift */,
 				100000000000000000000033 /* TouchpadView.swift */,
+				A32000000000000000000002 /* TrackpadGestureView.swift */,
 				100000000000000000000035 /* CommittedTextInput.swift */,
 			);
 			path = SofaRemoteiOS/App;
@@ -202,6 +205,7 @@
 				B20000000000000000000001 /* RemoteActionsMenu.swift in Sources */,
 				B20000000000000000000003 /* ConnectionBenchmarkSheet.swift in Sources */,
 				100000000000000000000031 /* TouchpadView.swift in Sources */,
+				A32000000000000000000001 /* TrackpadGestureView.swift in Sources */,
 				100000000000000000000034 /* CommittedTextInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
