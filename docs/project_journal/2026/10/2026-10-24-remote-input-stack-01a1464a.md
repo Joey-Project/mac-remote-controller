@@ -34,8 +34,10 @@ superseded_by:
   high-frequency relative-input work.
 - The input slice coalesces adjacent relative deltas on a 60 Hz common-run-loop timer,
   preserves click/key ordering barriers, and bounds the queue and outstanding results.
-  Overload may replace only trailing motion after the latest barrier. Disconnect clears
-  queued work; accepted discrete actions are never replayed on reconnection.
+  Overload may replace only trailing motion after the latest barrier. A saturated
+  barrier queue silently drops only best-effort pointer motion and scroll; rejected
+  discrete actions remain visible. Disconnect clears queued work; accepted discrete
+  actions are never replayed on reconnection.
 - The companion samples desktop state once per periodic broadcast and immediately after
   a system-volume command, rather than after every pointer event. TCP enables `noDelay`;
   connection and result deadlines use a monotonic clock. These reduce avoidable work but

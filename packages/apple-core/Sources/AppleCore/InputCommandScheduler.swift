@@ -11,6 +11,11 @@ public struct InputCommandScheduler: Sendable {
         self.capacity = capacity
     }
 
+    /// Pointer deltas are best-effort when a discrete barrier fills the bounded queue.
+    public static func isBestEffortPointerDelta(_ command: RemoteCommand) -> Bool {
+        command.name == .pointerMove || command.name == .pointerScroll
+    }
+
     /// Enqueues a validated command. On overflow, only motion after the last
     /// discrete barrier may be discarded; accepted barriers and their preceding
     /// motion remain in order.
@@ -56,7 +61,7 @@ public struct InputCommandScheduler: Sendable {
     }
 
     private func isMotion(_ command: RemoteCommand) -> Bool {
-        command.name == .pointerMove || command.name == .pointerScroll
+        Self.isBestEffortPointerDelta(command)
     }
 
     private func isBarrier(_ command: RemoteCommand) -> Bool {
