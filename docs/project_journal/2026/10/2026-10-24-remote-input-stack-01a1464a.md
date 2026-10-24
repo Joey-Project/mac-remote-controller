@@ -48,11 +48,21 @@ superseded_by:
 - Preserve existing secure Wi-Fi pairing; offer BLE for already-paired devices using
   public Core Bluetooth APIs. Advertisements and peripheral identifiers are discovery
   hints, not proof of peer identity.
+- Pair over the existing Wi-Fi QR flow first. The mobile client stores the issued
+  per-device token in Keychain. BLE uses that token for a mutual HMAC handshake with
+  fresh nonces, derives directional keys, and protects ordered GATT frames with
+  ChaCha20-Poly1305. Advertising identifiers do not authenticate a peer, and the
+  pairing token is not sent as clear BLE data.
 - Transport changes must retire the old session and pending work. Do not silently replay
   clicks, text, relative seeking, or held input across a switch or reconnect.
 - Compare finite groups of authenticated no-op round trips over the selected transport.
   Report sample count, timeouts, median, p95, and clearly defined jitter. Do not subtract
   unsynchronized phone and Mac timestamps or label fixtures as radio measurements.
+- The connection menu offers Wi-Fi/Bluetooth LE switching for an already paired Mac and
+  a connection benchmark sheet. A default run sends three warmups, then three groups of
+  30 sequential no-op probes, with a two-second timeout per measured probe. It reports
+  local-monotonic p50/p95, jitter (p95 minus p50), and loss. No physical BLE measurement
+  has been recorded.
 
 ## Gestures and media
 
@@ -70,6 +80,9 @@ superseded_by:
 - Ordinary repository CI accepts non-default PR bases. The currently published shared
   Codex review gate rejects them and needs upstream stacked-base support and retarget
   handling. A clean remote review cannot substitute for that required check.
+- On 2026-10-24 the `@v2` action ref and released v2.2.10 resolved to the same commit;
+  the current action inputs match this repository's consumer. The non-default-base
+  rejection remains an upstream gate limitation.
 - The user explicitly chose repository-only changes and will coordinate the upstream
   fix. Do not modify, publish, or merge either upstream repository from this workstream.
 - Keep this external dependency visible in PR evidence; do not skip, replace, or forge
@@ -78,6 +91,9 @@ superseded_by:
 ## Evidence and follow-up
 
 - Foundation: PR #2; connected-screen and Simulator coverage: PR #3.
+- The integrated BLE/input local check passed 72 AppleCore tests, Mac and generic iOS
+  Simulator builds, and plist validation. No simulator UI suite, physical BLE radio, or
+  real RTT comparison was run for this validation.
 - Per-slice validation and current external-gate state belong in the corresponding PR.
 - Later product work retains numeric-comparison pairing, Control Centre/widgets, and
   installation-entry exploration from the earlier journals.
