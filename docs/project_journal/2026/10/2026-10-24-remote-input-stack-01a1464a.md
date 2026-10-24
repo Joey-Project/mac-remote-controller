@@ -34,8 +34,10 @@ superseded_by:
   high-frequency relative-input work.
 - The input slice coalesces adjacent relative deltas on a 60 Hz common-run-loop timer,
   preserves click/key ordering barriers, and bounds the queue and outstanding results.
-  Overload may replace only trailing motion after the latest barrier. Disconnect clears
-  queued work; accepted discrete actions are never replayed on reconnection.
+  Overload may replace only trailing motion after the latest barrier. A saturated
+  barrier queue silently drops only best-effort pointer motion and scroll; rejected
+  discrete actions remain visible. Disconnect clears queued work; accepted discrete
+  actions are never replayed on reconnection.
 - The companion samples desktop state once per periodic broadcast and immediately after
   a system-volume command, rather than after every pointer event. TCP enables `noDelay`;
   connection and result deadlines use a monotonic clock. These reduce avoidable work but
@@ -89,9 +91,10 @@ superseded_by:
 ## Evidence and follow-up
 
 - Foundation: PR #2; connected-screen and Simulator coverage: PR #3.
-- The integrated BLE/input local check passed 72 AppleCore tests, Mac and generic iOS
-  Simulator builds, and plist validation. No simulator UI suite, physical BLE radio, or
-  real RTT comparison was run for this validation.
+- The final Gesture+BLE integration check passed 108 AppleCore tests, macOS and generic
+  iOS Simulator app builds, and plist validation. Full Node format, lint, typecheck, test,
+  and build checks also passed, along with actionlint, shell, and journal validation. No
+  Simulator UI suite, physical BLE radio, or real RTT comparison was run for this check.
 - Per-slice validation and current external-gate state belong in the corresponding PR.
 - Later product work retains numeric-comparison pairing, Control Centre/widgets, and
   installation-entry exploration from the earlier journals.

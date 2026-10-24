@@ -121,6 +121,35 @@ final class InputCommandSchedulerTests: XCTestCase {
         }
     }
 
+    func testSaturatedBarrierQueueDropsOnlyBestEffortPointerDeltas() {
+        var scheduler = InputCommandScheduler(capacity: 3)
+        let queued = [
+            RemoteCommand(name: .pointerMove, x: 30, y: 0),
+            RemoteCommand(name: .pointerClick, button: .left),
+            RemoteCommand(name: .keyboardKey, key: .left)
+        ]
+        for command in queued { XCTAssertTrue(scheduler.enqueue(command)) }
+
+        let pointerMove = RemoteCommand(name: .pointerMove, x: 5, y: 0)
+        let pointerScroll = RemoteCommand(name: .pointerScroll, x: 0, y: 4)
+        XCTAssertTrue(InputCommandScheduler.isBestEffortPointerDelta(pointerMove))
+        XCTAssertTrue(InputCommandScheduler.isBestEffortPointerDelta(pointerScroll))
+        XCTAssertFalse(scheduler.enqueue(pointerMove))
+        XCTAssertFalse(scheduler.enqueue(pointerScroll))
+
+        let discreteCommands = [
+            RemoteCommand(name: .pointerClick, button: .right),
+            RemoteCommand(name: .keyboardKey, key: .returnKey),
+            RemoteCommand(name: .keyboardText, text: "submit"),
+            RemoteCommand(name: .systemVolumeSet, value: 0.5)
+        ]
+        for command in discreteCommands {
+            XCTAssertFalse(InputCommandScheduler.isBestEffortPointerDelta(command))
+            XCTAssertFalse(scheduler.enqueue(command))
+        }
+        XCTAssertEqual(scheduler.queuedCommands, queued)
+    }
+
     func testOppositeDeltasCancelAndOverflowSplitsAtWireCoordinateLimit() {
         var scheduler = InputCommandScheduler()
         XCTAssertTrue(scheduler.enqueue(RemoteCommand(name: .pointerMove, x: 500, y: 0)))

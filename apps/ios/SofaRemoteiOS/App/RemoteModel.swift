@@ -341,7 +341,7 @@ extension RemoteModel {
                         + "A pending control may have taken effect; it was not retried."
                     : "Disconnected to release the pointer safely. "
                         + "Reconnect to continue."
-            } else {
+            } else if !InputCommandScheduler.isBestEffortPointerDelta(command) {
                 errorMessage = "The Mac is busy. Wait for the pending controls to finish."
             }
             return false
