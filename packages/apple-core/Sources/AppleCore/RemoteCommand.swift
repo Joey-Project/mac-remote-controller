@@ -1,31 +1,5 @@
 import Foundation
 
-public enum CommandName: String, Codable, Sendable, Equatable {
-    case pointerMove = "pointer.move"
-    case pointerClick = "pointer.click"
-    case pointerScroll = "pointer.scroll"
-    case keyboardText = "keyboard.text"
-    case keyboardKey = "keyboard.key"
-    case systemVolumeSet = "system.volume.set"
-    case mediaControl = "media.control"
-}
-
-public enum RemoteKey: String, Codable, Sendable, Equatable {
-    case returnKey = "return"
-    case escape
-    case backspace
-    case space
-    case left
-    case right
-    case up
-    case down
-}
-
-public enum PointerButton: String, Codable, Sendable, Equatable {
-    case left
-    case right
-}
-
 public struct RemoteCommand: Codable, Sendable, Equatable {
     public var name: CommandName
     public var x: Double?
@@ -34,6 +8,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     public var text: String?
     public var key: RemoteKey?
     public var button: PointerButton?
+    public var shortcut: SystemShortcut?
     public var mediaRequest: MediaRequest?
 
     public init(
@@ -44,6 +19,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         text: String? = nil,
         key: RemoteKey? = nil,
         button: PointerButton? = nil,
+        shortcut: SystemShortcut? = nil,
         mediaRequest: MediaRequest? = nil
     ) {
         self.name = name
@@ -53,72 +29,62 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         self.text = text
         self.key = key
         self.button = button
+        self.shortcut = shortcut
         self.mediaRequest = mediaRequest
     }
 
     public func validate() throws {
         switch name {
-        case .pointerMove:
-            try validatePointer(limit: 500)
-        case .pointerScroll:
-            try validatePointer(limit: 100)
-        case .pointerClick:
-            try validateClick()
-        case .keyboardText, .keyboardKey:
-            try validateKeyboard()
-        case .systemVolumeSet:
-            try validateSystemVolume()
-        case .mediaControl:
-            try validateMediaControl()
-        }
-    }
-
-    private func validatePointer(limit: Double) throws {
-        try requireCoordinates(limit: limit)
-        try requireOnly(["x", "y"])
-    }
-
-    private func validateClick() throws {
-        guard button != nil else {
-            throw WireProtocolError.invalidCommand("pointer.click requires button")
-        }
-        try requireOnly(["button"])
-    }
-
-    private func validateKeyboard() throws {
-        switch name {
+        case .pointerMove, .pointerScroll:
+            try requireCoordinates(limit: name == .pointerMove ? 500 : 100)
+            try requireOnly(["x", "y"])
+        case .pointerClick, .pointerButtonDown, .pointerButtonUp:
+            guard button != nil else {
+                throw WireProtocolError.invalidCommand("\(name.rawValue) requires button")
+            }
+            try requireOnly(["button"])
         case .keyboardText:
             guard let text, !text.isEmpty, text.utf8.count <= WireLimits.maximumTextBytes else {
                 throw WireProtocolError.invalidCommand(
                     "keyboard.text requires 1...4096 UTF-8 bytes")
             }
             try requireOnly(["text"])
+        case .systemShortcut, .keyboardKey:
+            try validateKeyOrShortcut()
+        case .systemVolumeSet:
+            guard let value, value.isFinite, (0...1).contains(value) else {
+                throw WireProtocolError.invalidCommand(
+                    "system.volume.set value must be finite and within 0...1")
+            }
+            try requireOnly(["value"])
+        case .mediaControl:
+            try validateMediaControl()
+        }
+    }
+
+    private func validateKeyOrShortcut() throws {
+        switch name {
+        case .systemShortcut:
+            guard shortcut != nil else {
+                throw WireProtocolError.invalidCommand(
+                    "system.shortcut requires an allowlisted action")
+            }
+            try requireOnly(["shortcut"])
         case .keyboardKey:
             guard key != nil else {
                 throw WireProtocolError.invalidCommand("keyboard.key requires an allowlisted key")
             }
             try requireOnly(["key"])
         default:
-            throw WireProtocolError.invalidCommand("keyboard action is invalid")
+            throw WireProtocolError.invalidCommand("unsupported key action")
         }
-    }
-
-    private func validateSystemVolume() throws {
-        guard let value, value.isFinite, (0...1).contains(value) else {
-            throw WireProtocolError.invalidCommand(
-                "system.volume.set value must be finite and within 0...1")
-        }
-        try requireOnly(["value"])
     }
 
     private func validateMediaControl() throws {
         guard let mediaRequest else {
             throw WireProtocolError.invalidCommand("media.control requires a media request")
         }
-        guard x == nil, y == nil, value == nil, text == nil, key == nil, button == nil else {
-            throw WireProtocolError.invalidCommand(
-                "media.control contains fields from another command")
-        }
+        try requireOnly(["mediaRequest"])
         try mediaRequest.validate()
     }
 
@@ -148,6 +114,9 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         if button != nil, !allowed.contains("button") {
             throw WireProtocolError.invalidCommand("unexpected button for \(name.rawValue)")
         }
+        if shortcut != nil, !allowed.contains("shortcut") {
+            throw WireProtocolError.invalidCommand("unexpected shortcut for \(name.rawValue)")
+        }
         if mediaRequest != nil, !allowed.contains("mediaRequest") {
             throw WireProtocolError.invalidCommand("unexpected media request for \(name.rawValue)")
         }
@@ -155,11 +124,11 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: MediaDynamicCodingKey.self)
-        let nameKey = MediaDynamicCodingKey("name")
-        let name = try container.decode(CommandName.self, forKey: nameKey)
+        let name = try container.decode(
+            CommandName.self, forKey: MediaDynamicCodingKey("name"))
         let keys = Set(container.allKeys.map(\.stringValue))
         let allowed: Set<String> = [
-            "name", "x", "y", "value", "text", "key", "button", "mediaRequest"
+            "name", "x", "y", "value", "text", "key", "button", "shortcut", "mediaRequest"
         ]
         guard keys.isSubset(of: allowed) else {
             throw DecodingError.dataCorrupted(
@@ -181,6 +150,8 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         key = try container.decodeIfPresent(RemoteKey.self, forKey: MediaDynamicCodingKey("key"))
         button = try container.decodeIfPresent(
             PointerButton.self, forKey: MediaDynamicCodingKey("button"))
+        shortcut = try container.decodeIfPresent(
+            SystemShortcut.self, forKey: MediaDynamicCodingKey("shortcut"))
         mediaRequest = try container.decodeIfPresent(
             MediaRequest.self, forKey: MediaDynamicCodingKey("mediaRequest"))
     }

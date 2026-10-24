@@ -1,8 +1,9 @@
 # Remote protocol v1
 
 Status: the Apple foundation implements discovery, pairing, state, pointer,
-keyboard, and system volume. iPhone/iPad is the first mobile target; Android and
-media adapters follow. Physical device validation remains outstanding.
+keyboard, system volume, authenticated Bluetooth LE, and typed media controls.
+iPhone/iPad is the first mobile target; Android remains future work.
+Physical Bluetooth validation remains outstanding.
 
 ## First slice
 
@@ -11,7 +12,7 @@ media adapters follow. Physical device validation remains outstanding.
 3. Read connection, permission, and system-volume state.
 4. Control the desktop pointer and committed text, then system volume.
 
-IINA and Chrome media adapters follow this foundation. Media commands retain an
+IINA and Chrome media adapters use this foundation. Media commands retain an
 explicit selected-source identity independent of desktop focus.
 
 ## Connection and trust
@@ -97,34 +98,92 @@ encoding. The Swift binding and JSON fixture implement these bounds.
 ## Implemented messages
 
 All messages use `protocolVersion: 1` and one of `authenticate`, `welcome`,
-`command`, `result`, or `state`. Maximum encoded size is 64 KiB. A command has
+`command`, `result`, `state`, `ping`, `pong`, or `disconnect`. Maximum encoded
+size is 64 KiB. A command has
 `connectionId`, UUID `requestId`, positive `sequence`, and a `command` object.
 A result echoes those three identities; absent `error` means success. An error
 has `code` and `message`. Malformed or incompatible wire envelopes close the
 connection. A result means the Mac submitted the input to its OS API; it does
 not prove that the foreground app accepted the input or completed an action.
 
-| Command             | Fields         | Bounds                                                                  |
-| ------------------- | -------------- | ----------------------------------------------------------------------- |
-| `pointer.move`      | `x`, `y`       | Relative finite deltas, each within ±500                                |
-| `pointer.click`     | `button`       | `left` or `right`, at the current cursor                                |
-| `pointer.scroll`    | `x`, `y`       | Pixel deltas, each within ±100                                          |
-| `keyboard.text`     | `text`         | 1–4096 UTF-8 bytes of committed text                                    |
-| `keyboard.key`      | `key`          | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
-| `system.volume.set` | `value`        | Finite scalar in 0...1                                                  |
-| `media.control`     | `mediaRequest` | Exact target ID, typed action, and optional finite value; see below     |
+| Command               | Fields         | Bounds                                                                  |
+| --------------------- | -------------- | ----------------------------------------------------------------------- |
+| `pointer.move`        | `x`, `y`       | Relative finite deltas, each within ±500                                |
+| `pointer.click`       | `button`       | `left` or `right`, at the current cursor                                |
+| `pointer.scroll`      | `x`, `y`       | Pixel deltas, each within ±100                                          |
+| `pointer.button.down` | `button`       | Hold `left` or `right`; requires advertised gesture support             |
+| `pointer.button.up`   | `button`       | Release a held button in the same connection                            |
+| `system.shortcut`     | `shortcut`     | `mission-control`, `app-expose`, `previous-space`, or `next-space`      |
+| `keyboard.text`       | `text`         | 1–4096 UTF-8 bytes of committed text                                    |
+| `keyboard.key`        | `key`          | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
+| `system.volume.set`   | `value`        | Finite scalar in 0...1                                                  |
+| `media.control`       | `mediaRequest` | Exact target ID, typed action, and optional finite value; see below     |
 
 State contains `deviceName`, `accessibilityGranted`, optional `systemVolume`, and
 optional `systemVolumeReason`. Absent volume means unavailable, never zero.
 An independently muted output reports effective volume `0`; a nonzero volume
 command also clears mute. Fractional scroll pixels accumulate per connection,
 and their remainder is discarded on disconnect.
-The server sends state at authentication, after a completed command, when media
-targets change, and once per second.
-The client bounds outstanding commands to eight; excess relative input is
-dropped and only the latest unsent absolute volume is retained. It discards all
-pending input on disconnect. Missing command results time out after three
+The server includes an initial snapshot in `welcome`, then sends state once per
+second and immediately after a system-volume command. Pointer and keyboard
+commands receive a correlated `result`; they do not imply a following `state`.
+Clients acknowledge commands using `result` and consume state as independent
+snapshots, without waiting for one snapshot per command.
+The client bounds outstanding commands and its unsent queue to eight each.
+Adjacent relative deltas are combined within the wire bounds. All other input
+commands except coalesced system-volume updates are ordering barriers, including
+button holds, releases, and system shortcuts. Under overload, only trailing
+motion after the latest barrier may be replaced; accepted motion before a
+barrier is retained, and a new discrete action is rejected if the queue is full.
+If a required button release is rejected, the client closes the session so the
+Mac releases held input during session cleanup.
+Adjacent unsent absolute-volume updates retain the latest value. Disconnect
+discards pending and unsent input. Missing command results time out after three
 seconds and close the connection without replaying commands.
+
+### Bluetooth LE transport
+
+Pair the iPhone or iPad with the Mac over the existing Wi-Fi QR flow first.
+Bluetooth LE then uses the paired 32-byte token as a pre-shared key; it never
+sends the token itself. The Mac advertises its existing opaque per-Mac service
+UUID. That UUID only narrows scan results and contains no pairing credential.
+The iOS app is the CoreBluetooth central and the Mac companion is the
+peripheral. Bluetooth permission and an available radio are required on both
+devices.
+
+Every BLE connection runs a one-shot mutual-authentication handshake with fresh
+32-byte client and server nonces. HMAC-SHA-256 proofs bind the service name,
+device name, and nonces. HKDF-SHA-256 derives separate client-to-server and
+server-to-client keys; ChaCha20-Poly1305 protects every wire message with a
+strictly increasing per-direction sequence number as authenticated data.
+Frames use a four-byte big-endian length prefix. Handshake records are limited
+to 512 bytes; encrypted messages are limited to the wire-message bound plus
+framing overhead. Queues are capped at 1 MiB. Authentication expires after 12
+seconds, and incomplete frames expire after three seconds. Invalid, oversized,
+unauthenticated, replayed, or out-of-order frames close the BLE connection.
+
+Changing transport explicitly disconnects the current peer. Select the paired
+Mac again from the setup screen to connect over the selected transport. A failed
+Bluetooth connection is shown as a failure; the app does not silently fall back
+to Wi-Fi or replay a pending control.
+Previously paired Macs that do not advertise the `roundTripProbe.v1`
+capability remain usable for normal controls, but the benchmark stays disabled.
+
+### Connection benchmark
+
+The benchmark sends three warm-up probes followed by 90 sequential no-op
+`ping`/`pong` exchanges in three groups of 30. Probes do not execute pointer,
+keyboard, volume, or playback commands. Each measured exchange has a two-second
+timeout; cancelling keeps a partial report. Successful measured round trips
+produce minimum, p50, p95, maximum, and `p95 - p50` jitter. Timed-out measured
+probes are excluded from latency percentiles and included in the reported loss
+count and rate; warm-ups are excluded from both.
+
+The mobile app measures round-trip duration with its monotonic clock. The Mac
+separately reports how many probes it handled and the elapsed Mac-local time to
+prepare the latest pong. Those Mac-side values are not subtracted from mobile
+RTT because the clocks are independent. Comparison reports are retained per
+Mac so Wi-Fi and Bluetooth results can be viewed after an explicit switch.
 
 ## Media sources and command
 
@@ -155,6 +214,19 @@ page scripts or content scripts. Adapter polling is not an authenticated
 network pairing mechanism.
 
 ## State and media boundaries
+
+The optional `supportsGestures` state flag enables the held-button and fixed
+shortcut commands above. Absence means unsupported; clients must keep these
+controls disabled for legacy companions. Ordinary taps remain atomic clicks.
+The Mac sets native single/double-click state using its configured double-click
+interval, proximity, button, and remote-session identity.
+
+Held pointer ownership is limited to one remote session. Conflicting pointer
+commands from another session fail explicitly. A client must release held input
+when a gesture is cancelled or its surface is removed; the server also releases
+on disconnect, revocation, or eight seconds without valid client activity.
+Four-finger actions invoke fixed public macOS shortcuts, so local shortcut
+configuration controls their availability and meaning.
 
 - Desktop input targets the current desktop. It does not change the selected
   media source. Keyboard text contains committed Unicode input, not intermediate
@@ -197,5 +269,6 @@ Refresh state where useful and let the user repeat an intentional action.
 
 The foundation tests cover valid round trips, malformed/unknown messages, version
 rejection, duplicate and stale sequences, Unicode text, bounds, and invitation
-expiry. Player gain above 100% and loss of a selected source will be tested with
-the media adapters; the current bindings expose system volume only.
+expiry. Media-adapter fixtures cover player gain above 100%, explicit source
+routing, and source lease expiry. Live-player behavior and physical-device
+acceptance remain separate from these package and fixture tests.

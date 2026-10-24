@@ -3,6 +3,9 @@
 Open `SofaRemoteMac.xcodeproj` in Xcode and run `SofaRemoteMac` on macOS 14 or
 newer. Sofa Remote appears in the menu bar. Allow Local Network access so the
 companion can advertise its Bonjour service and accept connections.
+Allow Bluetooth access when macOS requests it. The companion advertises a
+per-Mac Bluetooth LE service UUID only as a scan hint; it accepts a control
+session only after the paired-device handshake authenticates the iPhone or iPad.
 
 Choose **Pair iPhone or iPad**, then scan the invitation in the mobile app. The
 invitation expires after two minutes and can be redeemed only once. Closing
@@ -34,6 +37,8 @@ Discovery names contain only an opaque service UUID, never a pairing secret.
 Only authenticated sessions can execute the typed input/volume allowlist. No
 arbitrary shell commands or scripts are exposed. See the
 [wire contract](../../packages/protocol/v1-design.md).
+The companion samples desktop state once per second and shares that snapshot
+with connected clients; a volume change triggers an immediate refreshed state.
 
 Enable **local media adapters** in the companion to expose the authenticated
 media-only bridge on `127.0.0.1:47623`. The companion creates a separate random
@@ -49,3 +54,6 @@ Media source selection is explicit and independent of the frontmost desktop
 application. Chrome tabs and each IINA player window report their own exact
 target IDs. Unavailable capabilities fail visibly, and commands are not replayed
 after the phone connection closes.
+
+For the authenticated Bluetooth protocol and connection benchmark limits, see
+the [wire contract](../../packages/protocol/v1-design.md#bluetooth-le-transport).

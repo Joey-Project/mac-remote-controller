@@ -35,6 +35,41 @@ final class MediaProtocolTests: XCTestCase {
         XCTAssertEqual(state.mediaTargets?.first?.capabilities.playerVolumeMaximum, 1.5)
     }
 
+    func testGestureAndMediaStateCapabilitiesRoundTripTogether() throws {
+        let target = MediaTarget(
+            id: "iina:window-7", name: "IINA · Episode 4", kind: .iina,
+            capabilities: MediaCapabilities(
+                playPause: true, seek: true, next: true, previous: false,
+                playerVolumeMaximum: 1.5))
+        let state = RemoteState(
+            accessibilityGranted: true, systemVolume: 0.5, deviceName: "Mac",
+            supportsGestures: true, capabilities: [WireCapabilities.roundTripProbe],
+            mediaTargets: [target])
+
+        let decoded = try JSONDecoder().decode(
+            RemoteState.self, from: JSONEncoder().encode(state))
+
+        XCTAssertEqual(decoded, state)
+        try decoded.validate()
+    }
+
+    func testMediaAndGestureCommandsDecodeTogetherAndRejectUnknownFields() throws {
+        let gesture = RemoteCommand(
+            name: .systemShortcut, shortcut: .missionControl)
+        let gestureJSON = try JSONEncoder().encode(gesture)
+        XCTAssertEqual(try JSONDecoder().decode(RemoteCommand.self, from: gestureJSON), gesture)
+
+        let media = RemoteCommand(
+            name: .mediaControl,
+            mediaRequest: MediaRequest(targetID: "iina:window-7", action: .playPause))
+        let mediaJSON = try JSONEncoder().encode(media)
+        XCTAssertEqual(try JSONDecoder().decode(RemoteCommand.self, from: mediaJSON), media)
+
+        let extraGestureField = Data(
+            #"{"name":"system.shortcut","shortcut":"mission-control","script":"bad"}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(RemoteCommand.self, from: extraGestureField))
+    }
+
     func testSharedMediaCommandFixtureDecodesAndRoundTrips() throws {
         let url = try XCTUnwrap(
             Bundle.module.url(

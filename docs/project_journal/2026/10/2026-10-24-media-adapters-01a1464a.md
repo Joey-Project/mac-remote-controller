@@ -28,10 +28,10 @@ superseded_by:
   target for each player window. Playback, seek, playlist navigation, and
   player volume are routed to the selected target, independently of frontmost
   application focus. Unsupported controls fail visibly.
-- Local Swift checks passed 65 AppleCore tests, the Mac app build, and the
+- Local Swift checks passed 109 AppleCore/MacSupport tests, the Mac app build, and the
   generic iOS Simulator build; the native messaging host product also builds.
   Pinned pnpm format, lint, strict typecheck, tests, and builds passed. Chrome
-  tests passed 7/7 and IINA mock tests passed 2/2.
+  tests passed 8/8 and IINA mock tests passed 2/2.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,
   native messaging registration, IINA plugin, live media site, or device was
   installed or tested; no audio was played. User setup and playback acceptance

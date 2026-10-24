@@ -98,6 +98,32 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertThrowsError(try RemoteCommand(name: .systemVolumeSet, value: .infinity).validate())
     }
 
+    func testGestureCommandsAreAllowlistedAndRejectExtraFields() throws {
+        try RemoteCommand(name: .pointerButtonDown, button: .left).validate()
+        try RemoteCommand(name: .pointerButtonUp, button: .left).validate()
+        try RemoteCommand(name: .systemShortcut, shortcut: .missionControl).validate()
+        XCTAssertThrowsError(try RemoteCommand(name: .pointerButtonDown).validate())
+        XCTAssertThrowsError(try RemoteCommand(name: .systemShortcut).validate())
+        XCTAssertThrowsError(try RemoteCommand(name: .systemShortcut, key: .up).validate())
+        XCTAssertThrowsError(
+            try RemoteCommand(name: .pointerButtonDown, text: "bad", button: .left).validate())
+    }
+
+    func testGestureCapabilityIsBackwardCompatibleWhenAbsent() throws {
+        let legacyJSON = #"{"accessibilityGranted":true,"deviceName":"Mac"}"#
+        let state = try JSONDecoder().decode(RemoteState.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(state.supportsGestures)
+        let capable = RemoteState(
+            accessibilityGranted: true, systemVolume: nil,
+            deviceName: "Mac", supportsGestures: true,
+            capabilities: [WireCapabilities.roundTripProbe])
+        let decoded = try JSONDecoder().decode(
+            RemoteState.self,
+            from: JSONEncoder().encode(capable))
+        XCTAssertTrue(decoded.supportsGestures == true)
+        XCTAssertEqual(decoded.capabilities, [WireCapabilities.roundTripProbe])
+    }
+
     func testSessionRejectsWrongConnectionAndReplayButAllowsGaps() throws {
         var session = ServerSession(connectionID: "connection-a")
         let command = RemoteCommand(name: .pointerClick, button: .left)

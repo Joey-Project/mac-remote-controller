@@ -25,6 +25,17 @@ private struct CompanionView: View {
                 Label(
                     "\(model.connectedCount) connected",
                     systemImage: "iphone.radiowaves.left.and.right")
+                Label(model.bleStatus, systemImage: "antenna.radiowaves.left.and.right")
+                if model.probeCount > 0, let processing = model.lastProbeProcessingMilliseconds {
+                    let processingText = processing.formatted(
+                        .number.precision(.fractionLength(3)))
+                    let summary = [
+                        "\(model.probeCount) mobile probes",
+                        "Mac response preparation \(processingText) ms"
+                    ].joined(separator: " · ")
+                    Text(summary)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if !model.remoteState.accessibilityGranted {
                     Text("Allow Accessibility to control the pointer and keyboard.")
                     Button("Allow Accessibility…") { model.desktop.requestAccessibility() }
@@ -58,7 +69,7 @@ private struct CompanionView: View {
                 } else {
                     Button("Pair iPhone or iPad") { model.openPairing() }
                     Text(
-                        "Both devices must be on the same local network. Pairing stays open for two minutes."
+                        "Pair over Wi-Fi first. Paired devices can then connect over Bluetooth LE."
                     )
                     .font(.caption).foregroundStyle(.secondary)
                 }
