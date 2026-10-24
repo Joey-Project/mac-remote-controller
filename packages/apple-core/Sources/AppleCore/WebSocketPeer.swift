@@ -4,7 +4,7 @@ import Security
 
 /// All transport callbacks and command execution share the main actor's ordering.
 @MainActor
-public final class WebSocketPeer {
+public final class WebSocketPeer: RemotePeer {
     public var onReady: (() -> Void)?
     public var onMessage: ((WireMessage) -> Void)?
     public var onClose: ((String) -> Void)?
@@ -40,7 +40,9 @@ public final class WebSocketPeer {
                     if !matches { MainActor.assumeIsolated { onTrustFailure?() } }
                 }, .main)
         }
-        let parameters = NWParameters(tls: tls, tcp: NWProtocolTCP.Options())
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        let parameters = NWParameters(tls: tls, tcp: tcp)
         let webSocket = NWProtocolWebSocket.Options()
         webSocket.autoReplyPing = true
         webSocket.maximumMessageSize = 65_536

@@ -34,14 +34,23 @@ superseded_by:
   off.
 - The Mac marks nearby same-button taps within the system double-click interval
   as native double-click events, tracked independently per remote session.
+- Per-finger tap slop prevents opposing two-finger movement from becoming a
+  false right-click, while centroid movement can still start scrolling. Held
+  right-button movement emits a native right drag. If queue saturation rejects
+  a required button release, iOS closes the session so Mac cleanup releases it.
 - Four-finger actions emit public macOS keyboard shortcuts. The matching system
   shortcuts must be enabled on the Mac; custom mappings can change the action.
   No private macOS API or arbitrary keyboard code is sent over the wire.
-- Local validation passes strict Swift format/SwiftLint, 66 AppleCore/MacSupport
+- Local validation passes strict Swift format/SwiftLint, 89 AppleCore/MacSupport
   tests, and macOS plus generic iOS Simulator app builds. The extracted volume
   card is included in the app target's explicit source list. The UI assertions
   and per-device execution evidence are tracked in the corresponding PR;
   no physical-device acceptance is claimed here.
+
+- The Simulator suite has nine scenarios on iPhone and iPad. The UI step has a
+  40-minute limit and the Apple job a 50-minute limit: a six-scenario CI run took
+  about 23 minutes, so the added capability and gesture cases need headroom.
+  These limits do not assert that a particular run passed.
 
 ## Remaining Acceptance
 

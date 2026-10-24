@@ -7,16 +7,18 @@ public struct RemoteState: Codable, Sendable, Equatable {
     public var systemVolume: Double?
     public var systemVolumeReason: String?
     public var deviceName: String
+    public var capabilities: [String]?
 
     public init(
         accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
-        deviceName: String, supportsGestures: Bool? = nil
+        deviceName: String, supportsGestures: Bool? = nil, capabilities: [String]? = nil
     ) {
         self.accessibilityGranted = accessibilityGranted
         self.supportsGestures = supportsGestures
         self.systemVolume = systemVolume
         self.systemVolumeReason = systemVolumeReason
         self.deviceName = deviceName
+        self.capabilities = capabilities
     }
 
     public func validate() throws {
@@ -25,6 +27,12 @@ public struct RemoteState: Codable, Sendable, Equatable {
         }
         guard !deviceName.isEmpty, deviceName.utf8.count <= WireLimits.maximumDeviceNameBytes else {
             throw WireProtocolError.invalidEnvelope("deviceName is empty or too long")
+        }
+        if let capabilities,
+            capabilities.count > 16
+                || capabilities.contains(where: { $0.isEmpty || $0.utf8.count > 64 })
+        {
+            throw WireProtocolError.invalidEnvelope("capabilities are empty or too large")
         }
     }
 }

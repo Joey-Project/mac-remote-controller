@@ -115,12 +115,13 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertNil(state.supportsGestures)
         let capable = RemoteState(
             accessibilityGranted: true, systemVolume: nil,
-            deviceName: "Mac", supportsGestures: true)
-        XCTAssertEqual(
-            try JSONDecoder().decode(
-                RemoteState.self,
-                from: JSONEncoder().encode(capable)
-            ).supportsGestures, true)
+            deviceName: "Mac", supportsGestures: true,
+            capabilities: [WireCapabilities.roundTripProbe])
+        let decoded = try JSONDecoder().decode(
+            RemoteState.self,
+            from: JSONEncoder().encode(capable))
+        XCTAssertTrue(decoded.supportsGestures == true)
+        XCTAssertEqual(decoded.capabilities, [WireCapabilities.roundTripProbe])
     }
 
     func testSessionRejectsWrongConnectionAndReplayButAllowsGaps() throws {

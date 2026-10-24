@@ -189,6 +189,24 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
+    func testBenchmarkRequiresMacProbeCapability() throws {
+        launchApp()
+        defer { terminateApp() }
+
+        element("remote.menu").tap()
+        element("remote.benchmark").tap()
+
+        let runButton = app.buttons["Run benchmark"]
+        XCTAssertTrue(runButton.waitForExistence(timeout: 3))
+        XCTAssertFalse(runButton.isEnabled)
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "does not advertise round-trip probe")
+            ).firstMatch.exists)
+        XCTAssertEqual(try commands().count, 0)
+    }
+
+    @MainActor
     func testLandscapeControlsRemainVisibleAndInsideTheScreen() throws {
         guard UIDevice.current.userInterfaceIdiom == .pad else {
             throw XCTSkip("The app supports landscape orientation on iPad only.")

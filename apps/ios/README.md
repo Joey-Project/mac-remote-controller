@@ -15,6 +15,15 @@ checks the saved certificate pin before sending its credential. A replacement
 Mac identity requires a new, explicit QR pairing. Remove a device from the Mac
 companion to revoke it. Pairing credentials stay in each platform's Keychain.
 
+Bluetooth LE is available after the same Wi-Fi QR pairing. From the connected
+screen's menu, choose **Switch to Bluetooth LE** to reconnect using the paired
+credential. Enable Bluetooth and allow Bluetooth access in iOS Settings. The
+advertised service UUID is only a discovery hint; the app authenticates the Mac
+before sending control messages. Switching transports disconnects the current
+peer; select the paired Mac again from the setup screen to reconnect. Failures
+stay visible, pending controls are never replayed, and Wi-Fi is not used as a
+silent fallback.
+
 The connected screen defaults to a touchpad that fills the available area,
 without an enclosing page scroll view. Drag one finger to move the desktop
 pointer, tap to left-click, double-tap to send a native Mac double-click, tap
@@ -40,6 +49,12 @@ volume toggle and disconnect action. The keyboard includes the arrow keys,
 Return, Escape, Delete, and Space. Compose text locally, then tap Send to submit
 committed Unicode text; intermediate input-method composition is not streamed.
 
+Pointer and scroll updates are combined for up to one display interval before
+they are sent. Adjacent deltas retain their sum; clicks and keyboard commands
+remain in order. If the bounded queue overloads, movement after the latest
+click or keyboard command may be cleared and replaced with the newest movement.
+Movement that positions an accepted click stays ahead of that click.
+
 The volume control uses a fixed position at the top of the screen. It starts
 hidden in touchpad mode; use the top menu to change the touchpad's volume-pin
 preference, which persists across mode changes. Keyboard mode always shows the
@@ -54,6 +69,22 @@ loss; their outcome may be unknown. No screen preview is transmitted.
 
 Only system volume is available in this slice. Media-source selection, player
 volume, playback controls, and Finder shortcuts follow with the media adapters.
+
+## Connection benchmark
+
+After connecting to a Mac that advertises `roundTripProbe.v1`, choose
+**Connection benchmark** from the remote menu. It runs three warm-up probes and
+then 90 sequential no-op probes in three groups of 30. Each measured exchange
+times out after two seconds; cancellation preserves a partial report. Results
+show minimum, p50, p95, maximum, jitter (`p95 - p50`), and timeout loss. The
+benchmark does not issue desktop or playback controls. Older Mac companions
+without the capability keep normal controls available and show the benchmark as
+unsupported.
+
+Round-trip time is measured on the iPhone or iPad's monotonic clock. The Mac
+shows its own pong-preparation count and latest local processing duration; it
+does not subtract the Mac clock from the mobile clock. The simulator UI fixture
+does not exercise Bluetooth radio, pairing credentials, or real audio.
 
 ## Simulator UI Tests
 
