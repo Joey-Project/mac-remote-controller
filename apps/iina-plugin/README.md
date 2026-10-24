@@ -1,10 +1,19 @@
 # IINA plugin
 
 `pnpm --filter @mac-remote-controller/iina-plugin build` creates
-`apps/iina-plugin/dist/SofaRemote.iinaplugin`. In IINA, install that package
-using **Settings → Plugins → Install from file**, then enable the companion's
-local media bridge and copy its token into the plugin's preferences. The plugin
-uses HTTP polling against `127.0.0.1:47623`; it does not open a listener.
+`apps/iina-plugin/dist/SofaRemote.iinaplugin`. Package that directory with IINA's
+CLI, running from the output directory:
+
+```sh
+cd apps/iina-plugin/dist
+/Applications/IINA.app/Contents/MacOS/iina-plugin pack SofaRemote.iinaplugin
+```
+
+Open the generated `SofaRemote.iinaplugin-0.1.0.iinaplgz` with IINA to install it,
+then enable the companion's local media bridge and copy its token into the
+plugin's preferences. Keep **Bridge port** at `47623` unless the companion shows
+a different port. The plugin uses HTTP polling against `127.0.0.1:47623`; it does
+not open a listener.
 
 Each IINA player window creates and reports its own routing ID. The ID
 distinguishes windows but is not an authentication secret; the companion-issued

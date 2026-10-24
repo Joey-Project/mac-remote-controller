@@ -17,6 +17,10 @@ Pointer and keyboard control require permission in **System Settings → Privacy
 & Security → Accessibility**. Use the companion's **Allow Accessibility…** button
 to request it. Permission is checked again for each input operation. Keep the
 app's signing identity stable between builds to avoid repeated permission prompts.
+For local device testing, install and launch the companion at
+`$HOME/Applications/SofaRemoteMac.app`. Update that bundle in place rather than
+launching copies from DerivedData or temporary build directories. Keep the same
+development signing identity as well as the installation path between updates.
 
 System volume targets the current default audio output. Fixed-volume outputs
 such as some HDMI or digital devices report that volume control is unavailable.
