@@ -64,12 +64,29 @@ superseded_by:
   remaining finger continues to be tracked for tap slop without starting a
   one-finger gesture. Taps must finish within 0.5 seconds, while holding and
   later moving can still start scrolling or dragging.
-- Pointer ownership covers pointer actions, while system keyboard shortcuts
+- Pointer ownership covers pointer actions, while fixed system gestures
   remain available to another authenticated remote.
-- Four-finger actions emit public macOS keyboard shortcuts. The matching system
-  shortcuts must be enabled on the Mac; custom mappings can change the action.
-  No private macOS API or arbitrary keyboard code is sent over the wire.
-- Local validation passes strict Swift format/SwiftLint, 123 AppleCore/MacSupport
+- Four-finger actions no longer synthesize Control-arrow shortcuts. Mission
+  Control and App Exposé send the same native Dock notifications used by the
+  system launcher. Previous/next Space posts a balanced begin/change/end Dock
+  swipe with no keyboard events or modifier flags. The wire action allowlist
+  remains unchanged for compatibility; arbitrary events cannot be requested.
+- The undocumented Dock/HID ABI is isolated and dynamically resolved from fixed
+  system library paths. Missing interfaces report a failure without a keyboard
+  fallback. macOS 27 uses an attached HID payload; older macOS uses Dock gesture
+  fields. All frames are prepared before any post, including the terminal frame,
+  so allocation or payload failure cannot leave a partial gesture. No virtual
+  HID device, driver, memory-offset access, or additional entitlement is used.
+- Protocol details are cross-checked against Apple's `HIDEvent.m` wrapper and
+  the native Dock event consumers in Hammerspoon, yabai, and Spaces Manager.
+  Sources: [Apple HID wrapper](https://github.com/apple-oss-distributions/IOHIDFamily/blob/main/HID/HIDEvent.m),
+  [Dock notification ABI](https://github.com/asmvik/yabai/blob/master/src/misc/extern.h),
+  and [Dock swipe consumer](https://github.com/michaeltorbert/spaces-manager/blob/main/Sources/SpaceSwitcher.swift).
+  Package tests inspect real HID payloads without posting them and cover native
+  notification routing, both swipe directions, balanced phases, modifier-free
+  events, and failure before emission. Live desktop action acceptance remains
+  separate from these non-interactive checks.
+- Local validation passes strict Swift format/SwiftLint, 134 AppleCore/MacSupport
   tests, and macOS plus generic iOS Simulator app builds. The extracted volume
   card is included in the app target's explicit source list. The UI assertions
   and per-device execution evidence are tracked in the corresponding PR; no
@@ -85,6 +102,6 @@ superseded_by:
 
 ## Remaining Acceptance
 
-- Verify touch feel, pressure support, haptics, and standard shortcut mappings
+- Verify touch feel, pressure support, haptics, and native desktop actions
   on supported physical devices. Keep this separate from package tests and
   Simulator UI coverage.
