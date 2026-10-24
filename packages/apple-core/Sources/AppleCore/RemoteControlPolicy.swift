@@ -38,6 +38,49 @@ public enum PointerOwnershipPolicy {
     }
 }
 
+/// Allows drag movement only after the matching button-down result succeeds.
+public struct PointerDragStartGate: Sendable, Equatable {
+    private enum StartState: Sendable, Equatable {
+        case pending
+        case accepted
+    }
+
+    private var starts: [String: StartState] = [:]
+
+    public init() {}
+
+    @discardableResult
+    public mutating func begin(gestureID: String) -> Bool {
+        guard !gestureID.isEmpty, starts[gestureID] == nil else { return false }
+        starts[gestureID] = .pending
+        return true
+    }
+
+    @discardableResult
+    public mutating func acceptStart(gestureID: String) -> Bool {
+        guard starts[gestureID] == .pending else { return false }
+        starts[gestureID] = .accepted
+        return true
+    }
+
+    @discardableResult
+    public mutating func rejectStart(gestureID: String) -> Bool {
+        guard starts[gestureID] == .pending else { return false }
+        starts.removeValue(forKey: gestureID)
+        return true
+    }
+
+    public mutating func finish(gestureID: String) {
+        starts.removeValue(forKey: gestureID)
+    }
+
+    public mutating func reset() { starts.removeAll(keepingCapacity: true) }
+
+    public func permitsMovement(gestureID: String) -> Bool {
+        starts[gestureID] == .accepted
+    }
+}
+
 /// Correlates a local drag's button-down and button-up replies so a rejected
 /// start does not turn its paired release error into a false safety failure.
 public struct PointerDragResultPolicy: Sendable {
