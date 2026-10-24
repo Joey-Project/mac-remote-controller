@@ -14,7 +14,7 @@ struct PairedDevice: Codable, Identifiable {
 private final class ClientConnection {
     let peer: WebSocketPeer
     var session: ServerSession?
-    var scrollAccumulator = PixelScrollAccumulator()
+    var inputState = DesktopInputState()
     var deviceID: String?
     let connectedAt = Date()
     var rateWindow = Date()
@@ -39,6 +39,7 @@ final class CompanionModel {
     private var listenerReady = false
     private var identity: LocalIdentity?
     private var clients: [UUID: ClientConnection] = [:]
+    private var heldPointerOwner: UUID?
     private var admission = ConnectionAdmission<UUID>()
     private var pairing: PairingInvitation?
     private var timer: Timer?
@@ -155,11 +156,7 @@ final class CompanionModel {
         do {
             let accepted = try session.accept(message)
             client.session = session
-            var failure: RemoteError?
-            do { try desktop.execute(accepted.command, scroll: &client.scrollAccumulator) } catch {
-                failure = RemoteError(
-                    code: "control_unavailable", message: error.localizedDescription)
-            }
+            let failure = execute(accepted.command, for: client, id: id)
             client.peer.send(session.makeResult(for: accepted, error: failure))
             sendState(to: client)
         } catch {
@@ -240,6 +237,13 @@ final class CompanionModel {
         }
         for client in expired { client.peer.close() }
         for client in clients.values where client.session != nil { sendState(to: client) }
+        for (id, client) in clients {
+            let expiredButtons = client.inputState.heldInput.expire(ifOlderThan: 8)
+            if !expiredButtons.isEmpty {
+                desktop.release(expiredButtons)
+                if heldPointerOwner == id { heldPointerOwner = nil }
+            }
+        }
     }
 
     private func refreshConnectedCount() {
@@ -248,8 +252,43 @@ final class CompanionModel {
 
     private func removeClient(_ id: UUID, closePeer: Bool = false) {
         guard let client = clients.removeValue(forKey: id) else { return }
+        if heldPointerOwner == id { heldPointerOwner = nil }
+        desktop.release(&client.inputState.heldInput)
         _ = admission.remove(id)
         refreshConnectedCount()
         if closePeer { client.peer.close() }
+    }
+
+    private func execute(_ command: RemoteCommand, for client: ClientConnection, id: UUID)
+        -> RemoteError?
+    {
+        if command.targetsPointer, let owner = heldPointerOwner, owner != id {
+            return RemoteError(
+                code: "pointer_busy", message: "Another remote session is holding the pointer.")
+        }
+        do {
+            try desktop.execute(command, input: &client.inputState)
+            client.inputState.heldInput.refresh()
+            if command.name == .pointerButtonDown, !client.inputState.heldInput.buttons.isEmpty {
+                heldPointerOwner = id
+            }
+            if command.name == .pointerButtonUp, client.inputState.heldInput.buttons.isEmpty {
+                heldPointerOwner = nil
+            }
+            return nil
+        } catch {
+            return RemoteError(code: "control_unavailable", message: error.localizedDescription)
+        }
+    }
+}
+
+private extension RemoteCommand {
+    var targetsPointer: Bool {
+        switch name {
+        case .pointerMove, .pointerClick, .pointerScroll, .pointerButtonDown,
+            .pointerButtonUp, .systemShortcut:
+            true
+        case .keyboardText, .keyboardKey, .systemVolumeSet: false
+        }
     }
 }

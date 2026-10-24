@@ -17,12 +17,28 @@ companion to revoke it. Pairing credentials stay in each platform's Keychain.
 
 The connected screen defaults to a touchpad that fills the available area,
 without an enclosing page scroll view. Drag one finger to move the desktop
-pointer, tap to left-click, tap with two fingers to right-click, and scroll with
-two fingers. The top menu switches between touchpad and keyboard modes and
-includes the volume toggle and disconnect action. The keyboard includes the
-arrow keys, Return, Escape, Delete, and Space. Compose text locally, then tap
-Send to submit committed Unicode text; intermediate input-method composition
-is not streamed.
+pointer, tap to left-click, double-tap to send a native Mac double-click, tap
+with two fingers to right-click, and scroll with two fingers. On a companion
+that advertises gesture support, three fingers
+drag while holding the Mac's left mouse button, and four-finger swipes request
+Mission Control (up), App Exposé (down), or the previous/next Space (left/right).
+These use public macOS keyboard shortcuts. The matching shortcuts must be enabled
+in System Settings > Keyboard > Keyboard Shortcuts > Mission Control on the Mac;
+custom shortcut assignments can change the result. No private macOS APIs are used.
+
+The remote menu lets you turn three-finger drag, four-finger shortcuts, pressure
+click, and optional haptic feedback on or off. Pressure click works only where
+iOS reports force-capable touch input; ordinary tap remains available on every
+device. Haptics default off. Gesture controls stay disabled when paired to an
+older companion that does not advertise support. If a touch sequence changes
+finger count or is cancelled, it cannot turn into a click; an active drag sends
+button-up on cancellation and is also released by the Mac after disconnect or an
+eight-second lost-release timeout.
+
+The top menu switches between touchpad and keyboard modes and includes the
+volume toggle and disconnect action. The keyboard includes the arrow keys,
+Return, Escape, Delete, and Space. Compose text locally, then tap Send to submit
+committed Unicode text; intermediate input-method composition is not streamed.
 
 The volume control uses a fixed position at the top of the screen. It starts
 hidden in touchpad mode; use the top menu to change the touchpad's volume-pin

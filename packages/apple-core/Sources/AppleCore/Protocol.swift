@@ -12,6 +12,9 @@ public enum CommandName: String, Codable, Sendable, Equatable {
     case pointerMove = "pointer.move"
     case pointerClick = "pointer.click"
     case pointerScroll = "pointer.scroll"
+    case pointerButtonDown = "pointer.button.down"
+    case pointerButtonUp = "pointer.button.up"
+    case systemShortcut = "system.shortcut"
     case keyboardText = "keyboard.text"
     case keyboardKey = "keyboard.key"
     case systemVolumeSet = "system.volume.set"
@@ -33,6 +36,14 @@ public enum PointerButton: String, Codable, Sendable, Equatable {
     case right
 }
 
+/// Fixed public macOS shortcuts; arbitrary key codes and shell actions are never accepted.
+public enum SystemShortcut: String, Codable, Sendable, Equatable {
+    case missionControl = "mission-control"
+    case appExpose = "app-expose"
+    case previousSpace = "previous-space"
+    case nextSpace = "next-space"
+}
+
 public struct RemoteCommand: Codable, Sendable, Equatable {
     public var name: CommandName
     public var x: Double?
@@ -41,6 +52,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     public var text: String?
     public var key: RemoteKey?
     public var button: PointerButton?
+    public var shortcut: SystemShortcut?
 
     public init(
         name: CommandName,
@@ -49,7 +61,8 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         value: Double? = nil,
         text: String? = nil,
         key: RemoteKey? = nil,
-        button: PointerButton? = nil
+        button: PointerButton? = nil,
+        shortcut: SystemShortcut? = nil
     ) {
         self.name = name
         self.x = x
@@ -58,38 +71,51 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         self.text = text
         self.key = key
         self.button = button
+        self.shortcut = shortcut
     }
 
     public func validate() throws {
         switch name {
-        case .pointerMove:
-            try requireCoordinates(limit: 500)
+        case .pointerMove, .pointerScroll:
+            try requireCoordinates(limit: name == .pointerMove ? 500 : 100)
             try requireOnly(["x", "y"])
-        case .pointerClick:
+        case .pointerClick, .pointerButtonDown, .pointerButtonUp:
             guard button != nil else {
-                throw WireProtocolError.invalidCommand("pointer.click requires button")
+                throw WireProtocolError.invalidCommand("\(name.rawValue) requires button")
             }
             try requireOnly(["button"])
-        case .pointerScroll:
-            try requireCoordinates(limit: 100)
-            try requireOnly(["x", "y"])
         case .keyboardText:
             guard let text, !text.isEmpty, text.utf8.count <= WireLimits.maximumTextBytes else {
                 throw WireProtocolError.invalidCommand(
                     "keyboard.text requires 1...4096 UTF-8 bytes")
             }
             try requireOnly(["text"])
-        case .keyboardKey:
-            guard key != nil else {
-                throw WireProtocolError.invalidCommand("keyboard.key requires an allowlisted key")
-            }
-            try requireOnly(["key"])
+        case .systemShortcut, .keyboardKey:
+            try validateKeyOrShortcut()
         case .systemVolumeSet:
             guard let value, value.isFinite, (0...1).contains(value) else {
                 throw WireProtocolError.invalidCommand(
                     "system.volume.set value must be finite and within 0...1")
             }
             try requireOnly(["value"])
+        }
+    }
+
+    private func validateKeyOrShortcut() throws {
+        switch name {
+        case .systemShortcut:
+            guard shortcut != nil else {
+                throw WireProtocolError.invalidCommand(
+                    "system.shortcut requires an allowlisted action")
+            }
+            try requireOnly(["shortcut"])
+        case .keyboardKey:
+            guard key != nil else {
+                throw WireProtocolError.invalidCommand("keyboard.key requires an allowlisted key")
+            }
+            try requireOnly(["key"])
+        default:
+            throw WireProtocolError.invalidCommand("unsupported key action")
         }
     }
 
@@ -119,31 +145,8 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         if button != nil, !allowed.contains("button") {
             throw WireProtocolError.invalidCommand("unexpected button for \(name.rawValue)")
         }
-    }
-}
-
-public struct RemoteState: Codable, Sendable, Equatable {
-    public var accessibilityGranted: Bool
-    public var systemVolume: Double?
-    public var systemVolumeReason: String?
-    public var deviceName: String
-
-    public init(
-        accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
-        deviceName: String
-    ) {
-        self.accessibilityGranted = accessibilityGranted
-        self.systemVolume = systemVolume
-        self.systemVolumeReason = systemVolumeReason
-        self.deviceName = deviceName
-    }
-
-    public func validate() throws {
-        if let systemVolume, !systemVolume.isFinite || !(0...1).contains(systemVolume) {
-            throw WireProtocolError.invalidEnvelope("systemVolume must be finite and within 0...1")
-        }
-        guard !deviceName.isEmpty, deviceName.utf8.count <= WireLimits.maximumDeviceNameBytes else {
-            throw WireProtocolError.invalidEnvelope("deviceName is empty or too long")
+        if shortcut != nil, !allowed.contains("shortcut") {
+            throw WireProtocolError.invalidCommand("unexpected shortcut for \(name.rawValue)")
         }
     }
 }

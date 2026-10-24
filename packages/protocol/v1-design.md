@@ -104,14 +104,17 @@ has `code` and `message`. Malformed or incompatible wire envelopes close the
 connection. A result means the Mac submitted the input to its OS API; it does
 not prove that the foreground app accepted the input or completed an action.
 
-| Command             | Fields   | Bounds                                                                  |
-| ------------------- | -------- | ----------------------------------------------------------------------- |
-| `pointer.move`      | `x`, `y` | Relative finite deltas, each within ±500                                |
-| `pointer.click`     | `button` | `left` or `right`, at the current cursor                                |
-| `pointer.scroll`    | `x`, `y` | Pixel deltas, each within ±100                                          |
-| `keyboard.text`     | `text`   | 1–4096 UTF-8 bytes of committed text                                    |
-| `keyboard.key`      | `key`    | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
-| `system.volume.set` | `value`  | Finite scalar in 0...1                                                  |
+| Command               | Fields     | Bounds                                                                  |
+| --------------------- | ---------- | ----------------------------------------------------------------------- |
+| `pointer.move`        | `x`, `y`   | Relative finite deltas, each within ±500                                |
+| `pointer.click`       | `button`   | `left` or `right`, at the current cursor                                |
+| `pointer.scroll`      | `x`, `y`   | Pixel deltas, each within ±100                                          |
+| `pointer.button.down` | `button`   | Hold `left` or `right`; requires advertised gesture support             |
+| `pointer.button.up`   | `button`   | Release a held button in the same connection                            |
+| `system.shortcut`     | `shortcut` | `mission-control`, `app-expose`, `previous-space`, or `next-space`      |
+| `keyboard.text`       | `text`     | 1–4096 UTF-8 bytes of committed text                                    |
+| `keyboard.key`        | `key`      | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
+| `system.volume.set`   | `value`    | Finite scalar in 0...1                                                  |
 
 State contains `deviceName`, `accessibilityGranted`, optional `systemVolume`, and
 optional `systemVolumeReason`. Absent volume means unavailable, never zero.
@@ -125,6 +128,19 @@ pending input on disconnect. Missing command results time out after three
 seconds and close the connection without replaying commands.
 
 ## State and future media boundaries
+
+The optional `supportsGestures` state flag enables the held-button and fixed
+shortcut commands above. Absence means unsupported; clients must keep these
+controls disabled for legacy companions. Ordinary taps remain atomic clicks.
+The Mac sets native single/double-click state using its configured double-click
+interval, proximity, button, and remote-session identity.
+
+Held pointer ownership is limited to one remote session. Conflicting pointer
+commands from another session fail explicitly. A client must release held input
+when a gesture is cancelled or its surface is removed; the server also releases
+on disconnect, revocation, or eight seconds without valid client activity.
+Four-finger actions invoke fixed public macOS shortcuts, so local shortcut
+configuration controls their availability and meaning.
 
 - Desktop input targets the current desktop. It does not change the selected
   media source. Keyboard text contains committed Unicode input, not intermediate
