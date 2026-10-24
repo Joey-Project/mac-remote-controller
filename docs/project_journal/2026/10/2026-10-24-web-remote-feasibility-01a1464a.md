@@ -57,10 +57,10 @@ superseded_by:
   Responsive shell padding now includes the horizontal device safe-area insets
   at each existing breakpoint.
 - The Web integration includes reviewed Media commit
-  `1ecddf96d36375c939f9c2b5af49c866bfd1941f`, including bundled adapter
+  `e82c1a0450f3d07f3be9bfb61686f7c20e938e88`, including bundled adapter
   setup and the Chrome delivery acknowledgement fix. Node.js 26.12.0 and pnpm
   12.14.0 passed format check, lint, strict typecheck, tests, and builds for all
-  three TypeScript packages: 73 tests (Chrome 38/38, IINA 15/15, Web preview
+  three TypeScript packages: 75 tests (Chrome 40/40, IINA 15/15, Web preview
   20/20). The refreshed stack passed all 170 Swift package tests, strict Swift
   formatting/SwiftLint, macOS and generic iOS Simulator builds, generated
   Info.plist checks, shell/workflow lint, and project-journal validation.

@@ -249,6 +249,10 @@ function isValidCommand(message: NativeMediaCommand): boolean {
 
 function receiveNativeMessage(port: chrome.runtime.Port, value: unknown): void {
   if (nativePort !== port || !value || typeof value !== 'object') return;
+  if ((value as { type?: unknown }).type === 'media.ready' && Object.keys(value).length === 1) {
+    nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
+    return;
+  }
   const message = value as Partial<NativeMediaCommand>;
   if (message.type !== 'media.command' || !isValidCommand(message as NativeMediaCommand)) return;
   nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;

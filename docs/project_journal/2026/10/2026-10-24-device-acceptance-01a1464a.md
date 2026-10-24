@@ -116,3 +116,25 @@ superseded_by:
   prepared. The desktop later locked; automatic unlock and the user's requested
   retry both failed. Live GUI acceptance remains unverified. The user authorized
   continuing implementation and automatic checks while manual unlock is unavailable.
+- Real-device XCTest signing is configured using the existing development Team.
+  The iPhone's first automation launch required a system confirmation; after the
+  user approved it, XCTest launched the real app and reconnected its paired Mac.
+  On iOS 18, a parent media-card identifier propagated over its child controls,
+  hiding the picker's `media.target` identifier. Removing that unused parent
+  identifier preserves the child's identity for the live media test.
+- The corrected live test passed on a physical iPhone XS running iOS 18 at
+  `7acf3c69766d282354b317fffa55e317b6ab02e5`: stored-pairing reconnect, real
+  Bilibili source selection, and three forward-ten-second seeks, each receiving
+  a correlated successful result with no connection-problem alert. XCTest
+  reported one passed test, zero failures, and zero skips. Fixtures were disabled
+  and system audio remained muted. The app was then relaunched normally.
+- The live test used the existing running companion and extension. Bundled
+  first-install UI acceptance remains separate. CI's newer `lipo` rejected
+  multi-architecture `-verify_arch` arguments; bundle validation now reads the
+  executable's architecture list and checks each requested slice explicitly.
+- The native host acknowledges a target snapshot only after the authenticated
+  bridge accepts it. Chrome resets reconnect backoff on that current-port health
+  signal, without requiring a playback command. Regressions cover recovery from
+  a 15-second delay, ignored stale/malformed acknowledgements, and continued
+  exponential retry for immediate disconnects. The recovery regression failed
+  against the old worker before the fix.

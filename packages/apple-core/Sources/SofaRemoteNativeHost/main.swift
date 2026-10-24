@@ -20,6 +20,9 @@ private struct SofaRemoteNativeHost {
             while let data = try readFrame(), let message = try parse(message: data) {
                 guard allowedExtensionMessage(message) else { continue }
                 _ = try await postToBridge(configuration: configuration, body: message)
+                if message["type"] as? String == "media.targetUpdate" {
+                    try output.write(["type": "media.ready"])
+                }
             }
             polling.cancel()
         } catch {
