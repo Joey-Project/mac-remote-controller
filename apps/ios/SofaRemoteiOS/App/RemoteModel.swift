@@ -327,7 +327,9 @@ extension RemoteModel {
             errorMessage = "The control value is invalid."; return false
         }
         guard commandScheduler.enqueue(command) else {
-            errorMessage = "The Mac is busy. Wait for the pending controls to finish."
+            if !InputCommandScheduler.isBestEffortPointerDelta(command) {
+                errorMessage = "The Mac is busy. Wait for the pending controls to finish."
+            }
             return false
         }
         if command.name == .pointerMove || command.name == .pointerScroll
