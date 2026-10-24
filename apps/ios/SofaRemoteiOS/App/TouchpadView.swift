@@ -167,8 +167,16 @@ private final class TrackpadView: UIView {
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard enabled, mode != .blocked, mode != .idle else { return }
-        if touchCount != sequence.initialCount { cancelSequence(blockUntilLift: true); return }
+        if sequence.cancelsMovementAfterTouchCountChange(currentTouchCount: touchCount) {
+            cancelSequence(blockUntilLift: true); return
+        }
         updateTwoFingerTapSlop(event, including: touches)
+        if sequence.hasPartialPendingLift {
+            // A pending two-finger tap remains pending while the final finger
+            // is down. Observe its movement for tap slop without converting it
+            // into a one-finger pointer/scroll gesture.
+            return
+        }
         let point = centroid(event) ?? touches.first?.location(in: self) ?? previous
         var delta = CGPoint(x: point.x - previous.x, y: point.y - previous.y)
         let total = hypot(point.x - start.x, point.y - start.y)
@@ -268,8 +276,10 @@ private final class TrackpadView: UIView {
             {
                 let tapTimestamp = touches.map(\.timestamp).max() ?? monotonicTime
                 if kind == .pointer, completedCount == 1 { onTap?(tapTimestamp) }
-                if kind == .scroll, completedCount == 2,
-                    fingerMovement.staysWithinTwoFingerTapSlop(threshold: Double(threshold))
+                if TouchGesturePolicy.shouldEmitTwoFingerRightClick(
+                    completedCount: completedCount, kind: kind, tapAllowed: tapAllowed,
+                    perFingerDisplacements: fingerMovement.displacements,
+                    threshold: Double(threshold))
                 {
                     onRightClick?(tapTimestamp)
                 }

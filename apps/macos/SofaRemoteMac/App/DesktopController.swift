@@ -100,8 +100,7 @@ final class DesktopController {
             try type(require(command.text), source: source)
         case .keyboardKey:
             let key = try require(command.key)
-            try post(CGEvent(keyboardEventSource: source, virtualKey: key.code, keyDown: true))
-            try post(CGEvent(keyboardEventSource: source, virtualKey: key.code, keyDown: false))
+            try emitKeyboardPair(key: key.code, source: source)
         default:
             throw ControlError.invalidCommand
         }
@@ -176,12 +175,30 @@ final class DesktopController {
             case .previousSpace: 123  // Control-Left
             case .nextSpace: 124  // Control-Right
             }
-        for down in [true, false] {
-            guard let event = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: down)
-            else { throw ControlError.eventUnavailable }
-            event.flags = .maskControl
-            event.post(tap: .cghidEventTap)
-        }
+        try emitKeyboardPair(key: key, source: source, flags: .maskControl)
+    }
+
+    private func emitKeyboardPair(
+        key: CGKeyCode,
+        source: CGEventSource,
+        flags: CGEventFlags? = nil,
+        text: [UniChar]? = nil
+    ) throws {
+        guard
+            KeyboardEventPair.emit(
+                create: { isDown in
+                    CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: isDown)
+                },
+                configure: { event, _ in
+                    if let text {
+                        var units = text
+                        event.keyboardSetUnicodeString(
+                            stringLength: units.count, unicodeString: &units)
+                    }
+                    if let flags { event.flags = flags }
+                },
+                post: { $0.post(tap: .cghidEventTap) })
+        else { throw ControlError.eventUnavailable }
     }
 
     private func emitScroll(
@@ -226,13 +243,8 @@ final class DesktopController {
         while !units.isEmpty {
             var count = min(20, units.count)
             if count < units.count, (0xD800...0xDBFF).contains(units[count - 1]) { count -= 1 }
-            var chunk = Array(units.prefix(count))
-            for down in [true, false] {
-                guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down)
-                else { throw ControlError.eventUnavailable }
-                event.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
-                event.post(tap: .cghidEventTap)
-            }
+            let chunk = Array(units.prefix(count))
+            try emitKeyboardPair(key: 0, source: source, text: chunk)
             units.removeFirst(count)
         }
     }
