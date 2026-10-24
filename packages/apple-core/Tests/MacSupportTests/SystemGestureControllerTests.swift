@@ -11,7 +11,7 @@
             var notifications: [String] = []
             let controller = SystemGestureController(
                 notifyDock: {
-                    notifications.append($0); return true
+                    notifications.append($0)
                 },
                 makeSwipe: { _ in
                     XCTFail("Overview must not create input events"); return nil
@@ -32,11 +32,12 @@
             }
         }
 
-        func testRejectedOverviewReportsFailure() {
+        func testUnavailableSpaceReportsFailureWithoutPosting() {
             let controller = SystemGestureController(
-                notifyDock: { _ in false }, makeSwipe: { _ in nil }, post: { _ in })
-            XCTAssertThrowsError(try controller.perform(.appExpose)) {
-                XCTAssertEqual($0 as? SystemGestureError, .rejected)
+                notifyDock: nil, makeSwipe: { _ in nil }, post: { _ in XCTFail("No partial event") }
+            )
+            XCTAssertThrowsError(try controller.perform(.nextSpace)) {
+                XCTAssertEqual($0 as? SystemGestureError, .unavailable)
             }
         }
 
@@ -44,7 +45,7 @@
             var posted: [CGEvent] = []
             let controller = SystemGestureController(
                 notifyDock: { _ in
-                    XCTFail("Spaces must use gesture events"); return false
+                    XCTFail("Spaces must use gesture events")
                 },
                 makeSwipe: { DockSwipeEvents.make(direction: $0, modern: false) },
                 post: { posted.append($0) })

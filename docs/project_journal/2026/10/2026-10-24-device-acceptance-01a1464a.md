@@ -102,7 +102,7 @@ superseded_by:
   Chrome's first local-extension load remains a browser-confirmed step. No token
   is included in distributable plugin assets or the Chrome manifest.
 - Five installer regressions cover repeated preparation, unrelated settings,
-  first-time IINA permission flow, private file permissions, and linked destination rejection. All 178 Swift tests,
+  first-time IINA permission flow, private file permissions, and linked destination rejection. All 194 Swift tests,
   strict Swift format/SwiftLint, Mac packaging, and generic iOS Simulator build pass.
 - Follow-up review fixes select a visible main YouTube player after hidden Shorts
   matches, preserve the bridge opt-in across companion relaunches, and build/sign
@@ -150,3 +150,11 @@ superseded_by:
   modifier-free events, balanced phases, failures before emission, and real HID
   payload readback without posting. Desktop automation timed out, so actual
   Mission Control, App Exposé, and Space transitions still need live acceptance.
+
+- The gesture review follow-up buffers pending drag displacement through the
+  matching start result, preserves all wire chunks under backpressure, and orders
+  later input after release. Normal termination synchronously releases all held
+  states before closing sessions; the media descendant also cancels pending media
+  work through its existing session removal path. These changes modify the iOS
+  input coordinator and protocol contract after the physical media proof above;
+  that proof remains scoped to `7acf3c6`, not this later candidate.

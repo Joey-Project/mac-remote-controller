@@ -62,7 +62,7 @@ superseded_by:
 - CI runs `actionlint` separately, checks `scripts/*.sh` with `bash -n` and
   ShellCheck in a media setup step, and keeps Swift tooling and the Android
   wrapper in the repository shell-check step.
-- Final integrated local Swift checks passed 178 AppleCore package tests, the
+- Final integrated local Swift checks passed 194 AppleCore package tests, the
   macOS app build, generic iOS Simulator build, and generated plist validation. The
   `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
   12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome

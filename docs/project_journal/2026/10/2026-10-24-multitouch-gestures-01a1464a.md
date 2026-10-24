@@ -56,9 +56,13 @@ superseded_by:
 - An unqueueable or rejected drag start blocks movement for the remainder of
   that touch sequence. A sequence-ID check in the model prevents a late UI
   update from sending movement after rejection; lifting the fingers allows a
-  fresh drag attempt. Movement is discarded while the matching button-down is
-  pending and enabled only after its successful result; a late result after
-  lift cannot revive movement.
+  fresh drag attempt. Pending displacement is accumulated in bounded scalar
+  storage and sent in wire-sized chunks after the matching button-down succeeds,
+  before release even if fingers have already lifted. A late result cannot
+  reactivate the finger sequence. Rejection or disconnect discards that buffer.
+  Backpressure retains unsent chunks and release, protects accepted chunks from
+  best-effort queue replacement, and holds later input behind the release barrier.
+  The existing three-second acknowledgement deadline tears down stalled sessions.
 - Tap history survives staggered finger lifts; a replacement finger after
   lifting begins cancels the sequence. During a partial pending lift, the
   remaining finger continues to be tracked for tap slop without starting a
@@ -79,14 +83,16 @@ superseded_by:
   HID device, driver, memory-offset access, or additional entitlement is used.
 - Protocol details are cross-checked against Apple's `HIDEvent.m` wrapper and
   the native Dock event consumers in Hammerspoon, yabai, and Spaces Manager.
+  Dock notification calls consume no return value; submission does not prove
+  completion of the system animation.
   Sources: [Apple HID wrapper](https://github.com/apple-oss-distributions/IOHIDFamily/blob/main/HID/HIDEvent.m),
-  [Dock notification ABI](https://github.com/asmvik/yabai/blob/master/src/misc/extern.h),
+  [Dock notification consumer](https://github.com/asmvik/yabai/blob/master/src/misc/extern.h),
   and [Dock swipe consumer](https://github.com/michaeltorbert/spaces-manager/blob/main/Sources/SpaceSwitcher.swift).
   Package tests inspect real HID payloads without posting them and cover native
   notification routing, both swipe directions, balanced phases, modifier-free
   events, and failure before emission. Live desktop action acceptance remains
   separate from these non-interactive checks.
-- Local validation passes strict Swift format/SwiftLint, 134 AppleCore/MacSupport
+- Local validation passes strict Swift format/SwiftLint, 150 AppleCore/MacSupport
   tests, and macOS plus generic iOS Simulator app builds. The extracted volume
   card is included in the app target's explicit source list. The UI assertions
   and per-device execution evidence are tracked in the corresponding PR; no
@@ -105,3 +111,16 @@ superseded_by:
 - Verify touch feel, pressure support, haptics, and native desktop actions
   on supported physical devices. Keep this separate from package tests and
   Simulator UI coverage.
+
+## Termination and Acknowledgement Safety
+
+- The application delegate handles ordinary termination, including menu Quit.
+  It synchronously attempts every active and pending disconnected-session button
+  release before closing clients. A failed release retains retry state and
+  cancels termination with an actionable error; normal timer retries remain
+  enabled. Successful preparation is idempotent.
+- The drag coordinator lives in AppleCore so deterministic tests exercise the
+  actual app state machine: quick lift before acknowledgement, delayed accepted
+  start, rejected start, deferred later input, queue saturation and wire chunks,
+  reset, fixture mode, and failed release. Additional tests cover protected queue
+  prefixes and synchronous termination across all retained sessions.
