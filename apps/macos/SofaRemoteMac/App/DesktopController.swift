@@ -65,8 +65,9 @@ final class DesktopController {
             let button = try require(command.button)
             let clickState = input.clickTracker.register(
                 button: button, x: location.x, y: location.y,
-                at: ProcessInfo.processInfo.systemUptime,
-                doubleClickInterval: NSEvent.doubleClickInterval)
+                at: command.tapTimestamp ?? ProcessInfo.processInfo.systemUptime,
+                doubleClickInterval: NSEvent.doubleClickInterval,
+                timebase: command.tapTimestamp == nil ? .server : .client)
             try click(button: button, clickState: clickState, source: source, location: location)
         case .pointerScroll:
             try emitScroll(command, source: source, accumulator: &input.scrollAccumulator)

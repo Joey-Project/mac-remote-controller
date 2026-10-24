@@ -262,6 +262,8 @@ public enum WireLimits {
     public static let protocolVersion = 1
     public static let maximumMessageBytes = 64 * 1024
     public static let maximumTextBytes = 4096
+    /// Maximum supported monotonic client uptime in seconds for pointer tap timestamps.
+    public static let maximumTapTimestampSeconds: TimeInterval = 1_000_000_000
     public static let maximumSequence: UInt64 = 9_007_199_254_740_991
     public static let maximumIdentityBytes = 128
     public static let maximumAuthTokenBytes = 4096

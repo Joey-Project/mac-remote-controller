@@ -8,11 +8,13 @@ struct TouchpadCard: View {
     let shortcutsEnabled: Bool
     let forceClickEnabled: Bool
     let hapticsEnabled: Bool
+    let rejectedDragID: UUID?
     let onMove: (Double, Double) -> Void
     let onScroll: (Double, Double) -> Void
-    let onTap: () -> Void
-    let onRightClick: () -> Void
-    let onDragBegin: () -> Void
+    let onTap: (TimeInterval) -> Void
+    let onRightClick: (TimeInterval) -> Void
+    let onDragBegin: () -> UUID?
+    let onDragMove: (UUID, Double, Double) -> Void
     let onDragEnd: () -> Void
     let onShortcut: (SystemShortcut) -> Void
 
@@ -39,8 +41,9 @@ struct TouchpadCard: View {
                     enabled: isEnabled, dragEnabled: dragEnabled,
                     shortcutsEnabled: shortcutsEnabled, forceClickEnabled: forceClickEnabled,
                     hapticsEnabled: hapticsEnabled,
+                    rejectedDragID: rejectedDragID,
                     onMove: onMove, onScroll: onScroll, onTap: onTap,
-                    onRightClick: onRightClick, onDragBegin: onDragBegin,
+                    onRightClick: onRightClick, onDragBegin: onDragBegin, onDragMove: onDragMove,
                     onDragEnd: onDragEnd, onShortcut: onShortcut
                 ).clipShape(RoundedRectangle(cornerRadius: 16))
                 if !isEnabled {
@@ -53,8 +56,12 @@ struct TouchpadCard: View {
             .accessibilityLabel("Touchpad")
             .accessibilityIdentifier("touchpad.surface")
             .accessibilityHint(gestureInstructions.accessibilityHint)
-            .accessibilityAction(named: Text("Right-click")) { if isEnabled { onRightClick() } }
-            .accessibilityAction(.default) { if isEnabled { onTap() } }
+            .accessibilityAction(named: Text("Right-click")) {
+                if isEnabled { onRightClick(ProcessInfo.processInfo.systemUptime) }
+            }
+            .accessibilityAction(.default) {
+                if isEnabled { onTap(ProcessInfo.processInfo.systemUptime) }
+            }
             .disabled(!isEnabled)
         }
         .padding(18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -70,11 +77,13 @@ private struct TrackpadSurface: UIViewRepresentable {
     let shortcutsEnabled: Bool
     let forceClickEnabled: Bool
     let hapticsEnabled: Bool
+    let rejectedDragID: UUID?
     let onMove: (Double, Double) -> Void
     let onScroll: (Double, Double) -> Void
-    let onTap: () -> Void
-    let onRightClick: () -> Void
-    let onDragBegin: () -> Void
+    let onTap: (TimeInterval) -> Void
+    let onRightClick: (TimeInterval) -> Void
+    let onDragBegin: () -> UUID?
+    let onDragMove: (UUID, Double, Double) -> Void
     let onDragEnd: () -> Void
     let onShortcut: (SystemShortcut) -> Void
 
@@ -89,6 +98,8 @@ private struct TrackpadSurface: UIViewRepresentable {
         view.hapticsEnabled = hapticsEnabled
         view.onMove = onMove; view.onScroll = onScroll; view.onTap = onTap
         view.onRightClick = onRightClick; view.onDragBegin = onDragBegin
+        view.onDragMove = onDragMove
+        view.rejectDragStart(rejectedDragID)
         view.onDragEnd = onDragEnd; view.onShortcut = onShortcut
     }
 }
@@ -102,9 +113,10 @@ private final class TrackpadView: UIView {
     var hapticsEnabled = false
     var onMove: ((Double, Double) -> Void)?
     var onScroll: ((Double, Double) -> Void)?
-    var onTap: (() -> Void)?
-    var onRightClick: (() -> Void)?
-    var onDragBegin: (() -> Void)?
+    var onTap: ((TimeInterval) -> Void)?
+    var onRightClick: ((TimeInterval) -> Void)?
+    var onDragBegin: (() -> UUID?)?
+    var onDragMove: ((UUID, Double, Double) -> Void)?
     var onDragEnd: (() -> Void)?
     var onShortcut: ((SystemShortcut) -> Void)?
 
@@ -117,6 +129,9 @@ private final class TrackpadView: UIView {
     private var didForceClick = false
     private var fingerMovement = TouchFingerMovementTracker<ObjectIdentifier>()
     private var dragHeld = false
+    private var activeDragID: UUID?
+    private var dragSequence = PointerDragSequencePolicy()
+    private var lastRejectedDragID: UUID?
     private let threshold: CGFloat = 7
 
     override init(frame: CGRect) { super.init(frame: frame); isMultipleTouchEnabled = true }
@@ -177,9 +192,16 @@ private final class TrackpadView: UIView {
         case .pointer: mode = .move
         case .scroll: mode = .scroll
         case .drag:
-            mode = .drag
-            dragHeld = true
-            onDragBegin?()
+            let dragID = onDragBegin?()
+            if dragSequence.begin(gestureID: dragID?.uuidString) {
+                activeDragID = dragID
+                mode = .drag
+                dragHeld = true
+            } else {
+                activeDragID = nil
+                mode = .blocked
+                dragHeld = false
+            }
         case .shortcutSwipe: mode = .swipe
         case .ignore: mode = .blocked
         }
@@ -195,8 +217,13 @@ private final class TrackpadView: UIView {
             onScroll?(
                 Double(delta.x.clamped(to: -100...100)), Double(delta.y.clamped(to: -100...100)))
         case .drag:
-            onMove?(
-                Double(delta.x.clamped(to: -500...500)), Double(delta.y.clamped(to: -500...500)))
+            guard let activeDragID,
+                dragSequence.canSendMovement(gestureID: activeDragID.uuidString)
+            else { return }
+            onDragMove?(
+                activeDragID,
+                Double(delta.x.clamped(to: -500...500)),
+                Double(delta.y.clamped(to: -500...500)))
         default: break
         }
     }
@@ -209,7 +236,7 @@ private final class TrackpadView: UIView {
         {
             didForceClick = true
             mode = .blocked
-            onTap?()
+            onTap?(touch.timestamp)
             if hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
         }
     }
@@ -239,11 +266,12 @@ private final class TrackpadView: UIView {
             if case .ended(let kind, let tapAllowed) = endOutcome, mode == .pending,
                 tapAllowed
             {
-                if kind == .pointer, completedCount == 1 { onTap?() }
+                let tapTimestamp = touches.map(\.timestamp).max() ?? monotonicTime
+                if kind == .pointer, completedCount == 1 { onTap?(tapTimestamp) }
                 if kind == .scroll, completedCount == 2,
                     fingerMovement.staysWithinTwoFingerTapSlop(threshold: Double(threshold))
                 {
-                    onRightClick?()
+                    onRightClick?(tapTimestamp)
                 }
             }
         }
@@ -299,6 +327,8 @@ private final class TrackpadView: UIView {
             dragHeld = false
             onDragEnd?()
         }
+        activeDragID = nil
+        if blockUntilLift { dragSequence.blockUntilLift() } else { dragSequence.finish() }
         sequence.cancel()
         fingerMovement.reset()
         mode = blockUntilLift ? .blocked : .idle
@@ -308,11 +338,25 @@ private final class TrackpadView: UIView {
         cancelSequence()
         touchCount = 0
     }
+
+    func rejectDragStart(_ dragID: UUID?) {
+        guard let dragID, dragID != lastRejectedDragID else { return }
+        lastRejectedDragID = dragID
+        guard activeDragID == dragID,
+            dragSequence.reject(gestureID: dragID.uuidString)
+        else { return }
+        activeDragID = nil
+        dragHeld = false
+        mode = .blocked
+    }
+
     private func finishSequence() {
         if dragHeld {
             dragHeld = false
             onDragEnd?()
         }
+        activeDragID = nil
+        dragSequence.finish()
         sequence.cancel()
         fingerMovement.reset()
         mode = .idle

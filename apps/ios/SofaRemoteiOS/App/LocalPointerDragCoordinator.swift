@@ -38,6 +38,10 @@ final class LocalPointerDragCoordinator {
         _ = send(RemoteCommand(name: .pointerButtonUp, button: .left))
     }
 
+    func permitsMovement(for dragID: UUID) -> Bool {
+        activeDragID == dragID
+    }
+
     func registerDispatchedCommand(_ command: RemoteCommand, requestID: String) {
         if command.name == .pointerButtonDown, !queuedStartIDs.isEmpty {
             let dragID = queuedStartIDs.removeFirst()
@@ -96,6 +100,12 @@ extension RemoteModel {
         localPointerDragCoordinator.end(dragID) { [weak self] command in
             self?.send(command) ?? false
         }
+    }
+
+    @discardableResult
+    func sendLocalPointerDragMove(_ dragID: UUID, x: Double, y: Double) -> Bool {
+        guard localPointerDragCoordinator.permitsMovement(for: dragID) else { return false }
+        return send(RemoteCommand(name: .pointerMove, x: x, y: y))
     }
 
     func resolveLocalPointerDragResult(
