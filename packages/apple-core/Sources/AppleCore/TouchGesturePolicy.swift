@@ -86,6 +86,50 @@ public enum TouchGesturePolicy {
     }
 }
 
+/// Tracks whether an active drag sequence acquired the Mac's pointer button.
+/// A rejected or unqueueable start stays blocked until the touch sequence ends.
+public struct PointerDragSequencePolicy: Sendable, Equatable {
+    public enum State: Sendable, Equatable {
+        case idle
+        case dragging(String)
+        case blocked
+    }
+
+    public private(set) var state: State = .idle
+
+    public init() {}
+
+    @discardableResult
+    public mutating func begin(gestureID: String?) -> Bool {
+        guard state == .idle else { return false }
+        guard let gestureID, !gestureID.isEmpty else {
+            state = .blocked
+            return false
+        }
+        state = .dragging(gestureID)
+        return true
+    }
+
+    @discardableResult
+    public mutating func reject(gestureID: String) -> Bool {
+        guard state == .dragging(gestureID) else { return false }
+        state = .blocked
+        return true
+    }
+
+    public mutating func blockUntilLift() {
+        state = .blocked
+    }
+
+    public mutating func finish() {
+        state = .idle
+    }
+
+    public func canSendMovement(gestureID: String) -> Bool {
+        state == .dragging(gestureID)
+    }
+}
+
 /// Keeps maximum per-finger movement for a touch sequence, including fingers
 /// whose final `touchesEnded` batch arrives before the rest of the sequence.
 public struct TouchFingerMovementTracker<Identifier: Hashable & Sendable>: Sendable {

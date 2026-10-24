@@ -9,6 +9,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     public var key: RemoteKey?
     public var button: PointerButton?
     public var shortcut: SystemShortcut?
+    public var tapTimestamp: TimeInterval?
 
     public init(
         name: CommandName,
@@ -18,7 +19,8 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         text: String? = nil,
         key: RemoteKey? = nil,
         button: PointerButton? = nil,
-        shortcut: SystemShortcut? = nil
+        shortcut: SystemShortcut? = nil,
+        tapTimestamp: TimeInterval? = nil
     ) {
         self.name = name
         self.x = x
@@ -28,6 +30,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         self.key = key
         self.button = button
         self.shortcut = shortcut
+        self.tapTimestamp = tapTimestamp
     }
 
     public func validate() throws {
@@ -36,10 +39,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
             try requireCoordinates(limit: name == .pointerMove ? 500 : 100)
             try requireOnly(["x", "y"])
         case .pointerClick, .pointerButtonDown, .pointerButtonUp:
-            guard button != nil else {
-                throw WireProtocolError.invalidCommand("\(name.rawValue) requires button")
-            }
-            try requireOnly(["button"])
+            try validatePointerButton()
         case .keyboardText:
             guard let text, !text.isEmpty, text.utf8.count <= WireLimits.maximumTextBytes else {
                 throw WireProtocolError.invalidCommand(
@@ -54,6 +54,24 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
                     "system.volume.set value must be finite and within 0...1")
             }
             try requireOnly(["value"])
+        }
+    }
+
+    private func validatePointerButton() throws {
+        guard button != nil else {
+            throw WireProtocolError.invalidCommand("\(name.rawValue) requires button")
+        }
+        if name == .pointerClick {
+            if let tapTimestamp,
+                !tapTimestamp.isFinite
+                    || !(0...WireLimits.maximumTapTimestampSeconds).contains(tapTimestamp)
+            {
+                throw WireProtocolError.invalidCommand(
+                    "pointer.click tapTimestamp must be finite and within the supported range")
+            }
+            try requireOnly(["button", "tapTimestamp"])
+        } else {
+            try requireOnly(["button"])
         }
     }
 
@@ -103,6 +121,9 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         }
         if shortcut != nil, !allowed.contains("shortcut") {
             throw WireProtocolError.invalidCommand("unexpected shortcut for \(name.rawValue)")
+        }
+        if tapTimestamp != nil, !allowed.contains("tapTimestamp") {
+            throw WireProtocolError.invalidCommand("unexpected tapTimestamp for \(name.rawValue)")
         }
     }
 }

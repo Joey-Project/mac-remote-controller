@@ -106,17 +106,25 @@ has `code` and `message`. Malformed or incompatible wire envelopes close the
 connection. A result means the Mac submitted the input to its OS API; it does
 not prove that the foreground app accepted the input or completed an action.
 
-| Command               | Fields     | Bounds                                                                  |
-| --------------------- | ---------- | ----------------------------------------------------------------------- |
-| `pointer.move`        | `x`, `y`   | Relative finite deltas, each within ±500                                |
-| `pointer.click`       | `button`   | `left` or `right`, at the current cursor                                |
-| `pointer.scroll`      | `x`, `y`   | Pixel deltas, each within ±100                                          |
-| `pointer.button.down` | `button`   | Hold `left` or `right`; requires advertised gesture support             |
-| `pointer.button.up`   | `button`   | Release a held button in the same connection                            |
-| `system.shortcut`     | `shortcut` | `mission-control`, `app-expose`, `previous-space`, or `next-space`      |
-| `keyboard.text`       | `text`     | 1–4096 UTF-8 bytes of committed text                                    |
-| `keyboard.key`        | `key`      | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
-| `system.volume.set`   | `value`    | Finite scalar in 0...1                                                  |
+| Command               | Fields                            | Bounds                                                                    |
+| --------------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| `pointer.move`        | `x`, `y`                          | Relative finite deltas, each within ±500                                  |
+| `pointer.click`       | `button`, optional `tapTimestamp` | `left` or `right`; client monotonic uptime in `0...1,000,000,000` seconds |
+| `pointer.scroll`      | `x`, `y`                          | Pixel deltas, each within ±100                                            |
+| `pointer.button.down` | `button`                          | Hold `left` or `right`; requires advertised gesture support               |
+| `pointer.button.up`   | `button`                          | Release a held button in the same connection                              |
+| `system.shortcut`     | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`        |
+| `keyboard.text`       | `text`                            | 1–4096 UTF-8 bytes of committed text                                      |
+| `keyboard.key`        | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`   |
+| `system.volume.set`   | `value`                           | Finite scalar in 0...1                                                    |
+
+New iOS clients send `tapTimestamp` from `UITouch.timestamp`. The Mac compares
+successive client timestamps only within that client's authenticated session,
+using the Mac's configured double-click interval; it never subtracts a Mac
+uptime from a client timestamp. This keeps queued taps classified by when the
+touches occurred. The field is optional for older clients, which retain the
+Mac-processing-time behavior. A timebase change or backwards client timestamp
+starts a new single-click sequence.
 
 State contains `deviceName`, `accessibilityGranted`, optional `systemVolume`, and
 optional `systemVolumeReason`. Absent volume means unavailable, never zero.

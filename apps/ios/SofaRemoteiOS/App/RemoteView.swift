@@ -200,15 +200,27 @@ private extension RemoteView {
             shortcutsEnabled: gesturesSupported && fourFingerShortcutsEnabled,
             forceClickEnabled: gesturesSupported && forceClickEnabled,
             hapticsEnabled: gesturesSupported && hapticsEnabled,
+            rejectedDragID: model.rejectedLocalDragID,
             onMove: { x, y in model.send(RemoteCommand(name: .pointerMove, x: x, y: y)) },
             onScroll: { x, y in model.send(RemoteCommand(name: .pointerScroll, x: x, y: y)) },
-            onTap: { model.send(RemoteCommand(name: .pointerClick, button: .left)) },
-            onRightClick: { model.send(RemoteCommand(name: .pointerClick, button: .right)) },
+            onTap: { timestamp in
+                model.send(
+                    RemoteCommand(name: .pointerClick, button: .left, tapTimestamp: timestamp))
+            },
+            onRightClick: { timestamp in
+                model.send(
+                    RemoteCommand(name: .pointerClick, button: .right, tapTimestamp: timestamp))
+            },
             onDragBegin: {
                 guard gesturesSupported && threeFingerDragEnabled, localDragID == nil else {
-                    return
+                    return nil
                 }
-                localDragID = model.beginLocalPointerDrag()
+                let dragID = model.beginLocalPointerDrag()
+                localDragID = dragID
+                return dragID
+            },
+            onDragMove: { dragID, x, y in
+                model.sendLocalPointerDragMove(dragID, x: x, y: y)
             },
             onDragEnd: { releaseLocalDrag() },
             onShortcut: { action in
