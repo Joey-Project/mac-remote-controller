@@ -4,8 +4,8 @@ title: iPhone Acceptance and Stable Mac Installation
 status: active
 created: 2026-10-24
 updated: 2026-10-24
-branch: codex/device-acceptance-fixes
-pr:
+branch: wip/media-adapters
+pr: https://github.com/Joey-Project/mac-remote-controller/pull/7
 supersedes: []
 superseded_by:
 ---
@@ -91,17 +91,22 @@ superseded_by:
   Native Messaging executable. The Apple CI job installs the pinned Node/pnpm
   dependencies before building, so installers do not depend on a source checkout
   at runtime.
-- **Set Up IINA** installs the plugin and updates only its bridge port and token,
+- **Set Up IINA** opens IINA's package installation/permission flow and updates only its bridge port and token,
   preserving other plugin preferences. Credentials are created with mode `0600`
   before writing and atomically renamed. IINA's plugin preferences are cached;
-  an already-running IINA needs plugin reload or restart.
+  an already-running IINA needs plugin reload or restart after replacement.
+  IINA owns permission approval and enablement; setup never silently enables a plugin.
 - **Set Up Chrome** copies the extension and helper into stable Application
   Support paths and registers only the fixed Sofa Remote extension origin.
   Chrome's first local-extension load remains a browser-confirmed step. No token
   is included in distributable plugin assets or the Chrome manifest.
-- Four installer regressions cover repeated installation, unrelated settings,
-  private file permissions, and linked destination rejection. All 169 Swift tests,
+- Five installer regressions cover repeated preparation, unrelated settings,
+  first-time IINA permission flow, private file permissions, and linked destination rejection. All 170 Swift tests,
   strict Swift format/SwiftLint, Mac packaging, and generic iOS Simulator build pass.
+- Follow-up review fixes select a visible main YouTube player after hidden Shorts
+  matches, preserve the bridge opt-in across companion relaunches, and build/sign
+  the Native Messaging helper for every Xcode-requested Mac architecture. A fresh
+  IINA setup regression requires package handoff rather than a disabled copied plugin.
 - The opt-in `LiveMediaUITests` uses the normal app, existing pairing, and real
   transport. It sends three seeks and requires matched successful results from
   the Mac without an error alert. The debug-only observation exposes result

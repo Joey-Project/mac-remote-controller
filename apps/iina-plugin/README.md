@@ -1,11 +1,13 @@
 # IINA plugin
 
-Choose **Set Up IINA** in the Mac companion. It installs the bundled plugin and
-writes the bridge port and token into this plugin's private local preferences,
-preserving other settings. No token copying is needed. If IINA is already open,
-choose **Plugin → Reload All Plugins** or restart IINA so it reloads the installed
-plugin and its cached preferences. Open a video, then select its IINA media source
-on the phone.
+Choose **Set Up IINA** in the Mac companion. It writes the bridge port and token
+into this plugin's private local preferences, preserving other settings, and opens
+the bundled package in IINA. Confirm IINA's installation and permission prompt;
+IINA then installs and enables the plugin. No token copying is needed. For an
+existing plugin, approve replacement and choose **Plugin → Reload All Plugins**
+or restart IINA to reload its cached preferences. Open a video, then select its
+IINA media source on the phone. The companion remembers the bridge opt-in across
+relaunches; disabling it keeps it off on subsequent launches.
 
 ## Manual development setup
 

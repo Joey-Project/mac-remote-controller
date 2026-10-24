@@ -15,6 +15,10 @@ final class MediaAdapterController {
 
     private var bridge: LoopbackMediaBridge?
 
+    func restoreEnabled() {
+        if UserDefaults.standard.bool(forKey: "mediaBridgeEnabled") { setEnabled(true) }
+    }
+
     var isRunning: Bool { bridge?.isRunning == true }
     var port: UInt16? { bridge?.configuration.port }
     var mediaTargets: [MediaTarget]? {
@@ -23,6 +27,7 @@ final class MediaAdapterController {
     }
 
     func setEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "mediaBridgeEnabled")
         guard enabled != isEnabled else { return }
         if !enabled {
             bridge?.stop()
@@ -65,14 +70,17 @@ final class MediaAdapterController {
         bridge?.expireStaleTargets()
     }
 
-    func configureIINA() {
+    func configureIINA() -> URL? {
         if !isEnabled { setEnabled(true) }
-        guard let bridge else { setupMessage = message; return }
+        guard let bridge else { setupMessage = message; return nil }
         do {
-            _ = try integrationInstaller().installIINA(configuration: bridge.configuration)
+            let package = try integrationInstaller().prepareIINA(
+                configuration: bridge.configuration)
             setupMessage =
-                "IINA is configured. If IINA is already open, reload its plugins or restart it."
-        } catch { setupMessage = error.localizedDescription }
+                "Bridge settings are saved. Confirm installation and permissions in IINA. "
+                + "For an existing installation, approve replacement, then reload plugins or restart IINA."
+            return package
+        } catch { setupMessage = error.localizedDescription; return nil }
     }
 
     func configureChrome() -> URL? {

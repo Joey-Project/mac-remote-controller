@@ -16,7 +16,10 @@ struct MediaBridgeView: View {
             )
             .font(.caption).foregroundStyle(.secondary)
             HStack {
-                Button("Set Up IINA") { model.mediaAdapters.configureIINA() }
+                Button("Set Up IINA") {
+                    guard let package = model.mediaAdapters.configureIINA() else { return }
+                    NSWorkspace.shared.open(package)
+                }
                 Button("Set Up Chrome") {
                     guard let folder = model.mediaAdapters.configureChrome() else { return }
                     NSWorkspace.shared.activateFileViewerSelecting([folder])

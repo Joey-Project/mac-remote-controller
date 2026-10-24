@@ -209,6 +209,22 @@ function advertise(document, url = 'https://www.youtube.com/watch?v=1') {
   return target;
 }
 
+test('a hidden Shorts player does not mask the visible main YouTube player', async () => {
+  const shorts = new StubVideo({ hidden: true, paused: false });
+  const main = new StubVideo({ currentTime: 5 });
+  const { document } = makeDocument({
+    videos: [main],
+    videoMatches: {
+      [youtubeShortsSelector]: [shorts],
+      [youtubeMainSelector]: [main],
+    },
+  });
+  advertise(document);
+  await executeMediaAction(document, 'https://www.youtube.com/watch?v=1', 'seek', 10);
+  assert.equal(main.currentTime, 15);
+  assert.equal(shorts.currentTime, 10);
+});
+
 test('site allowlist accepts only the exact supported HTTPS hostnames', () => {
   const { document } = makeDocument();
   assert.equal(readMediaTarget(document, 'https://www.youtube.com/watch?v=1')?.kind, 'youtube');

@@ -18,14 +18,13 @@ public struct MediaIntegrationInstaller {
         self.helper = helper
     }
 
-    public func installIINA(configuration: MediaBridgeConfiguration) throws -> URL {
-        let source = resources.appendingPathComponent("SofaRemote.iinaplugin")
+    /// Writes private configuration and returns a package for IINA's own permission/enablement flow.
+    public func prepareIINA(configuration: MediaBridgeConfiguration) throws -> URL {
+        let package = resources.appendingPathComponent("SofaRemote.iinaplgz")
         let pluginRoot = applicationSupport.appendingPathComponent("com.colliderli.iina/plugins")
-        let destination = pluginRoot.appendingPathComponent(Self.pluginID + ".iinaplugin")
         let preferences = pluginRoot.appendingPathComponent(".preferences")
             .appendingPathComponent(Self.pluginID + ".plist")
-        try requireRegularFile(source.appendingPathComponent("Info.json"))
-        try requireRegularFile(source.appendingPathComponent("main.js"))
+        try requireRegularFile(package)
         try ensureDirectory(preferences.deletingLastPathComponent())
         try rejectLink(preferences)
         var values: [String: Any] = [:]
@@ -41,9 +40,8 @@ public struct MediaIntegrationInstaller {
         values["bridge_token"] = configuration.token
         let data = try PropertyListSerialization.data(
             fromPropertyList: values, format: .binary, options: 0)
-        try installDirectory(source, at: destination)
         try writePrivate(data, to: preferences)
-        return destination
+        return package
     }
 
     public func installChrome() throws -> URL {

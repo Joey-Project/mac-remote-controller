@@ -23,6 +23,7 @@ final class MediaIntegrationInstallerTests: XCTestCase {
         }
         for file in [
             "SofaRemote.iinaplugin/Info.json", "SofaRemote.iinaplugin/main.js",
+            "SofaRemote.iinaplgz",
             "ChromeExtension/manifest.json", "ChromeExtension/content-script.js",
             "ChromeExtension/service-worker.js"
         ] {
@@ -46,9 +47,13 @@ final class MediaIntegrationInstallerTests: XCTestCase {
         let unrelated = support.appendingPathComponent("com.colliderli.iina/plugins/other.txt")
         try Data("untouched".utf8).write(to: unrelated)
         let config = MediaBridgeConfiguration(port: 47_623, token: fixtureToken)
-        let destination = try installer.installIINA(configuration: config)
-        try Data("stale version".utf8).write(to: destination.appendingPathComponent("main.js"))
-        _ = try installer.installIINA(configuration: config)
+        let installedPlugin = support.appendingPathComponent(
+            "com.colliderli.iina/plugins/\(MediaIntegrationInstaller.pluginID).iinaplugin")
+        try files.createDirectory(at: installedPlugin, withIntermediateDirectories: true)
+        let installedEntry = installedPlugin.appendingPathComponent("main.js")
+        try Data("installed version".utf8).write(to: installedEntry)
+        let package = try installer.prepareIINA(configuration: config)
+        XCTAssertEqual(package, try installer.prepareIINA(configuration: config))
 
         let preferences = try XCTUnwrap(
             PropertyListSerialization.propertyList(
@@ -59,12 +64,19 @@ final class MediaIntegrationInstallerTests: XCTestCase {
         XCTAssertEqual(try permissions(preferenceFile), 0o600)
         XCTAssertEqual(try String(contentsOf: unrelated, encoding: .utf8), "untouched")
         XCTAssertEqual(
-            try Data(contentsOf: destination.appendingPathComponent("main.js")), Data("{}".utf8))
+            try Data(contentsOf: installedEntry), Data("installed version".utf8))
+        XCTAssertEqual(package.pathExtension, "iinaplgz")
         XCTAssertFalse(
-            try String(
-                contentsOf: destination.appendingPathComponent("Info.json"),
-                encoding: .utf8
-            ).contains(fixtureToken))
+            try String(contentsOf: package, encoding: .utf8).contains(fixtureToken))
+    }
+
+    func testFirstIINASetupPreparesPermissionFlowWithoutInstallingDisabledPlugin() throws {
+        let package = try installer.prepareIINA(
+            configuration: MediaBridgeConfiguration(port: 47_623, token: fixtureToken))
+        XCTAssertTrue(files.fileExists(atPath: package.path))
+        let plugin = support.appendingPathComponent(
+            "com.colliderli.iina/plugins/\(MediaIntegrationInstaller.pluginID).iinaplugin")
+        XCTAssertFalse(files.fileExists(atPath: plugin.path))
     }
 
     func testChromeInstallsStableHelperAndExactOriginWithoutChangingOtherHosts() throws {
@@ -101,7 +113,7 @@ final class MediaIntegrationInstallerTests: XCTestCase {
         let original = Data("not a plist".utf8)
         try original.write(to: preferenceFile)
         XCTAssertThrowsError(
-            try installer.installIINA(
+            try installer.prepareIINA(
                 configuration:
                     MediaBridgeConfiguration(port: 47_623, token: fixtureToken)))
         XCTAssertEqual(try Data(contentsOf: preferenceFile), original)

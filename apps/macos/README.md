@@ -53,15 +53,17 @@ with mode `0600`. The bridge rejects cross-origin requests and does not expose
 desktop input. Copy the token only into the official IINA plugin preferences;
 Chrome uses a Native Messaging helper that reads the protected file directly.
 Use **Set Up IINA** or **Set Up Chrome** for installation and configuration from
-the files bundled with the app. IINA setup preserves other plugin preferences;
-reload IINA plugins if it is already running. Chrome setup installs its helper
+the files bundled with the app. IINA setup preserves other plugin preferences and
+opens IINA's own package installation and permission prompt, which must be
+confirmed to enable the plugin. Reload IINA plugins after replacing an existing
+installation. Chrome setup installs its helper
 under Application Support and registers its exact extension origin. On first use,
 Chrome still requires **Developer mode → Load unpacked** for the revealed extension
 directory. The app never includes a runtime bridge token in its distributable
 plugin files or exposes it to a browser page.
 See [Chrome setup](../chrome-extension/README.md) and
-[IINA setup](../iina-plugin/README.md). The bridge is optional and stops when
-disabled.
+[IINA setup](../iina-plugin/README.md). The bridge is optional, remembers the user's
+opt-in across relaunches, and stops when disabled.
 
 Media source selection is explicit and independent of the frontmost desktop
 application. Chrome tabs and each IINA player window report their own exact

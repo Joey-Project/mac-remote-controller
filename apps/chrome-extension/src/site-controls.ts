@@ -66,7 +66,7 @@ function videoForDocument(document: Document, adapter: SiteAdapter): HTMLVideoEl
       (video) =>
         typeof video.play === 'function' && typeof video.pause === 'function' && isRendered(video),
     );
-    if (rendered.length === 0) return undefined;
+    if (rendered.length === 0) continue;
 
     const playing = rendered.filter((video) => !video.paused);
     if (playing.length === 1) return playing[0];
