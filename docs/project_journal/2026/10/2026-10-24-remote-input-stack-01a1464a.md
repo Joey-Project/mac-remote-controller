@@ -100,7 +100,7 @@ superseded_by:
 ## Evidence and follow-up
 
 - Foundation: PR #2; connected-screen and Simulator coverage: PR #3.
-- Final integrated local checks passed 146 AppleCore package tests, macOS and generic
+- Final integrated local checks passed 154 AppleCore package tests, macOS and generic
   iOS Simulator app builds, generated plist validation, and the `SofaRemoteNativeHost`
   release build. Pinned Node 26.12.0/pnpm 12.14.0 format, lint, typecheck, tests, and
   builds passed: Chrome 15/15 and IINA 10/10. `actionlint` 1.7.12, shell syntax,

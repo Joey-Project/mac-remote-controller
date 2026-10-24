@@ -53,6 +53,15 @@ public enum TouchGesturePolicy {
             && perFingerDisplacements.allSatisfy { $0.isFinite && $0 >= 0 && $0 < threshold }
     }
 
+    public static func shouldEmitTwoFingerRightClick(
+        completedCount: Int, kind: TouchGestureKind, tapAllowed: Bool,
+        perFingerDisplacements: [Double], threshold: Double
+    ) -> Bool {
+        completedCount == 2 && kind == .scroll && tapAllowed
+            && isTwoFingerTapWithinSlop(
+                perFingerDisplacements: perFingerDisplacements, threshold: threshold)
+    }
+
     public static func isTapDurationAllowed(
         startedAt: TimeInterval,
         endedAt: TimeInterval,
@@ -190,6 +199,14 @@ public struct TouchSequencePolicy: Sendable, Equatable {
     private var pendingLiftOccurred = false
 
     public init() {}
+
+    public var hasPartialPendingLift: Bool {
+        isPending && touchCount > 0 && touchCount < initialCount
+    }
+
+    public func cancelsMovementAfterTouchCountChange(currentTouchCount: Int) -> Bool {
+        isActive && currentTouchCount != initialCount
+    }
 
     public mutating func begin(adding count: Int, at time: TimeInterval = 0)
         -> TouchSequenceOutcome

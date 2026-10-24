@@ -31,6 +31,33 @@ final class HeldInputStateTests: XCTestCase {
         XCTAssertNil(state.lastUpdate)
     }
 
+    func testAccessibilityRevocationKeepsExpiredReleaseForLaterRetry() {
+        var state = HeldInputState()
+        let start: TimeInterval = 100
+        _ = state.apply(RemoteCommand(name: .pointerButtonDown, button: .left), at: start)
+
+        var accessibilityTrusted = false
+        var postedButtons: [PointerButton] = []
+        let postIfTrusted: (PointerButton) -> Bool = { button in
+            guard accessibilityTrusted else { return false }
+            postedButtons.append(button)
+            return accessibilityTrusted
+        }
+
+        let expired = state.expiredButtons(ifOlderThan: 8, now: start + 8)
+        XCTAssertEqual(state.release(expired, posting: postIfTrusted), [.left])
+        XCTAssertEqual(state.buttons, [.left])
+        XCTAssertTrue(postedButtons.isEmpty)
+
+        accessibilityTrusted = true
+        let retry = state.expiredButtons(ifOlderThan: 8, now: start + 9)
+        XCTAssertEqual(retry, [.left])
+        XCTAssertTrue(state.release(retry, posting: postIfTrusted).isEmpty)
+        XCTAssertEqual(postedButtons, [.left])
+        XCTAssertTrue(state.buttons.isEmpty)
+        XCTAssertNil(state.lastUpdate)
+    }
+
     func testPartialReleaseRetainsOnlyButtonsWhosePostFailed() {
         var state = HeldInputState()
         _ = state.apply(RemoteCommand(name: .pointerButtonDown, button: .left), at: 10)

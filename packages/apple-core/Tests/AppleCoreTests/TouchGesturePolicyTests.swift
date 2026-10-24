@@ -116,6 +116,66 @@ final class TouchGesturePolicyTests: XCTestCase {
             .ended(.scroll, tapAllowed: true))
     }
 
+    func testStaggeredPendingTapTracksRemainingFingerUntilFinalLift() {
+        var sequence = TouchSequencePolicy()
+        var movement = TouchFingerMovementTracker<String>()
+        XCTAssertEqual(sequence.begin(adding: 2, at: 10), .started)
+        movement.begin(id: "lifted", x: 0, y: 0)
+        movement.begin(id: "remaining", x: 20, y: 0)
+        movement.record(id: "lifted", x: 1, y: 1)
+
+        XCTAssertEqual(
+            sequence.end(removing: 1, dragEnabled: true, shortcutsEnabled: true, at: 10.1),
+            .partialPendingLift)
+        XCTAssertTrue(sequence.hasPartialPendingLift)
+        XCTAssertFalse(sequence.cancelsMovementAfterTouchCountChange(currentTouchCount: 1))
+
+        // The still-down finger moves less than the seven-point tap slop.
+        movement.record(id: "remaining", x: 24, y: 3)
+        let outcome = sequence.end(
+            removing: 1, dragEnabled: true, shortcutsEnabled: true, at: 10.2)
+        guard case .ended(let kind, let tapAllowed) = outcome else {
+            return XCTFail("Expected the pending tap to complete")
+        }
+        XCTAssertTrue(
+            TouchGesturePolicy.shouldEmitTwoFingerRightClick(
+                completedCount: 2, kind: kind, tapAllowed: tapAllowed,
+                perFingerDisplacements: movement.displacements, threshold: 7))
+    }
+
+    func testStaggeredPendingTapOverSlopDoesNotBecomeRightClick() {
+        var sequence = TouchSequencePolicy()
+        var movement = TouchFingerMovementTracker<String>()
+        XCTAssertEqual(sequence.begin(adding: 2, at: 10), .started)
+        movement.begin(id: "lifted", x: 0, y: 0)
+        movement.begin(id: "remaining", x: 20, y: 0)
+        XCTAssertEqual(
+            sequence.end(removing: 1, dragEnabled: true, shortcutsEnabled: true, at: 10.1),
+            .partialPendingLift)
+
+        movement.record(id: "remaining", x: 28, y: 0)
+        let outcome = sequence.end(
+            removing: 1, dragEnabled: true, shortcutsEnabled: true, at: 10.2)
+        guard case .ended(let kind, let tapAllowed) = outcome else {
+            return XCTFail("Expected the pending sequence to complete")
+        }
+        XCTAssertFalse(
+            TouchGesturePolicy.shouldEmitTwoFingerRightClick(
+                completedCount: 2, kind: kind, tapAllowed: tapAllowed,
+                perFingerDisplacements: movement.displacements, threshold: 7))
+    }
+
+    func testReplacementFingerCancelsPartiallyLiftedPendingTap() {
+        var sequence = TouchSequencePolicy()
+        XCTAssertEqual(sequence.begin(adding: 2, at: 10), .started)
+        XCTAssertEqual(
+            sequence.end(removing: 1, dragEnabled: true, shortcutsEnabled: true, at: 10.1),
+            .partialPendingLift)
+        XCTAssertTrue(sequence.hasPartialPendingLift)
+        XCTAssertEqual(sequence.begin(adding: 1, at: 10.2), .cancelled)
+        XCTAssertFalse(sequence.isPending)
+    }
+
     func testPendingSequenceCancelsWhenAnotherFingerJoinsAfterPartialLift() {
         var sequence = TouchSequencePolicy()
         XCTAssertEqual(sequence.begin(adding: 2, at: 4), .started)
@@ -169,6 +229,7 @@ final class TouchGesturePolicyTests: XCTestCase {
         var sequence = TouchSequencePolicy()
         XCTAssertEqual(sequence.begin(adding: 2), .started)
         sequence.activate()
+        XCTAssertTrue(sequence.cancelsMovementAfterTouchCountChange(currentTouchCount: 1))
         XCTAssertEqual(
             sequence.end(removing: 1, dragEnabled: true, shortcutsEnabled: true), .cancelled)
         XCTAssertEqual(

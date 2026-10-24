@@ -53,20 +53,24 @@ superseded_by:
 - An unqueueable or rejected drag start blocks movement for the remainder of
   that touch sequence. A sequence-ID check in the model prevents a late UI
   update from sending movement after rejection; lifting the fingers allows a
-  fresh drag attempt.
+  fresh drag attempt. Movement is discarded while the matching button-down is
+  pending and enabled only after its successful result; a late result after
+  lift cannot revive movement.
 - Tap history survives staggered finger lifts; a replacement finger after
-  lifting begins cancels the sequence. Taps must finish within 0.5 seconds,
-  while holding and later moving can still start scrolling or dragging.
+  lifting begins cancels the sequence. During a partial pending lift, the
+  remaining finger continues to be tracked for tap slop without starting a
+  one-finger gesture. Taps must finish within 0.5 seconds, while holding and
+  later moving can still start scrolling or dragging.
 - Pointer ownership covers pointer actions, while system keyboard shortcuts
   remain available to another authenticated remote.
 - Four-finger actions emit public macOS keyboard shortcuts. The matching system
   shortcuts must be enabled on the Mac; custom mappings can change the action.
   No private macOS API or arbitrary keyboard code is sent over the wire.
-- Local validation passes strict Swift format/SwiftLint, 115 AppleCore/MacSupport
+- Local validation passes strict Swift format/SwiftLint, 123 AppleCore/MacSupport
   tests, and macOS plus generic iOS Simulator app builds. The extracted volume
   card is included in the app target's explicit source list. The UI assertions
-  and per-device execution evidence are tracked in the corresponding PR;
-  no physical-device acceptance is claimed here.
+  and per-device execution evidence are tracked in the corresponding PR; no
+  physical-device acceptance is claimed here.
 
 - The Simulator suite has nine scenarios on iPhone and iPad. The UI step has a
   40-minute limit and the Apple job a 50-minute limit: a six-scenario CI run took
