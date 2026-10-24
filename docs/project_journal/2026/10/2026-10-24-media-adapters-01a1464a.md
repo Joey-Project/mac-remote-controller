@@ -46,11 +46,15 @@ superseded_by:
   matching late result receives 204. Chrome uses a 1.5-second action deadline,
   discards late content-script callbacks, and clamps live/DVR seeks to valid
   seekable ranges, choosing the nearest endpoint across gaps.
+- Chrome reconnects to missing or disconnected Native Messaging hosts with
+  exponential backoff capped at 15 seconds. IINA rereads its bridge port and
+  token each poll, keeps polling while settings are invalid, and yields after
+  each batch of at most eight queued commands.
 - Final integrated local Swift checks passed 154 AppleCore package tests, the macOS app
   build, generic iOS Simulator build, and generated plist validation. The
   `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
   12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome
-  15/15 and IINA mocks 10/10. `actionlint`, shell syntax checks, ShellCheck
+  20/20 and IINA mocks 13/13. `actionlint`, shell syntax checks, ShellCheck
   0.11.0, and project-journal validation passed. The backend lane reported six
   focused bridge route/lifecycle tests and one localhost HTTP smoke passed.
 - Chrome tests use DOM fixtures and IINA tests use mocks. No Chrome extension,

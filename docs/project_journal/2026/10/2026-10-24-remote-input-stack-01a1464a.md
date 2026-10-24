@@ -103,7 +103,9 @@ superseded_by:
 - Final integrated local checks passed 154 AppleCore package tests, macOS and generic
   iOS Simulator app builds, generated plist validation, and the `SofaRemoteNativeHost`
   release build. Pinned Node 26.12.0/pnpm 12.14.0 format, lint, typecheck, tests, and
-  builds passed: Chrome 15/15 and IINA 10/10. `actionlint` 1.7.12, shell syntax,
+  builds passed: Chrome 20/20 and IINA 13/13. Chrome native-host reconnects use
+  a 15-second maximum backoff; IINA rereads current bridge settings and yields
+  after batches of at most eight commands. `actionlint` 1.7.12, shell syntax,
   ShellCheck 0.11.0, project-journal validation, and whitespace checks passed. This local
   gate did not run the Simulator UI suite, physical BLE radio, or live media playback.
 - Per-slice validation and current external-gate state belong in the corresponding PR.

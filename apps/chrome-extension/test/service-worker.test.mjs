@@ -19,20 +19,22 @@ function makeEvent() {
   };
 }
 
-async function makeHarness() {
+async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = false } = {}) {
   const source = await readFile(new URL('../dist/service-worker.js', import.meta.url), 'utf8');
   const nativeMessages = [];
   const tabMessages = [];
+  const tabCallbacks = [];
   const intervals = [];
   const timeouts = new Map();
+  const ports = [];
   let timeoutId = 0;
+  let connectionAttempts = 0;
+  let runtimeLastError;
   const runtimeMessage = makeEvent();
   const tabRemoved = makeEvent();
   const tabUpdated = makeEvent();
   const installed = makeEvent();
   const startup = makeEvent();
-  const nativeDisconnected = makeEvent();
-  const nativeMessage = makeEvent();
   const sender = { tab: { id: 41 }, frameId: 0, url: 'https://www.youtube.com/watch?v=1' };
   const snapshot = {
     kind: 'youtube',
@@ -47,22 +49,39 @@ async function makeHarness() {
     playerVolume: 0.5,
   };
   let workerMessageListener;
-  const port = {
-    onMessage: nativeMessage,
-    onDisconnect: nativeDisconnected,
-    postMessage(message) {
-      nativeMessages.push(message);
-    },
-  };
+
+  function createNativePort() {
+    const nativeDisconnected = makeEvent();
+    const nativeMessage = makeEvent();
+    const sent = [];
+    const port = {
+      onMessage: nativeMessage,
+      onDisconnect: nativeDisconnected,
+      sent,
+      postMessage(message) {
+        nativeMessages.push(message);
+        sent.push(message);
+      },
+    };
+    ports.push(port);
+    return port;
+  }
+
   const chrome = {
     runtime: {
-      lastError: undefined,
+      get lastError() {
+        return runtimeLastError;
+      },
       onMessage: runtimeMessage,
       onInstalled: installed,
       onStartup: startup,
       connectNative(name) {
         assert.equal(name, 'com.joeyteng.sofaremote');
-        return port;
+        connectionAttempts += 1;
+        if (failedConnectionAttempts.includes(connectionAttempts)) {
+          throw new Error('Native messaging host is unavailable.');
+        }
+        return createNativePort();
       },
     },
     tabs: {
@@ -73,11 +92,15 @@ async function makeHarness() {
         if (message.type === 'mediaRefresh') {
           workerMessageListener({ type: 'mediaState', snapshot }, sender);
         }
-        callback?.();
+        if (callback) {
+          if (deferTabCallbacks) tabCallbacks.push({ tabId, message, callback });
+          else callback();
+        }
         return Promise.resolve();
       },
     },
   };
+
   vm.runInContext(
     source,
     vm.createContext({
@@ -103,10 +126,19 @@ async function makeHarness() {
   return {
     nativeMessages,
     tabMessages,
+    tabCallbacks,
     intervals,
     timeouts,
-    nativeMessage,
-    nativeDisconnected,
+    ports,
+    get nativeMessage() {
+      return ports[0]?.onMessage;
+    },
+    get nativeDisconnected() {
+      return ports[0]?.onDisconnect;
+    },
+    get connectAttempts() {
+      return connectionAttempts;
+    },
     tabRemoved,
     tabUpdated,
     workerMessageListener,
@@ -114,9 +146,22 @@ async function makeHarness() {
     snapshot,
     fireTimeout(id) {
       const timeout = timeouts.get(id);
-      assert.ok(timeout, `timeout ${id} must be pending`);
+      assert.ok(timeout, 'requested timeout must be pending');
       timeouts.delete(id);
       timeout.callback();
+    },
+    fireTimeoutWithDelay(delay) {
+      const entry = [...timeouts.entries()].find(([, timeout]) => timeout.delay === delay);
+      assert.ok(entry, 'requested timeout delay must be pending');
+      this.fireTimeout(entry[0]);
+    },
+    pendingTimeoutDelays() {
+      return [...timeouts.values()]
+        .map((timeout) => timeout.delay)
+        .sort((left, right) => left - right);
+    },
+    setRuntimeLastError(value) {
+      runtimeLastError = value;
     },
   };
 }
@@ -161,6 +206,152 @@ test('unavailable navigation, source removal, and native disconnect stop worker 
   assert.equal(harness.tabMessages.length, 1);
 });
 
+test('native reconnect restores snapshots and ignores stale commands, callbacks, and ports', async () => {
+  const harness = await makeHarness({ deferTabCallbacks: true });
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  const command = {
+    type: 'media.command',
+    requestId: 'reused-request-id',
+    targetId: 'chrome:41',
+    action: 'seek',
+    value: 1,
+  };
+  harness.ports[0].onMessage.dispatch(command);
+  const oldTabCommand = harness.tabMessages.find(
+    ({ message }) => message.type === 'mediaCommand',
+  ).message;
+  assert.equal(oldTabCommand.dispatchId, 1);
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_500]);
+
+  harness.ports[0].onDisconnect.dispatch();
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_000]);
+  harness.fireTimeoutWithDelay(1_000);
+
+  assert.equal(harness.connectAttempts, 2);
+  assert.equal(
+    harness.tabMessages.filter(({ message }) => message.type === 'mediaRefresh').length,
+    1,
+  );
+  assert.equal(
+    harness.tabMessages.filter(({ message }) => message.type === 'mediaCommand').length,
+    1,
+  );
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+  assert.equal(harness.nativeMessages.at(-1).targetId, 'chrome:41');
+  assert.equal(
+    harness.nativeMessages.some((message) => message.type === 'media.commandResult'),
+    false,
+  );
+
+  harness.ports[1].onMessage.dispatch(command);
+  const tabCommands = harness.tabMessages.filter(({ message }) => message.type === 'mediaCommand');
+  const newTabCommand = tabCommands.at(-1).message;
+  assert.notEqual(newTabCommand.dispatchId, oldTabCommand.dispatchId);
+
+  // A late disconnect from the old port must not clear the replacement port.
+  harness.ports[0].onDisconnect.dispatch();
+  const beforeStaleResults = harness.nativeMessages.length;
+  harness.workerMessageListener(
+    {
+      type: 'mediaCommandResult',
+      requestId: command.requestId,
+      dispatchId: oldTabCommand.dispatchId,
+      ok: true,
+    },
+    harness.sender,
+  );
+  harness.setRuntimeLastError({ message: 'The old tab request failed.' });
+  harness.tabCallbacks.find(({ message }) => message.type === 'mediaCommand').callback();
+
+  assert.equal(harness.nativeMessages.length, beforeStaleResults);
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_500]);
+
+  harness.setRuntimeLastError(undefined);
+  harness.workerMessageListener(
+    {
+      type: 'mediaCommandResult',
+      requestId: command.requestId,
+      dispatchId: newTabCommand.dispatchId,
+      ok: true,
+    },
+    harness.sender,
+  );
+  assert.equal(harness.nativeMessages.length, beforeStaleResults + 1);
+  assert.equal(harness.ports[1].sent.at(-1).type, 'media.commandResult');
+  assert.equal(harness.ports[1].sent.at(-1).requestId, command.requestId);
+  assert.equal(harness.ports[1].sent.at(-1).ok, true);
+  assert.equal(harness.timeouts.size, 0);
+});
+
+test('missing native host uses one bounded exponential retry timer', async () => {
+  const failedAttempts = Array.from({ length: 8 }, (_, index) => index + 1);
+  const harness = await makeHarness({ failedConnectionAttempts: failedAttempts });
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  assert.equal(harness.connectAttempts, 1);
+
+  const expectedDelays = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000, 15_000];
+  for (let index = 0; index < expectedDelays.length; index += 1) {
+    const delay = expectedDelays[index];
+    assert.deepEqual(harness.pendingTimeoutDelays(), [delay]);
+    harness.intervals[0].callback();
+    harness.intervals[0].callback();
+    harness.workerMessageListener(
+      { type: 'mediaState', snapshot: harness.snapshot },
+      harness.sender,
+    );
+    assert.equal(harness.connectAttempts, index + 1);
+    assert.deepEqual(harness.pendingTimeoutDelays(), [delay]);
+
+    harness.fireTimeoutWithDelay(delay);
+    assert.equal(harness.connectAttempts, index + 2);
+  }
+
+  assert.deepEqual(harness.pendingTimeoutDelays(), [15_000]);
+});
+
+test('repeated immediate port disconnects keep increasing the retry delay', async () => {
+  const harness = await makeHarness();
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+
+  harness.ports[0].onDisconnect.dispatch();
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_000]);
+  harness.intervals[0].callback();
+  assert.equal(harness.connectAttempts, 1);
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_000]);
+
+  harness.fireTimeoutWithDelay(1_000);
+  assert.equal(harness.connectAttempts, 2);
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+  harness.ports[1].onDisconnect.dispatch();
+  assert.deepEqual(harness.pendingTimeoutDelays(), [2_000]);
+
+  harness.fireTimeoutWithDelay(2_000);
+  assert.equal(harness.connectAttempts, 3);
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+  harness.ports[2].onDisconnect.dispatch();
+  assert.deepEqual(harness.pendingTimeoutDelays(), [4_000]);
+});
+
+test('known tabs recover after several missing-host retries without a page event', async () => {
+  const harness = await makeHarness({ failedConnectionAttempts: [1, 2, 3] });
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  assert.equal(harness.connectAttempts, 1);
+
+  for (const delay of [1_000, 2_000, 4_000]) {
+    assert.deepEqual(harness.pendingTimeoutDelays(), [delay]);
+    harness.fireTimeoutWithDelay(delay);
+  }
+
+  assert.equal(harness.connectAttempts, 4);
+  assert.equal(harness.ports.length, 1);
+  assert.equal(
+    harness.tabMessages.filter(({ message }) => message.type === 'mediaRefresh').length,
+    1,
+  );
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+  assert.equal(harness.nativeMessages.at(-1).targetId, 'chrome:41');
+});
+
 test('command timeout retires its result, drops late replies, and frees the next request', async () => {
   const harness = await makeHarness();
   harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
@@ -172,6 +363,7 @@ test('command timeout retires its result, drops late replies, and frees the next
     value: 1,
   };
   harness.nativeMessage.dispatch(firstCommand);
+  const firstDispatchId = harness.tabMessages.at(-1).message.dispatchId;
 
   const firstTimeoutId = [...harness.timeouts.keys()][0];
   assert.equal(harness.timeouts.get(firstTimeoutId).delay, 1_500);
@@ -183,7 +375,12 @@ test('command timeout retires its result, drops late replies, and frees the next
   assert.equal(harness.nativeMessages.at(-1).ok, false);
 
   harness.workerMessageListener(
-    { type: 'mediaCommandResult', requestId: firstCommand.requestId, ok: true },
+    {
+      type: 'mediaCommandResult',
+      requestId: firstCommand.requestId,
+      dispatchId: firstDispatchId,
+      ok: true,
+    },
     harness.sender,
   );
   assert.equal(harness.nativeMessages.length, afterTimeoutCount);
@@ -191,9 +388,15 @@ test('command timeout retires its result, drops late replies, and frees the next
 
   const nextCommand = { ...firstCommand, requestId: 'chrome-request-2' };
   harness.nativeMessage.dispatch(nextCommand);
+  const nextDispatchId = harness.tabMessages.at(-1).message.dispatchId;
   assert.equal(harness.timeouts.size, 1);
   harness.workerMessageListener(
-    { type: 'mediaCommandResult', requestId: nextCommand.requestId, ok: true },
+    {
+      type: 'mediaCommandResult',
+      requestId: nextCommand.requestId,
+      dispatchId: nextDispatchId,
+      ok: true,
+    },
     harness.sender,
   );
 

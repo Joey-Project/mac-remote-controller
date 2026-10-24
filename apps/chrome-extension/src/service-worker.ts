@@ -19,6 +19,7 @@ interface MediaStateMessage {
 interface MediaCommandResultMessage {
   type: 'mediaCommandResult';
   requestId: string;
+  dispatchId: number;
   ok: boolean;
   error?: string;
 }
@@ -31,15 +32,28 @@ interface NativeMediaCommand {
   value?: number;
 }
 
+interface PendingTabCommand {
+  tabId: number;
+  targetId: string;
+  timeout: number;
+  port: chrome.runtime.Port;
+  dispatchId: number;
+}
+
 const HOST_NAME = 'com.joeyteng.sofaremote';
 const maximumPendingCommands = 8;
 const nativeMessageByteLimit = 64 * 1024;
 const targetRefreshIntervalMilliseconds = 2_000;
 const browserCommandTimeoutMilliseconds = 1_500;
+const nativeReconnectInitialDelayMilliseconds = 1_000;
+const nativeReconnectMaximumDelayMilliseconds = 15_000;
 
-const commandForTab = new Map<string, { tabId: number; targetId: string; timeout: number }>();
+const commandForTab = new Map<string, PendingTabCommand>();
 const knownMediaTabs = new Set<number>();
 let nativePort: chrome.runtime.Port | undefined;
+let nativeReconnectTimer: number | undefined;
+let nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
+let nextDispatchId = 0;
 
 function allowedKindForURL(url: string | undefined): 'youtube' | 'bilibili' | undefined {
   if (!url) return undefined;
@@ -56,19 +70,53 @@ function allowedKindForURL(url: string | undefined): 'youtube' | 'bilibili' | un
   return undefined;
 }
 
+function clearPendingTabCommands(): void {
+  for (const pending of commandForTab.values()) clearTimeout(pending.timeout);
+  commandForTab.clear();
+}
+
+function cancelReconnectIfNoKnownTabs(): void {
+  if (knownMediaTabs.size > 0) return;
+  if (nativeReconnectTimer !== undefined) {
+    clearTimeout(nativeReconnectTimer);
+    nativeReconnectTimer = undefined;
+  }
+  nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
+}
+
+function scheduleNativeReconnect(): void {
+  if (knownMediaTabs.size === 0 || nativeReconnectTimer !== undefined) return;
+  const delay = nativeReconnectDelayMilliseconds;
+  nativeReconnectDelayMilliseconds = Math.min(delay * 2, nativeReconnectMaximumDelayMilliseconds);
+  nativeReconnectTimer = setTimeout(() => {
+    nativeReconnectTimer = undefined;
+    if (knownMediaTabs.size === 0) {
+      nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
+      return;
+    }
+    if (!ensureNativePort()) return;
+    refreshKnownTargets();
+  }, delay);
+}
+
+function handleNativeDisconnect(port: chrome.runtime.Port): void {
+  if (nativePort !== port) return;
+  nativePort = undefined;
+  clearPendingTabCommands();
+  scheduleNativeReconnect();
+}
+
 function ensureNativePort(): chrome.runtime.Port | undefined {
   if (nativePort) return nativePort;
+  if (nativeReconnectTimer !== undefined) return undefined;
   try {
     const port = chrome.runtime.connectNative(HOST_NAME);
     nativePort = port;
     port.onMessage.addListener((message: unknown) => receiveNativeMessage(port, message));
-    port.onDisconnect.addListener(() => {
-      if (nativePort === port) nativePort = undefined;
-      for (const pending of commandForTab.values()) clearTimeout(pending.timeout);
-      commandForTab.clear();
-    });
+    port.onDisconnect.addListener(() => handleNativeDisconnect(port));
     return port;
   } catch {
+    scheduleNativeReconnect();
     return undefined;
   }
 }
@@ -82,18 +130,19 @@ function postToNative(message: unknown): boolean {
     port.postMessage(message);
     return true;
   } catch {
-    if (nativePort === port) nativePort = undefined;
+    handleNativeDisconnect(port);
     return false;
   }
 }
 
 function markTargetUnavailable(tabId: number): void {
   knownMediaTabs.delete(tabId);
+  cancelReconnectIfNoKnownTabs();
   postToNative({ type: 'media.targetUnavailable', targetId: `chrome:${tabId}` });
 }
 
 function refreshKnownTargets(): void {
-  if (!nativePort || knownMediaTabs.size === 0) return;
+  if (knownMediaTabs.size === 0 || !ensureNativePort()) return;
   for (const tabId of knownMediaTabs) {
     try {
       void chrome.tabs.sendMessage(tabId, { type: 'mediaRefresh' }).catch(() => undefined);
@@ -177,17 +226,19 @@ function isValidCommand(message: NativeMediaCommand): boolean {
 }
 
 function receiveNativeMessage(port: chrome.runtime.Port, value: unknown): void {
-  if (!value || typeof value !== 'object') return;
+  if (nativePort !== port || !value || typeof value !== 'object') return;
   const message = value as Partial<NativeMediaCommand>;
   if (message.type !== 'media.command' || !isValidCommand(message as NativeMediaCommand)) return;
+  nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
   if (commandForTab.size >= maximumPendingCommands || commandForTab.has(message.requestId!)) {
     sendCommandResult(message.requestId!, message.targetId!, false, 'The browser is busy.');
     return;
   }
   const tabId = Number(message.targetId!.slice('chrome:'.length));
+  const dispatchId = ++nextDispatchId;
   const timeout = setTimeout(() => {
     const pending = commandForTab.get(message.requestId!);
-    if (!pending) return;
+    if (!pending || pending.dispatchId !== dispatchId || pending.port !== port) return;
     commandForTab.delete(message.requestId!);
     sendCommandResult(
       message.requestId!,
@@ -196,20 +247,27 @@ function receiveNativeMessage(port: chrome.runtime.Port, value: unknown): void {
       'The browser tab did not respond.',
     );
   }, browserCommandTimeoutMilliseconds);
-  commandForTab.set(message.requestId!, { tabId, targetId: message.targetId!, timeout });
+  commandForTab.set(message.requestId!, {
+    tabId,
+    targetId: message.targetId!,
+    timeout,
+    port,
+    dispatchId,
+  });
   try {
     chrome.tabs.sendMessage(
       tabId,
       {
         type: 'mediaCommand',
         requestId: message.requestId,
+        dispatchId,
         action: message.action,
         value: message.value,
       },
       () => {
         if (chrome.runtime.lastError) {
           const pending = commandForTab.get(message.requestId!);
-          if (!pending) return;
+          if (!pending || pending.dispatchId !== dispatchId || pending.port !== port) return;
           clearTimeout(pending.timeout);
           commandForTab.delete(message.requestId!);
           sendCommandResult(
@@ -255,8 +313,15 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message?.type === 'mediaCommandResult') {
+      if (!Number.isSafeInteger(message.dispatchId) || message.dispatchId < 1) return false;
       const pending = commandForTab.get(message.requestId);
-      if (!pending || pending.tabId !== tabId) return false;
+      if (
+        !pending ||
+        pending.tabId !== tabId ||
+        pending.port !== nativePort ||
+        pending.dispatchId !== message.dispatchId
+      )
+        return false;
       clearTimeout(pending.timeout);
       commandForTab.delete(message.requestId);
       sendCommandResult(message.requestId, pending.targetId, message.ok === true, message.error);

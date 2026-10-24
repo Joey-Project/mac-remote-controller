@@ -1,7 +1,9 @@
 import {
+  bridgeConfiguration,
   iinaFormData,
   canNavigatePlaylist,
   createTargetID,
+  maximumCommandsPerPoll,
   mpvPercentFromGainRatio,
   shouldUnmuteForGainRatio,
   targetSnapshot,
@@ -9,25 +11,27 @@ import {
 } from './iina-controls';
 
 const targetId = createTargetID();
-const bridgePort = iina.preferences.get('bridge_port') as number;
-const bridgeToken = iina.preferences.get('bridge_token') as string;
-const baseURL = `http://127.0.0.1:${bridgePort}/v1/iina`;
 const tickMilliseconds = 250;
 
 let disconnected = false;
 let running = false;
 
-function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${bridgeToken}` };
+function currentBridgeConfiguration() {
+  return bridgeConfiguration(
+    iina.preferences.get('bridge_port'),
+    iina.preferences.get('bridge_token'),
+  );
 }
 
 async function request<T>(
+  baseURL: string,
+  token: string,
   method: 'get' | 'post',
   path: string,
   data?: Record<string, unknown>,
 ): Promise<T> {
   const options = {
-    headers: authHeaders(),
+    headers: { Authorization: `Bearer ${token}` },
     params: {} as Record<string, string>,
     data: method === 'post' ? iinaFormData(data ?? {}) : {},
   };
@@ -91,55 +95,59 @@ async function execute(action: string, value: number | undefined): Promise<void>
   }
 }
 
-async function pollOnce(): Promise<void> {
+async function pollOnce(configuration: { port: number; token: string }): Promise<number> {
+  const baseURL = `http://127.0.0.1:${configuration.port}/v1/iina`;
   const state = snapshot();
   if (iina.core.status.idle) {
-    await request('post', '/unregister', { targetId });
-    return;
+    await request(baseURL, configuration.token, 'post', '/unregister', { targetId });
+    return 0;
   }
-  await request('post', '/update', state.target);
-  const result = await request<{
-    command?: { requestId: string; targetId: string; action: string; value?: number };
-  }>('get', `/next?targetId=${encodeURIComponent(targetId)}`);
-  const command = result.command;
-  if (!command) return;
-  let error: string | undefined;
-  try {
-    if (command.targetId !== targetId || typeof command.requestId !== 'string') {
-      throw new Error('The media command target did not match this IINA window.');
+  await request(baseURL, configuration.token, 'post', '/update', state.target);
+  let completed = 0;
+  while (completed < maximumCommandsPerPoll) {
+    const result = await request<{
+      command?: { requestId: string; targetId: string; action: string; value?: number };
+    }>(baseURL, configuration.token, 'get', `/next?targetId=${encodeURIComponent(targetId)}`);
+    const command = result.command;
+    if (!command) break;
+    let error: string | undefined;
+    try {
+      if (command.targetId !== targetId || typeof command.requestId !== 'string') {
+        throw new Error('The media command target did not match this IINA window.');
+      }
+      await execute(command.action, command.value);
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : 'IINA could not complete the command.';
     }
-    await execute(command.action, command.value);
-  } catch (caught) {
-    error = caught instanceof Error ? caught.message : 'IINA could not complete the command.';
+    await request(baseURL, configuration.token, 'post', '/result', {
+      requestId: command.requestId,
+      targetId,
+      ok: error === undefined,
+      ...(error ? { error: error.slice(0, 1024) } : {}),
+    });
+    completed += 1;
   }
-  await request('post', '/result', {
-    requestId: command.requestId,
-    targetId,
-    ok: error === undefined,
-    ...(error ? { error: error.slice(0, 1024) } : {}),
-  });
+  return completed;
 }
 
 async function runLoop(): Promise<void> {
-  if (
-    running ||
-    disconnected ||
-    !Number.isInteger(bridgePort) ||
-    bridgePort < 1 ||
-    bridgePort > 65_535 ||
-    bridgeToken.length < 32
-  ) {
-    return;
-  }
+  if (running || disconnected) return;
   running = true;
   while (!disconnected) {
     const started = Date.now();
+    let completed = 0;
     try {
-      await pollOnce();
+      const configuration = currentBridgeConfiguration();
+      if (configuration) completed = await pollOnce(configuration);
     } catch {
       // Keep the token out of logs. Connection state is visible through the local companion.
     }
-    const delay = Math.max(0, tickMilliseconds - (Date.now() - started));
+    // A full batch yields to IINA's event loop before continuing. Otherwise
+    // keep the existing 250 ms polling cadence without delaying each command.
+    const delay =
+      completed === maximumCommandsPerPoll
+        ? 0
+        : Math.max(0, tickMilliseconds - (Date.now() - started));
     await new Promise<void>((resolve) => setTimeout(resolve, delay));
   }
   running = false;
@@ -147,7 +155,12 @@ async function runLoop(): Promise<void> {
 
 function unregister(): void {
   disconnected = true;
-  void request('post', '/unregister', { targetId }).catch(() => undefined);
+  const configuration = currentBridgeConfiguration();
+  if (!configuration) return;
+  const baseURL = `http://127.0.0.1:${configuration.port}/v1/iina`;
+  void request(baseURL, configuration.token, 'post', '/unregister', { targetId }).catch(
+    () => undefined,
+  );
 }
 
 iina.event.on('iina.window-loaded', () => {

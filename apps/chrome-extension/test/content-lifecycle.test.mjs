@@ -16,6 +16,8 @@ function makeContext() {
     duration: 30,
     seekable: { length: 0 },
     paused: true,
+    volume: 0.5,
+    muted: false,
     play() {},
     pause() {},
     addEventListener() {},
@@ -86,6 +88,9 @@ function makeContext() {
     refresh() {
       runtimeMessageListener({ type: 'mediaRefresh' });
     },
+    sendCommand(message) {
+      runtimeMessageListener(message);
+    },
     mutate() {
       mutationCallback();
     },
@@ -129,6 +134,27 @@ test('content script refreshes source after SPA navigation, BFCache restore, and
   harness.scheduled.delete(timerId);
   callback();
   assert.match(harness.sent.at(-1).snapshot.name, /Episode three/);
+});
+
+test('content script echoes the dispatch id on its asynchronous command result', async () => {
+  const source = await readFile(new URL('../dist/content-script.js', import.meta.url), 'utf8');
+  const harness = makeContext();
+  vm.runInContext(source, harness.context);
+
+  harness.sendCommand({
+    type: 'mediaCommand',
+    requestId: 'dispatch-id-check',
+    dispatchId: 29,
+    action: 'setVolume',
+    value: 0.6,
+  });
+  await Promise.resolve();
+
+  const result = harness.sent.at(-1);
+  assert.equal(result.type, 'mediaCommandResult');
+  assert.equal(result.requestId, 'dispatch-id-check');
+  assert.equal(result.dispatchId, 29);
+  assert.equal(result.ok, true);
 });
 
 test('service-worker refresh messages report the current tab video without a page timer', async () => {

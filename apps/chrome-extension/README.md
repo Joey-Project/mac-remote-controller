@@ -36,7 +36,11 @@ scripts/install-chrome-native-host.sh \
 The installer pins the manifest to this extension's fixed public ID and writes
 it under the current user's Chrome NativeMessagingHosts directory. It does not
 install the extension or launch Chrome. Reopen the extension after installing
-the native host. To remove this registration, delete
+the native host. After first loading or reloading the extension, refresh any
+YouTube or Bilibili tabs that were already open so Chrome injects the current
+content script. Later native-host reconnects are handled by the service worker,
+which requests fresh snapshots from registered tabs without waiting for another
+page event. To remove this registration, delete
 `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.joeyteng.sofaremote.json`.
 
 Website controls are implemented against the page's current `<video>` and
@@ -45,10 +49,14 @@ elements, and tab closure refresh or remove the target. The extension does not
 inject arbitrary JavaScript, run shell commands, or use keyboard shortcuts.
 While the native messaging host is connected, the service worker asks each
 registered tab for a current media snapshot every two seconds. This keeps the
-target lease alive when Chrome throttles timers in a hidden, silent page. Chrome
-105 or newer is required because that version keeps an extension service worker
-alive while its native messaging port remains connected. A muted `<video>` is
-reported with effective volume zero; a positive volume command unmutes it.
+target lease alive when Chrome throttles timers in a hidden, silent page. If the
+native port disconnects or the host is unavailable, one retry timer starts at one
+second, doubles up to a 15-second cap, and runs only while a media tab is
+registered. After reconnecting, the worker asks those tabs for fresh snapshots;
+pending actions are dropped and never replayed. Chrome 105 or newer is required
+because that version keeps an extension service worker alive while its native
+messaging port remains connected. A muted `<video>` is reported with effective
+volume zero; a positive volume command unmutes it.
 
 Site selectors can change without notice. Automated tests use DOM fixtures and
 do not claim live-site compatibility for every account, layout, region, or
