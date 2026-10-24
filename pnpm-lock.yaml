@@ -209,6 +209,21 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  apps/web-remote:
+    devDependencies:
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      oxlint:
+        specifier: 1.88.0
+        version: 1.88.0(oxlint-tsgolint@7.0.2004)
+      oxlint-tsgolint:
+        specifier: 7.0.2004
+        version: 7.0.2004
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':

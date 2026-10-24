@@ -22,10 +22,11 @@ to test pairing, security, command delivery, or physical-device behavior.
 
 ## Development
 
-The package uses the repository's TypeScript, esbuild, and Oxlint versions.
-Once the parent workspace includes this package, run its `lint`, `typecheck`,
-`build`, and `test` scripts through the root pnpm workspace. `dist/` and
-package-local `node_modules/` are ignored.
+The package uses the repository's pinned TypeScript, esbuild, and Oxlint
+versions. The root pnpm workspace and CI run its `lint`, `typecheck`, `test`,
+and `build` scripts alongside the native adapters. For focused local checks, use
+`pnpm --filter @mac-remote-controller/web-remote-preview <script>` from the
+repository root. `dist/` and package-local `node_modules/` are ignored.
 
 ## Web-control feasibility
 

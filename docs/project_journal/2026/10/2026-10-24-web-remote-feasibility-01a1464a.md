@@ -37,6 +37,9 @@ superseded_by:
 - The preview handles one-finger movement and tap, two-finger scroll, pointer
   capture cancellation, window blur, and page deactivation. Its test boundary
   rejects network/storage APIs and checks gesture lifecycle hooks.
+- The root pnpm workspace and CI include the offline preview's lint,
+  type-check, tests, and build. The app keeps its package-local generated
+  output ignored.
 - A desktop in-app-browser smoke of the source-identical built mirror passed:
   the offline/no-Mac banner appeared, a left-click action ran locally, keyboard
   mode switched, text input reached nine characters, the right-arrow counter
@@ -96,4 +99,6 @@ trust anchor, and token-binding design.
 ## Evidence
 
 - Preview source and test hooks: `apps/web-remote/`.
+- Workspace and CI commands: root `package.json`, `pnpm-workspace.yaml`, and
+  `.github/workflows/ci.yml`.
 - Protocol and trust implementation: `packages/apple-core/Sources/AppleCore/Pairing.swift`, `packages/apple-core/Sources/AppleCore/BonjourResolver.swift`, `packages/apple-core/Sources/AppleCore/WebSocketPeer.swift`, and `apps/ios/SofaRemoteiOS/App/RemoteModel.swift`.

@@ -38,9 +38,9 @@ jobs:
         run: pnpm run lint
       - name: Type-check TypeScript
         run: pnpm run typecheck
-      - name: Test Chrome extension
+      - name: Test TypeScript packages
         run: pnpm run test
-      - name: Build Chrome extension
+      - name: Build TypeScript packages
         run: pnpm run build
 
   apple:
