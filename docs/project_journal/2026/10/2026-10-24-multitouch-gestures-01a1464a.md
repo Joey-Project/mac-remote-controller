@@ -47,7 +47,7 @@ superseded_by:
 - Four-finger actions emit public macOS keyboard shortcuts. The matching system
   shortcuts must be enabled on the Mac; custom mappings can change the action.
   No private macOS API or arbitrary keyboard code is sent over the wire.
-- Local validation passes strict Swift format/SwiftLint, 97 AppleCore/MacSupport
+- Local validation passes strict Swift format/SwiftLint, 100 AppleCore/MacSupport
   tests, and macOS plus generic iOS Simulator app builds. The extracted volume
   card is included in the app target's explicit source list. The UI assertions
   and per-device execution evidence are tracked in the corresponding PR;

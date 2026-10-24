@@ -67,7 +67,7 @@ final class RemoteModel {
     private var coalescingTimer: Timer?
     var benchmark: RTTBenchmarkAccumulator?
     var benchmarkRequest: BenchmarkPendingProbe?
-    var expiredBenchmarkRequestIDs: Set<String> = []
+    var benchmarkRequestTracker = RTTBenchmarkRequestTracker()
     var benchmarkTimeout: Timer?
 
     var pairedMacChoices: [DiscoveredMac] {
@@ -252,6 +252,7 @@ final class RemoteModel {
     func handleClose(_ reason: String) {
         let unknown = !pending.isEmpty
         if benchmarkRunning { cancelBenchmark() }
+        benchmarkRequestTracker.reset()
         attemptID = nil
         isConnected = false
         remoteState = nil
@@ -279,6 +280,7 @@ extension RemoteModel {
                 isConnected = false
                 connectionID = nil
                 remoteState = nil
+                benchmarkRequestTracker.reset()
                 connectionSummary = "Disconnected"
                 errorMessage = nil
                 return
@@ -306,6 +308,7 @@ extension RemoteModel {
             ? "Disconnected with a pending control. Its outcome is unknown; it was not retried."
             : nil
         if benchmarkRunning { cancelBenchmark() }
+        benchmarkRequestTracker.reset()
     }
 
     @discardableResult
