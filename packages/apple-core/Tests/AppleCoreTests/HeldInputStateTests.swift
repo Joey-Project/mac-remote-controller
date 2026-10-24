@@ -26,6 +26,17 @@ final class HeldInputStateTests: XCTestCase {
         XCTAssertTrue(state.releaseAll().isEmpty)
     }
 
+    func testDragButtonSelectsRightAndPrefersLeftWhenBothAreHeld() {
+        var state = HeldInputState()
+        XCTAssertNil(state.dragButton)
+        _ = state.apply(RemoteCommand(name: .pointerButtonDown, button: .right), at: 1)
+        XCTAssertEqual(state.dragButton, .right)
+        _ = state.apply(RemoteCommand(name: .pointerButtonDown, button: .left), at: 2)
+        XCTAssertEqual(state.dragButton, .left)
+        _ = state.apply(RemoteCommand(name: .pointerButtonUp, button: .left), at: 3)
+        XCTAssertEqual(state.dragButton, .right)
+    }
+
     func testActiveMovementRefreshesTheIdleReleaseDeadline() {
         var state = HeldInputState()
         let start: TimeInterval = 100

@@ -113,6 +113,8 @@ private final class TrackpadView: UIView {
     private var start = CGPoint.zero
     private var previous = CGPoint.zero
     private var didForceClick = false
+    private var didMoveBeyondTwoFingerTapSlop = false
+    private var initialTouchLocations: [ObjectIdentifier: CGPoint] = [:]
     private var dragHeld = false
     private let threshold: CGFloat = 7
 
@@ -130,12 +132,16 @@ private final class TrackpadView: UIView {
             mode = .pending
             start = centroid(event) ?? touches.first?.location(in: self) ?? .zero
             previous = start; didForceClick = false
+            didMoveBeyondTwoFingerTapSlop = false
+            resetInitialTouchLocations(event)
         } else {
             guard mode != .blocked else { return }
             switch sequence.begin(adding: touches.count) {
             case .joined:
                 let point = centroid(event) ?? previous
                 start = point; previous = point
+                didMoveBeyondTwoFingerTapSlop = false
+                resetInitialTouchLocations(event)
             case .cancelled:
                 cancelSequence(blockUntilLift: true)
             default: break
@@ -146,6 +152,7 @@ private final class TrackpadView: UIView {
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard enabled, mode != .blocked, mode != .idle else { return }
         if touchCount != sequence.initialCount { cancelSequence(blockUntilLift: true); return }
+        updateTwoFingerTapSlop(event)
         let point = centroid(event) ?? touches.first?.location(in: self) ?? previous
         var delta = CGPoint(x: point.x - previous.x, y: point.y - previous.y)
         let total = hypot(point.x - start.x, point.y - start.y)
@@ -207,6 +214,7 @@ private final class TrackpadView: UIView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        updateTwoFingerTapSlop(event)
         let wasSwipe = mode == .swipe
         let completedCount = sequence.initialCount
         let endOutcome = sequence.end(
@@ -229,7 +237,11 @@ private final class TrackpadView: UIView {
         if enabled, !didForceClick {
             if case .ended(let kind) = endOutcome, mode == .pending {
                 if kind == .pointer, completedCount == 1 { onTap?() }
-                if kind == .scroll, completedCount == 2 { onRightClick?() }
+                if kind == .scroll, completedCount == 2,
+                    !didMoveBeyondTwoFingerTapSlop
+                {
+                    onRightClick?()
+                }
             }
         }
         finishSequence()
@@ -243,6 +255,28 @@ private final class TrackpadView: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow(); if window == nil { cancelSequence() }
+    }
+
+    private func resetInitialTouchLocations(_ event: UIEvent?) {
+        initialTouchLocations.removeAll(keepingCapacity: true)
+        for touch in event?.allTouches ?? [] where touch.view === self {
+            initialTouchLocations[ObjectIdentifier(touch)] = touch.location(in: self)
+        }
+    }
+
+    private func updateTwoFingerTapSlop(_ event: UIEvent?) {
+        guard sequence.initialCount == 2, mode == .pending else { return }
+        let activeTouches = event?.allTouches?.filter { $0.view === self } ?? []
+        let distances = activeTouches.compactMap { touch -> Double? in
+            guard let origin = initialTouchLocations[ObjectIdentifier(touch)] else { return nil }
+            let location = touch.location(in: self)
+            return Double(hypot(location.x - origin.x, location.y - origin.y))
+        }
+        if !TouchGesturePolicy.isTwoFingerTapWithinSlop(
+            perFingerDisplacements: distances, threshold: Double(threshold))
+        {
+            didMoveBeyondTwoFingerTapSlop = true
+        }
     }
 
     private func centroid(_ event: UIEvent?) -> CGPoint? {
@@ -264,6 +298,8 @@ private final class TrackpadView: UIView {
             onDragEnd?()
         }
         sequence.cancel()
+        initialTouchLocations.removeAll(keepingCapacity: true)
+        didMoveBeyondTwoFingerTapSlop = false
         mode = blockUntilLift ? .blocked : .idle
         if !blockUntilLift { touchCount = 0 }
     }
@@ -277,6 +313,8 @@ private final class TrackpadView: UIView {
             onDragEnd?()
         }
         sequence.cancel()
+        initialTouchLocations.removeAll(keepingCapacity: true)
+        didMoveBeyondTwoFingerTapSlop = false
         mode = .idle
         touchCount = 0
     }

@@ -14,6 +14,13 @@ public enum TouchGesturePolicy {
         distance.isFinite && threshold.isFinite && threshold >= 0 && distance >= threshold
     }
 
+    public static func isTwoFingerTapWithinSlop(
+        perFingerDisplacements: [Double], threshold: Double
+    ) -> Bool {
+        perFingerDisplacements.count == 2 && threshold.isFinite && threshold > 0
+            && perFingerDisplacements.allSatisfy { $0.isFinite && $0 >= 0 && $0 < threshold }
+    }
+
     public static func kind(
         touchCount: Int, dragEnabled: Bool, shortcutsEnabled: Bool
     ) -> TouchGestureKind {

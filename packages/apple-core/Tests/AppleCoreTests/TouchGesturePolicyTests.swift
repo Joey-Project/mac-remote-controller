@@ -35,6 +35,24 @@ final class TouchGesturePolicyTests: XCTestCase {
         XCTAssertNil(TouchGesturePolicy.shortcut(deltaX: 20, deltaY: 20))
     }
 
+    func testTwoFingerTapRequiresBothFingersToStayWithinTapSlop() {
+        XCTAssertTrue(
+            TouchGesturePolicy.isTwoFingerTapWithinSlop(
+                perFingerDisplacements: [6.9, 6.9], threshold: 7))
+        XCTAssertFalse(
+            TouchGesturePolicy.isTwoFingerTapWithinSlop(
+                perFingerDisplacements: [8, 8], threshold: 7))
+        XCTAssertFalse(
+            TouchGesturePolicy.isTwoFingerTapWithinSlop(
+                perFingerDisplacements: [0, 7], threshold: 7))
+        XCTAssertFalse(
+            TouchGesturePolicy.isTwoFingerTapWithinSlop(
+                perFingerDisplacements: [0], threshold: 7))
+        XCTAssertFalse(
+            TouchGesturePolicy.isTwoFingerTapWithinSlop(
+                perFingerDisplacements: [.nan, 0], threshold: 7))
+    }
+
     func testPendingTouchesMayJoinInSeparateBatchesAndLiftInSeparateBatches() {
         var sequence = TouchSequencePolicy()
         XCTAssertEqual(sequence.begin(adding: 1), .started)

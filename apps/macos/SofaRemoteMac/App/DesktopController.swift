@@ -123,12 +123,14 @@ final class DesktopController {
         held: HeldInputState
     ) throws {
         guard let x = command.x, let y = command.y else { throw ControlError.invalidCommand }
-        let (mouseType, button): (CGEventType, CGMouseButton) =
-            if held.buttons.contains(.left) {
-                (.leftMouseDragged, .left)
-            } else if held.buttons.contains(.right) { (.rightMouseDragged, .right) } else {
-                (.mouseMoved, .left)
+        let dragButton = held.dragButton
+        let mouseType: CGEventType =
+            switch dragButton {
+            case .left: .leftMouseDragged
+            case .right: .rightMouseDragged
+            case nil: .mouseMoved
             }
+        let button: CGMouseButton = dragButton == .right ? .right : .left
         try post(
             CGEvent(
                 mouseEventSource: source, mouseType: mouseType,

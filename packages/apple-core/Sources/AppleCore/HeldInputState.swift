@@ -3,6 +3,13 @@ public struct HeldInputState: Sendable, Equatable {
     public private(set) var buttons: Set<PointerButton> = []
     public private(set) var lastUpdate: TimeInterval?
 
+    /// Chooses the drag event button, preferring left when both buttons are held.
+    public var dragButton: PointerButton? {
+        if buttons.contains(.left) { return .left }
+        if buttons.contains(.right) { return .right }
+        return nil
+    }
+
     public init() {}
 
     @discardableResult
