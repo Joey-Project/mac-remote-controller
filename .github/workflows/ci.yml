@@ -116,7 +116,8 @@ jobs:
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Lint GitHub Actions workflows
-        run: actionlint
+        # actionlint v1.7.12's embedded webhook schema predates the stacked PR event.
+        run: actionlint -ignore '^invalid activity type "stacked" for "pull_request" Webhook event\.'
       - name: Check repository shell scripts
         run: |
           for script in tooling/swift/*.sh apps/android/gradlew; do
