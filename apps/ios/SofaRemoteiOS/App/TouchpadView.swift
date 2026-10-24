@@ -14,7 +14,7 @@ struct TouchpadCard: View {
                 Label("Touchpad", systemImage: "cursorarrow")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text("Move · tap · two-finger scroll")
+                Text("Move · tap · two-finger scroll or tap")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -28,7 +28,8 @@ struct TouchpadCard: View {
                     enabled: isEnabled,
                     onMove: onMove,
                     onScroll: onScroll,
-                    onTap: onTap
+                    onTap: onTap,
+                    onRightClick: onRightClick
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 if !isEnabled {
@@ -38,24 +39,26 @@ struct TouchpadCard: View {
                         .allowsHitTesting(false)
                 }
             }
-            .frame(height: 250)
+            .frame(maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Touchpad")
+            .accessibilityIdentifier("touchpad.surface")
             .accessibilityHint(
-                "Drag to move the Mac pointer, tap to click, or use two fingers to scroll"
+                "Drag to move the Mac pointer, tap to click, use two fingers to scroll, "
+                    + "or tap with two fingers to right-click"
             )
-            .disabled(!isEnabled)
-
-            Button(action: onRightClick) {
-                Label("Right click", systemImage: "cursorarrow.click.2")
-                    .frame(maxWidth: .infinity)
+            .accessibilityAction(named: Text("Right-click")) {
+                guard isEnabled else { return }
+                onRightClick()
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
+            .accessibilityAction(.default) {
+                guard isEnabled else { return }
+                onTap()
+            }
             .disabled(!isEnabled)
         }
         .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
             Color(uiColor: .secondarySystemGroupedBackground),
             in: RoundedRectangle(cornerRadius: 18))
@@ -67,12 +70,14 @@ private struct TrackpadSurface: UIViewRepresentable {
     let onMove: (Double, Double) -> Void
     let onScroll: (Double, Double) -> Void
     let onTap: () -> Void
+    let onRightClick: () -> Void
 
     func makeUIView(context: Context) -> TrackpadView {
         let view = TrackpadView()
         view.onMove = onMove
         view.onScroll = onScroll
         view.onTap = onTap
+        view.onRightClick = onRightClick
         view.isUserInteractionEnabled = enabled
         return view
     }
@@ -81,6 +86,7 @@ private struct TrackpadSurface: UIViewRepresentable {
         uiView.onMove = onMove
         uiView.onScroll = onScroll
         uiView.onTap = onTap
+        uiView.onRightClick = onRightClick
         uiView.isUserInteractionEnabled = enabled
     }
 }
@@ -89,6 +95,7 @@ private final class TrackpadView: UIView, UIGestureRecognizerDelegate {
     var onMove: ((Double, Double) -> Void)?
     var onScroll: ((Double, Double) -> Void)?
     var onTap: (() -> Void)?
+    var onRightClick: (() -> Void)?
 
     private lazy var pointerPan: UIPanGestureRecognizer = {
         let recognizer = UIPanGestureRecognizer(
@@ -112,6 +119,16 @@ private final class TrackpadView: UIView, UIGestureRecognizerDelegate {
         let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         recognizer.numberOfTouchesRequired = 1
         recognizer.require(toFail: pointerPan)
+        recognizer.require(toFail: rightTap)
+        recognizer.delegate = self
+        return recognizer
+    }()
+
+    private lazy var rightTap: UITapGestureRecognizer = {
+        let recognizer = UITapGestureRecognizer(
+            target: self, action: #selector(handleRightTap))
+        recognizer.numberOfTouchesRequired = 2
+        recognizer.require(toFail: scrollPan)
         recognizer.delegate = self
         return recognizer
     }()
@@ -121,6 +138,7 @@ private final class TrackpadView: UIView, UIGestureRecognizerDelegate {
         addGestureRecognizer(pointerPan)
         addGestureRecognizer(scrollPan)
         addGestureRecognizer(tap)
+        addGestureRecognizer(rightTap)
     }
 
     @available(*, unavailable)
@@ -155,6 +173,10 @@ private final class TrackpadView: UIView, UIGestureRecognizerDelegate {
 
     @objc private func handleTap() {
         onTap?()
+    }
+
+    @objc private func handleRightTap() {
+        onRightClick?()
     }
 }
 

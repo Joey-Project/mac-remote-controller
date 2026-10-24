@@ -12,6 +12,7 @@ struct CommittedTextInput: UIViewRepresentable {
         let textField = UITextField()
         textField.delegate = context.coordinator
         textField.placeholder = placeholder
+        textField.accessibilityIdentifier = "keyboard.text"
         textField.returnKeyType = .send
         textField.autocapitalizationType = .none
         textField.autocorrectionType = .no

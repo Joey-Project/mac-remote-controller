@@ -10,6 +10,10 @@ struct DiscoveredMac: Identifiable {
     let isPaired: Bool
 }
 
+enum RemoteMode: String {
+    case touchpad = "Touchpad", keyboard = "Keyboard"
+}
+
 @MainActor
 @Observable
 final class RemoteModel {
@@ -18,6 +22,17 @@ final class RemoteModel {
     var isConnected = false
     var remoteState: RemoteState?
     var errorMessage: String?
+
+    #if DEBUG && targetEnvironment(simulator)
+        @ObservationIgnored private let uiTestFixture = UITestFixture()
+        private var uiTestLogRevision = 0
+
+        var isUITesting: Bool { uiTestFixture.isActive }
+        var uiTestCommandLogJSON: String {
+            _ = uiTestLogRevision
+            return uiTestFixture.commandLogJSON
+        }
+    #endif
 
     private var browser: NWBrowser?
     private var resolver: BonjourResolver?
@@ -32,12 +47,23 @@ final class RemoteModel {
     private var deadline: Timer?
 
     init() {
+        #if DEBUG && targetEnvironment(simulator)
+            if let fixtureState = uiTestFixture.initialState {
+                connectionSummary = "Connected to UI Test Mac"
+                isConnected = true
+                remoteState = fixtureState
+                return
+            }
+        #endif
         do {
             pairedMacs = try SecureStore.load([PairedMac].self, account: "paired-macs") ?? []
         } catch { errorMessage = error.localizedDescription }
     }
 
     func startDiscovery() {
+        #if DEBUG && targetEnvironment(simulator)
+            guard !isUITesting else { return }
+        #endif
         guard browser == nil else { return }
         let browser = NWBrowser(for: .bonjour(type: "_sofaremote._tcp", domain: nil), using: .tcp)
         browser.browseResultsChangedHandler = { [weak self] results, _ in
@@ -72,6 +98,9 @@ final class RemoteModel {
     }
 
     func connectSaved(to mac: DiscoveredMac) {
+        #if DEBUG && targetEnvironment(simulator)
+            guard !isUITesting else { return }
+        #endif
         guard let saved = pairedMacs.first(where: { $0.serviceName == mac.id }) else {
             errorMessage = "Open pairing on this Mac and scan its invitation."
             return
@@ -80,6 +109,9 @@ final class RemoteModel {
     }
 
     func pair(invitation: String) {
+        #if DEBUG && targetEnvironment(simulator)
+            guard !isUITesting else { return }
+        #endif
         do {
             let invitation = try PairingInvitation.parse(
                 invitation.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -90,63 +122,20 @@ final class RemoteModel {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func disconnect() {
-        let unknown = !pending.isEmpty
-        resolver?.cancel()
-        resolver = nil
-        attemptID = nil
-        deadline?.invalidate()
-        deadline = nil
-        peer?.onClose = nil
-        peer?.close()
-        peer = nil
-        isConnected = false
-        connectionID = nil
-        remoteState = nil
-        pending.removeAll()
-        queuedVolume = nil
-        connectionSummary = "Disconnected"
-        errorMessage =
-            unknown
-            ? "Disconnected with a pending control. Its outcome is unknown; it was not retried."
-            : nil
-    }
-
     func suspend() {
+        #if DEBUG && targetEnvironment(simulator)
+            guard !isUITesting else { return }
+        #endif
         disconnect()
         browser?.cancel()
         browser = nil
         discoveredMacs = []
     }
 
-    @discardableResult
-    func send(_ command: RemoteCommand) -> Bool {
-        guard isConnected, let connectionID, let peer else { return false }
-        do { try command.validate() } catch {
-            errorMessage = "The control value is invalid."; return false
-        }
-        // Do not build an input backlog while the network is slow.
-        guard pending.count < 8 else {
-            if command.name == .systemVolumeSet {
-                queuedVolume = command.value
-                return true
-            }
-            if command.name != .pointerMove && command.name != .pointerScroll {
-                errorMessage = "The Mac is busy. Wait for the pending controls to finish."
-            }
-            return false
-        }
-        sequence += 1
-        let requestID = UUID().uuidString
-        pending[requestID] = (sequence, Date())
-        peer.send(
-            WireMessage(
-                type: .command, connectionID: connectionID, requestID: requestID,
-                sequence: sequence, command: command))
-        return true
-    }
-
     private func connect(_ mac: PairedMac) {
+        #if DEBUG && targetEnvironment(simulator)
+            guard !isUITesting else { return }
+        #endif
         disconnect()
         errorMessage = nil
         connectionSummary = "Resolving Mac…"
@@ -265,5 +254,75 @@ final class RemoteModel {
         default:
             peer?.close()
         }
+    }
+}
+
+extension RemoteModel {
+    func disconnect() {
+        #if DEBUG && targetEnvironment(simulator)
+            if isUITesting {
+                isConnected = false
+                connectionID = nil
+                remoteState = nil
+                connectionSummary = "Disconnected"
+                errorMessage = nil
+                return
+            }
+        #endif
+        let unknown = !pending.isEmpty
+        resolver?.cancel()
+        resolver = nil
+        attemptID = nil
+        deadline?.invalidate()
+        deadline = nil
+        peer?.onClose = nil
+        peer?.close()
+        peer = nil
+        isConnected = false
+        connectionID = nil
+        remoteState = nil
+        pending.removeAll()
+        queuedVolume = nil
+        connectionSummary = "Disconnected"
+        errorMessage =
+            unknown
+            ? "Disconnected with a pending control. Its outcome is unknown; it was not retried."
+            : nil
+    }
+
+    @discardableResult
+    func send(_ command: RemoteCommand) -> Bool {
+        guard isConnected else { return false }
+        #if DEBUG && targetEnvironment(simulator)
+            if isUITesting {
+                let accepted = uiTestFixture.send(
+                    command, remoteState: &remoteState, errorMessage: &errorMessage)
+                if accepted { uiTestLogRevision += 1 }
+                return accepted
+            }
+        #endif
+        guard let connectionID, let peer else { return false }
+        do { try command.validate() } catch {
+            errorMessage = "The control value is invalid."; return false
+        }
+        // Do not build an input backlog while the network is slow.
+        guard pending.count < 8 else {
+            if command.name == .systemVolumeSet {
+                queuedVolume = command.value
+                return true
+            }
+            if command.name != .pointerMove && command.name != .pointerScroll {
+                errorMessage = "The Mac is busy. Wait for the pending controls to finish."
+            }
+            return false
+        }
+        sequence += 1
+        let requestID = UUID().uuidString
+        pending[requestID] = (sequence, Date())
+        peer.send(
+            WireMessage(
+                type: .command, connectionID: connectionID, requestID: requestID,
+                sequence: sequence, command: command))
+        return true
     }
 }
