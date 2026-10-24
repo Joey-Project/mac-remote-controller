@@ -1,7 +1,6 @@
 import Foundation
 
-/// A bounded FIFO for remote commands. Adjacent pointer deltas are summed, while
-/// clicks and keyboard commands remain ordering barriers.
+/// A bounded FIFO that sums adjacent pointer deltas while preserving control barriers.
 public struct InputCommandScheduler: Sendable {
     public let capacity: Int
     private(set) public var queuedCommands: [RemoteCommand] = []
@@ -65,8 +64,7 @@ public struct InputCommandScheduler: Sendable {
     }
 
     private func isBarrier(_ command: RemoteCommand) -> Bool {
-        command.name == .pointerClick || command.name == .keyboardText
-            || command.name == .keyboardKey
+        !isMotion(command) && command.name != .systemVolumeSet
     }
 
     private mutating func discardTrailingMotion() {

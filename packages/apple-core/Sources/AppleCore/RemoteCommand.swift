@@ -8,6 +8,8 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     public var text: String?
     public var key: RemoteKey?
     public var button: PointerButton?
+    public var shortcut: SystemShortcut?
+    public var tapTimestamp: TimeInterval?
 
     public init(
         name: CommandName,
@@ -16,7 +18,9 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         value: Double? = nil,
         text: String? = nil,
         key: RemoteKey? = nil,
-        button: PointerButton? = nil
+        button: PointerButton? = nil,
+        shortcut: SystemShortcut? = nil,
+        tapTimestamp: TimeInterval? = nil
     ) {
         self.name = name
         self.x = x
@@ -25,38 +29,67 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         self.text = text
         self.key = key
         self.button = button
+        self.shortcut = shortcut
+        self.tapTimestamp = tapTimestamp
     }
 
     public func validate() throws {
         switch name {
-        case .pointerMove:
-            try requireCoordinates(limit: 500)
+        case .pointerMove, .pointerScroll:
+            try requireCoordinates(limit: name == .pointerMove ? 500 : 100)
             try requireOnly(["x", "y"])
-        case .pointerClick:
-            guard button != nil else {
-                throw WireProtocolError.invalidCommand("pointer.click requires button")
-            }
-            try requireOnly(["button"])
-        case .pointerScroll:
-            try requireCoordinates(limit: 100)
-            try requireOnly(["x", "y"])
+        case .pointerClick, .pointerButtonDown, .pointerButtonUp:
+            try validatePointerButton()
         case .keyboardText:
             guard let text, !text.isEmpty, text.utf8.count <= WireLimits.maximumTextBytes else {
                 throw WireProtocolError.invalidCommand(
                     "keyboard.text requires 1...4096 UTF-8 bytes")
             }
             try requireOnly(["text"])
-        case .keyboardKey:
-            guard key != nil else {
-                throw WireProtocolError.invalidCommand("keyboard.key requires an allowlisted key")
-            }
-            try requireOnly(["key"])
+        case .systemShortcut, .keyboardKey:
+            try validateKeyOrShortcut()
         case .systemVolumeSet:
             guard let value, value.isFinite, (0...1).contains(value) else {
                 throw WireProtocolError.invalidCommand(
                     "system.volume.set value must be finite and within 0...1")
             }
             try requireOnly(["value"])
+        }
+    }
+
+    private func validatePointerButton() throws {
+        guard button != nil else {
+            throw WireProtocolError.invalidCommand("\(name.rawValue) requires button")
+        }
+        if name == .pointerClick {
+            if let tapTimestamp,
+                !tapTimestamp.isFinite
+                    || !(0...WireLimits.maximumTapTimestampSeconds).contains(tapTimestamp)
+            {
+                throw WireProtocolError.invalidCommand(
+                    "pointer.click tapTimestamp must be finite and within the supported range")
+            }
+            try requireOnly(["button", "tapTimestamp"])
+        } else {
+            try requireOnly(["button"])
+        }
+    }
+
+    private func validateKeyOrShortcut() throws {
+        switch name {
+        case .systemShortcut:
+            guard shortcut != nil else {
+                throw WireProtocolError.invalidCommand(
+                    "system.shortcut requires an allowlisted action")
+            }
+            try requireOnly(["shortcut"])
+        case .keyboardKey:
+            guard key != nil else {
+                throw WireProtocolError.invalidCommand("keyboard.key requires an allowlisted key")
+            }
+            try requireOnly(["key"])
+        default:
+            throw WireProtocolError.invalidCommand("unsupported key action")
         }
     }
 
@@ -85,6 +118,12 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         }
         if button != nil, !allowed.contains("button") {
             throw WireProtocolError.invalidCommand("unexpected button for \(name.rawValue)")
+        }
+        if shortcut != nil, !allowed.contains("shortcut") {
+            throw WireProtocolError.invalidCommand("unexpected shortcut for \(name.rawValue)")
+        }
+        if tapTimestamp != nil, !allowed.contains("tapTimestamp") {
+            throw WireProtocolError.invalidCommand("unexpected tapTimestamp for \(name.rawValue)")
         }
     }
 }
