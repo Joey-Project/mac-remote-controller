@@ -57,16 +57,17 @@ superseded_by:
   Responsive shell padding now includes the horizontal device safe-area insets
   at each existing breakpoint.
 - The Web integration includes reviewed Media commit
-  `e82c1a0450f3d07f3be9bfb61686f7c20e938e88`, including bundled adapter
+  `7547f60eac615311080501217807a74ea7bd1bb7`, including bundled adapter
   setup and the Chrome delivery acknowledgement fix. Node.js 26.12.0 and pnpm
   12.14.0 passed format check, lint, strict typecheck, tests, and builds for all
   three TypeScript packages: 75 tests (Chrome 40/40, IINA 15/15, Web preview
-  20/20). The refreshed stack passed all 170 Swift package tests, strict Swift
+  20/20). The refreshed stack passed all 178 Swift package tests, strict Swift
   formatting/SwiftLint, macOS and generic iOS Simulator builds, generated
   Info.plist checks, shell/workflow lint, and project-journal validation.
   The bundled Native Messaging host was checked for both arm64 and x86_64
-  slices and passed signature verification. These native checks were run again
-  after the normal signed integration merge. This validation did not run
+  slices and passed signature verification. Apple checks also verify outer and
+  nested Mac signatures after two consecutive ad hoc builds, with no CI account
+  credentials. This validation did not run
   Safari/iPhone layout or live Web-device interaction, pairing, radio, or playback.
 - A desktop in-app-browser smoke of the source-identical built mirror passed:
   the offline/no-Mac banner appeared, a left-click action ran locally, keyboard

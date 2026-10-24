@@ -31,9 +31,13 @@ with two fingers to right-click, and scroll with two fingers. On a companion
 that advertises gesture support, three fingers
 drag while holding the Mac's left mouse button, and four-finger swipes request
 Mission Control (up), App Exposé (down), or the previous/next Space (left/right).
-These use public macOS keyboard shortcuts. The matching shortcuts must be enabled
-in System Settings > Keyboard > Keyboard Shortcuts > Mission Control on the Mac;
-custom shortcut assignments can change the result. No private macOS APIs are used.
+Mission Control and App Exposé use native Dock notifications; Spaces use a
+complete touchpad swipe event sequence. These actions emit no keyboard or modifier
+events and do not depend on the Mac's Control-arrow shortcut mappings. The native
+Dock/HID interfaces are undocumented and checked at runtime; an unavailable
+interface reports an error rather than falling back to a keyboard shortcut.
+This does not create a virtual trackpad device or require a driver. On macOS 27,
+the Space swipe carries an HID payload; earlier systems use Dock gesture fields.
 
 The remote menu lets you turn three-finger drag, four-finger shortcuts, pressure
 click, and optional haptic feedback on or off. Pressure click works only where

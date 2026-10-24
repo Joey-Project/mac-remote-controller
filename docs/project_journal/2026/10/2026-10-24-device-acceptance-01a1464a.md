@@ -83,7 +83,8 @@ superseded_by:
   All 37 Chrome tests and 15 IINA tests pass. Chrome TypeScript and Oxlint checks
   pass. The existing unpacked Chrome extension was verified to load this tree's
   output directory, reloaded through Chrome, and its Bilibili page refreshed.
-  Final phone-side acceptance of the revised Chrome action result is pending.
+  The later real-device acceptance below confirms successful matched Chrome
+  results without the false error alert.
 
 ## Bundled Integration Setup
 
@@ -101,7 +102,7 @@ superseded_by:
   Chrome's first local-extension load remains a browser-confirmed step. No token
   is included in distributable plugin assets or the Chrome manifest.
 - Five installer regressions cover repeated preparation, unrelated settings,
-  first-time IINA permission flow, private file permissions, and linked destination rejection. All 170 Swift tests,
+  first-time IINA permission flow, private file permissions, and linked destination rejection. All 178 Swift tests,
   strict Swift format/SwiftLint, Mac packaging, and generic iOS Simulator build pass.
 - Follow-up review fixes select a visible main YouTube player after hidden Shorts
   matches, preserve the bridge opt-in across companion relaunches, and build/sign
@@ -144,3 +145,8 @@ superseded_by:
   installed while invalid.
   Apple checks build the Mac app twice with ad hoc signing and verify both outer
   and nested signatures after each build, requiring no CI account credentials.
+- The integrated gesture parent replaces Control-arrow synthesis with native
+  Dock notifications and complete Dock swipe sequences. Eight regressions cover
+  modifier-free events, balanced phases, failures before emission, and real HID
+  payload readback without posting. Desktop automation timed out, so actual
+  Mission Control, App Exposé, and Space transitions still need live acceptance.
