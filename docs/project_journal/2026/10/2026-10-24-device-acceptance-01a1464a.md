@@ -60,7 +60,30 @@ superseded_by:
 
 ## Next Steps
 
+- Replace manual IINA token copying and Chrome helper registration with a unified
+  local setup flow. Prefer a companion action that writes the IINA plugin's local
+  preferences, without embedding credentials in distributable plugin packages or
+  exposing the bridge token to Chrome pages or content scripts.
+
 - Install the touchpad follow-up after the current media acceptance session and
   verify four-finger recognition, Mac actions, and physical tactile feedback.
 - Evaluate lower-latency BLE scheduling and framing while preserving authenticated
   ordering and cleanup; compare against Wi-Fi on the same physical devices.
+
+## Media Adapter Acceptance
+
+- IINA was installed correctly but had an empty local preference store. The user
+  configured the bridge token and confirmed that IINA control then worked.
+  The token was compared privately during diagnosis and never printed.
+- The user observed Chrome seek succeeding while the phone displayed an error
+  claiming the tab was closed. The worker used a callback-based Chrome delivery
+  channel, but the content script only sent a separate asynchronous action
+  result, without replying on the delivery channel.
+- The content script now synchronously acknowledges receipt and still sends its
+  correlated action result separately. A genuine delivery failure asks the user
+  to refresh the tab instead of claiming every transport error means a closed tab.
+- Two new regressions fail on the old content script and pass after the fix.
+  All 37 Chrome tests and 15 IINA tests pass. Chrome TypeScript and Oxlint checks
+  pass. The existing unpacked Chrome extension was verified to load this tree's
+  output directory, reloaded through Chrome, and its Bilibili page refreshed.
+  Final phone-side acceptance of the revised Chrome action result is pending.

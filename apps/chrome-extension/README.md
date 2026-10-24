@@ -8,6 +8,11 @@ and previous only when the site's episode controls are rendered and enabled,
 and checks the selected control again before invoking it. It returns a visible
 failure if a control disappears after selection.
 
+The content script acknowledges command delivery on Chrome's response channel
+before executing the asynchronous action. Its separate, correlated result
+message determines success or failure; the delivery acknowledgement alone
+never completes a media command.
+
 The service worker connects to the separately built native messaging host. The
 host reads the local bridge token from the companion's mode-0600 configuration
 file and proxies only validated media messages over authenticated loopback
