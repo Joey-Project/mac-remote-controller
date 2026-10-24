@@ -132,3 +132,9 @@ superseded_by:
   first-install UI acceptance remains separate. CI's newer `lipo` rejected
   multi-architecture `-verify_arch` arguments; bundle validation now reads the
   executable's architecture list and checks each requested slice explicitly.
+- The native host acknowledges a target snapshot only after the authenticated
+  bridge accepts it. Chrome resets reconnect backoff on that current-port health
+  signal, without requiring a playback command. Regressions cover recovery from
+  a 15-second delay, ignored stale/malformed acknowledgements, and continued
+  exponential retry for immediate disconnects. The recovery regression failed
+  against the old worker before the fix.

@@ -1,5 +1,11 @@
 # Chrome extension: YouTube and Bilibili
 
+After the authenticated companion bridge accepts a target snapshot, the native
+host emits a readiness acknowledgement. The extension then resets reconnect
+backoff even if no playback command has been sent. Stale ports and malformed
+acknowledgements do not reset it, and immediate failed connections retain bounded
+exponential retries.
+
 The Manifest V3 extension exposes typed playback, relative seek, player-volume,
 and site-provided episode navigation for HTTPS `www.youtube.com`,
 `www.bilibili.com`, and `bilibili.com` tabs. A tab is an explicit media source;

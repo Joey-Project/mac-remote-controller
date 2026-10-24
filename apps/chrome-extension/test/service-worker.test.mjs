@@ -448,6 +448,31 @@ test('known tabs recover after several missing-host retries without a page event
   assert.equal(harness.nativeMessages.at(-1).targetId, 'chrome:41');
 });
 
+test('confirmed bridge recovery resets reconnect backoff without a media command', async () => {
+  const harness = await makeHarness({ failedConnectionAttempts: [1, 2, 3, 4] });
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  for (const delay of [1_000, 2_000, 4_000, 8_000]) harness.fireTimeoutWithDelay(delay);
+  const recovered = harness.ports.at(-1);
+  assert.equal(recovered.sent.at(-1).type, 'media.targetUpdate');
+  recovered.onMessage.dispatch({ type: 'media.ready' });
+  recovered.onDisconnect.dispatch();
+  assert.deepEqual(harness.pendingTimeoutDelays(), [1_000]);
+});
+
+test('stale ports and malformed readiness messages cannot reset reconnect backoff', async () => {
+  const harness = await makeHarness();
+  harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
+  const stale = harness.ports[0];
+  stale.onDisconnect.dispatch();
+  harness.fireTimeoutWithDelay(1_000);
+  harness.ports[1].onDisconnect.dispatch();
+  harness.fireTimeoutWithDelay(2_000);
+  stale.onMessage.dispatch({ type: 'media.ready' });
+  harness.ports[2].onMessage.dispatch({ type: 'media.ready', extra: true });
+  harness.ports[2].onDisconnect.dispatch();
+  assert.deepEqual(harness.pendingTimeoutDelays(), [4_000]);
+});
+
 test('command timeout retires its result, drops late replies, and frees the next request', async () => {
   const harness = await makeHarness();
   harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
