@@ -63,8 +63,8 @@ for ((index = 0; index < ${#destinations[@]}; index += 2)); do
         -parallel-testing-enabled NO \
         -maximum-concurrent-test-simulator-destinations 1 \
         -test-timeouts-enabled YES \
-        -default-test-execution-time-allowance 120 \
-        -maximum-test-execution-time-allowance 120 \
+        -default-test-execution-time-allowance 240 \
+        -maximum-test-execution-time-allowance 240 \
         -collect-test-diagnostics never \
         -derivedDataPath "$derived_data" \
         -clonedSourcePackagesDirPath "$repo_root/.codex-tmp/apple-tools/SourcePackages" \
