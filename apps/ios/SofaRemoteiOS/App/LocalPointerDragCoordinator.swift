@@ -70,8 +70,13 @@ extension RemoteModel {
     }
 
     func scheduleCoalescedFlush() {
-        guard coalescingTimer == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: false) { [weak self] _ in
+        guard coalescingTimer == nil,
+            let delay = commandScheduler.flushDelay(
+                at: .now, maximumCount: 8 - pending.count)
+        else { return }
+        let components = delay.components
+        let seconds = Double(components.seconds) + Double(components.attoseconds) / 1e18
+        let timer = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.coalescingTimer = nil
                 self?.flushQueuedCommands()
@@ -84,7 +89,12 @@ extension RemoteModel {
     func flushQueuedCommands() {
         guard let connectionID, let peer else { return }
         let available = max(0, 8 - pending.count)
-        for command in commandScheduler.dequeue(maximumCount: available) {
+        let commands = commandScheduler.dequeue(maximumCount: available, at: .now)
+        if !commands.isEmpty {
+            coalescingTimer?.invalidate()
+            coalescingTimer = nil
+        }
+        for command in commands {
             sequence += 1
             let requestID = UUID().uuidString
             pending[requestID] = (
@@ -108,6 +118,7 @@ extension RemoteModel {
         localPointerDragCoordinator.resume { [weak self] command in
             self?.send(command, orderedDragInput: true) ?? false
         }
+        scheduleCoalescedFlush()
     }
 }
 

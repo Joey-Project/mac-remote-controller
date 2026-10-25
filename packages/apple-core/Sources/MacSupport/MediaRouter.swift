@@ -90,8 +90,10 @@ public final class MediaRouter {
         guard target.id.hasPrefix(validPrefix) else {
             throw WireProtocolError.invalidEnvelope("media target ID does not match its adapter")
         }
+        // Ignore excess registrations without disconnecting an otherwise healthy adapter.
+        // Existing targets still renew their leases; a later snapshot can claim a free slot.
         guard targets[target.id] != nil || targets.count < WireLimits.maximumMediaTargets else {
-            throw WireProtocolError.invalidEnvelope("too many media targets")
+            return false
         }
         let changed = targets[target.id] != target
         targets[target.id] = target

@@ -56,12 +56,12 @@ superseded_by:
   shortcuts, while keeping unmodified Space and focused control activation.
   Responsive shell padding now includes the horizontal device safe-area insets
   at each existing breakpoint.
-- The Web integration includes reviewed Media commit
-  `1597cee1b51e68b2bb845cd4e56de86e857406da`, including bundled adapter
+- The Web integration includes Media commit
+  `d57bc20d594d998b69b2cf9e660d7d4e410c9a52`, including bundled adapter
   setup and the Chrome delivery acknowledgement fix. Node.js 26.12.0 and pnpm
   12.14.0 passed format check, lint, strict typecheck, tests, and builds for all
-  three TypeScript packages: 75 tests (Chrome 40/40, IINA 15/15, Web preview
-  20/20). The refreshed stack passed all 194 Swift package tests, strict Swift
+  three TypeScript packages: 76 tests (Chrome 41/41, IINA 15/15, Web preview
+  20/20). The refreshed stack passed all 204 Swift package tests, strict Swift
   formatting/SwiftLint, macOS and generic iOS Simulator builds, generated
   Info.plist checks, shell/workflow lint, and project-journal validation.
   The bundled Native Messaging host was checked for both arm64 and x86_64

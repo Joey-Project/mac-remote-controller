@@ -3,7 +3,7 @@ id: 20261024-input-stack-01a1464a
 title: Responsive input, BLE comparison, gestures, and media adapters
 status: active
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-25
 branch: wip/input-latency
 pr:
 supersedes: []
@@ -32,12 +32,27 @@ superseded_by:
 - Measure command round-trip time with a monotonic local clock. Distinguish it from
   physical input-to-display latency, and preserve discrete-input ordering while bounding
   high-frequency relative-input work.
-- The input slice coalesces adjacent relative deltas on a 60 Hz common-run-loop timer,
+- The input slice coalesces adjacent relative deltas with a 60 Hz dispatch deadline,
   preserves click/key ordering barriers, and bounds the queue and outstanding results.
   Overload may replace only trailing motion after the latest barrier. A saturated
   barrier queue silently drops only best-effort pointer motion and scroll; rejected
   discrete actions remain visible. Disconnect clears queued work; accepted discrete
   actions are never replayed on reconnection.
+- Acceptance follow-up found a cadence problem shared by single-finger movement and
+  three-finger dragging: the previous one-shot timer waited a full frame after each
+  idle queue, and acknowledgements could independently flush continuous input. A
+  deterministic touch-first replay of equal 60 Hz deadlines produced 30 Hz batches;
+  this is a reproducible scheduling counterexample, not a physical-device measurement.
+  The dispatcher now sends the first available sample immediately, coalesces subsequent
+  samples until the last actual dispatch plus one frame, and retains that deadline
+  across acknowledgements. Late timers do not trigger catch-up bursts. Discrete barriers
+  still flush preceding motion immediately, and full acknowledgement windows require
+  no polling timer. Queue capacity, drag-start acknowledgement, protected drag deltas,
+  release ordering, gesture thresholds, pointer gain, and UI remain unchanged.
+- Nine dispatcher regression tests cover 60 Hz deadlines, faster samples, jittered
+  acknowledgement arrivals, backpressure, late timers, barriers, volume coalescing,
+  reconnect reset, and acknowledged drag/release integration. Real input-to-display
+  latency and the user's perceived Wi-Fi smoothness require a fresh device comparison.
 - The companion samples desktop state once per periodic broadcast and immediately after
   a system-volume command, rather than after every pointer event. TCP enables `noDelay`;
   connection and result deadlines use a monotonic clock. These reduce avoidable work but

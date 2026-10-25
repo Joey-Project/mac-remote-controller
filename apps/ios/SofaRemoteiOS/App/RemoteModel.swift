@@ -73,7 +73,7 @@ final class RemoteModel {
     var pending: [String: (metadata: PendingCommandMetadata, sent: ContinuousClock.Instant)] = [:]
     var queuedPlayerVolumeRequests: [QueuedPlayerVolumeRequest] = []
     var pendingPlayerVolumeRequests: [String: QueuedPlayerVolumeRequest] = [:]
-    @ObservationIgnored var commandScheduler = InputCommandScheduler(capacity: 8)
+    @ObservationIgnored var commandScheduler = InputCommandDispatcher(capacity: 8)
     @ObservationIgnored var localPointerDragCoordinator = LocalPointerDragCoordinator()
     var rejectedLocalDragID: UUID?
     private var deadline: Timer?
@@ -356,15 +356,7 @@ extension RemoteModel {
         guard commandScheduler.enqueue(command, preservingMotion: orderedDragInput) else {
             return handleQueueRejection(command, orderedDragInput: orderedDragInput)
         }
-        if command.name == .pointerMove || command.name == .pointerScroll
-            || command.name == .systemVolumeSet
-        {
-            scheduleCoalescedFlush()
-        } else {
-            coalescingTimer?.invalidate()
-            coalescingTimer = nil
-            flushQueuedCommands()
-        }
+        flushQueuedCommands()
         return true
     }
 
