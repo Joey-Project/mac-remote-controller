@@ -86,6 +86,9 @@ superseded_by:
 
 ## Next Steps
 
+- The user reported an intermittent IINA disconnect after successful setup and
+  explicitly deferred it while Wi-Fi pointer smoothness takes priority. Keep the
+  current media UI and volume behavior unchanged during input performance repairs.
 - Expose seek duration in a future settings screen if needed; keep it out of the
   compact media control row.
 - Follow the stack acceptance procedure after review and CI. Install only the
