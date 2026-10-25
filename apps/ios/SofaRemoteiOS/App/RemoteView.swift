@@ -13,7 +13,6 @@ struct RemoteView: View {
     @State private var showingBenchmark = false
     @State private var textToSend = ""
     @State var selectedMediaTargetID: String?
-    @State var seekInterval: Double = 10
     @State var volumeScope: VolumeScope = .system
     @State private var isTextComposing = false
     @State private var isTextInputFocused = false

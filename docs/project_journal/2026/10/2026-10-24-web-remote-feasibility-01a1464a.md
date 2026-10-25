@@ -3,7 +3,7 @@ id: 20261024-web-remote-01a1464a
 title: No-Install Web Remote Feasibility
 status: completed
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-25
 branch: wip/mobile-web-probe
 pr:
 supersedes: []
@@ -57,7 +57,7 @@ superseded_by:
   Responsive shell padding now includes the horizontal device safe-area insets
   at each existing breakpoint.
 - The Web integration includes reviewed Media commit
-  `46ec103ed68d0a0a0608206bd3ee1d341786565a`, including bundled adapter
+  `8c57243b4cbabc0e74545117797266f99e25a057`, including bundled adapter
   setup and the Chrome delivery acknowledgement fix. Node.js 26.12.0 and pnpm
   12.14.0 passed format check, lint, strict typecheck, tests, and builds for all
   three TypeScript packages: 75 tests (Chrome 40/40, IINA 15/15, Web preview

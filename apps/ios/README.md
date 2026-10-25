@@ -73,8 +73,9 @@ loss; their outcome may be unknown. No screen preview is transmitted.
 
 When the Mac media bridge is enabled, supported Chrome tabs and IINA player
 windows appear in a separate player-source picker. The selected source stays
-independent of the frontmost desktop app. Play/pause, relative seek (5, 10, or
-30 seconds), next/previous where available, and player volume do not retarget
+independent of the frontmost desktop app. A single row contains previous item,
+backward 10 seconds, play/pause, forward 10 seconds, and next item. Seek duration
+is fixed for now; it has no inline editor. These controls and player volume do not retarget
 Mac system input. Player volume follows the selected adapter's reported maximum
 and offers fixed 10-percentage-point steps with a stronger 100% detent, even
 when the maximum is higher. The system/player volume scope
