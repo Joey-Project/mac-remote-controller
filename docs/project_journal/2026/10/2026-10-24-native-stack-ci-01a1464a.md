@@ -3,7 +3,7 @@ id: 20261024-native-stack-ci-01a1464a
 title: Native Pull Request Stack Verifier Events
 status: completed
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-25
 branch: wip/native-stack-ci
 pr:
 supersedes: []
@@ -21,6 +21,10 @@ superseded_by:
 - The upstream v2.2.11 verifier supports authenticated GitHub-native stacks
   whose trunk is the repository's default branch. A manually chained set of
   feature-base PRs still needs native stack registration.
+- Preserve the canonical non-skipping v2.2.13 verifier/controller from master.
+  Both `stacked` and `edited` events invoke the verifier with the same required
+  check. The actionlint exception remains scoped to the verifier path through
+  `.github/actionlint.yaml`; the CI command needs no redundant global ignore.
 - Stack registration does not merge any PR. Each feature head retains its
   own CI and review requirements.
 - The iPhone/iPad UI-test step has a 40-minute cap inside the Apple job's
