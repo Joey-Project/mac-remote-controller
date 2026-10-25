@@ -39,49 +39,44 @@ extension RemoteView {
                         }
                     }
                     if let target = selectedMediaTarget {
-                        HStack(spacing: 12) {
+                        HStack(spacing: 8) {
                             Button {
                                 sendMedia(.previous, target: target)
                             } label: {
                                 Image(systemName: "backward.end.fill")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .disabled(!target.capabilities.previous)
                             .accessibilityLabel("Previous item")
                             Button {
+                                sendMedia(.seek, target: target, value: -10)
+                            } label: {
+                                Image(systemName: "gobackward.10")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .disabled(!target.capabilities.seek)
+                            .accessibilityLabel("Seek backward 10 seconds")
+                            Button {
                                 sendMedia(.playPause, target: target)
                             } label: {
                                 Image(systemName: "playpause.fill")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .disabled(!target.capabilities.playPause)
                             .accessibilityLabel("Play or pause")
                             Button {
-                                sendMedia(.seek, target: target, value: -seekInterval)
+                                sendMedia(.seek, target: target, value: 10)
                             } label: {
-                                Image(systemName: "gobackward.\(Int(seekInterval))")
+                                Image(systemName: "goforward.10")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .disabled(!target.capabilities.seek)
-                            .accessibilityLabel("Seek backward \(Int(seekInterval)) seconds")
-                            Menu {
-                                ForEach([5.0, 10.0, 30.0], id: \.self) { seconds in
-                                    Button("\(Int(seconds)) seconds") { seekInterval = seconds }
-                                }
-                            } label: {
-                                Text("±\(Int(seekInterval))s")
-                                    .font(.caption.monospacedDigit())
-                                    .frame(minWidth: 42, minHeight: 44)
-                            }
-                            .accessibilityLabel("Seek interval")
-                            Button {
-                                sendMedia(.seek, target: target, value: seekInterval)
-                            } label: {
-                                Image(systemName: "goforward.\(Int(seekInterval))")
-                            }
-                            .disabled(!target.capabilities.seek)
-                            .accessibilityLabel("Seek forward \(Int(seekInterval)) seconds")
+                            .accessibilityLabel("Seek forward 10 seconds")
                             Button {
                                 sendMedia(.next, target: target)
                             } label: {
                                 Image(systemName: "forward.end.fill")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .disabled(!target.capabilities.next)
                             .accessibilityLabel("Next item")

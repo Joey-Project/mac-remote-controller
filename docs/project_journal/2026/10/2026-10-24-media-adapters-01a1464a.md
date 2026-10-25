@@ -3,7 +3,7 @@ id: 20261024-media-01a1464a
 title: Native Media Adapters for IINA and Chrome
 status: active
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-25
 branch: wip/media-adapters
 pr:
 supersedes: []
@@ -16,6 +16,10 @@ superseded_by:
 
 - Add explicitly selected Chrome-tab and IINA-window playback targets to the
   native remote. Media selection remains separate from desktop focus.
+- The browser/player controls share one five-button row: previous item, backward
+  ten seconds, play/pause, forward ten seconds, and next item. Buttons expand
+  equally across the available width, with at least 44-point label height.
+  Seeking is fixed at ten seconds; the inline duration menu and its state are removed.
 
 ## Current State
 
@@ -79,6 +83,8 @@ superseded_by:
 
 ## Next Steps
 
+- Expose seek duration in a future settings screen if needed; keep it out of the
+  compact media control row.
 - Follow the stack acceptance procedure after review and CI. Install only the
   signed builds selected by the user, configure Chrome and IINA locally, and
   verify each explicit target plus visible failures for unavailable controls.
