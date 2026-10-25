@@ -78,12 +78,9 @@ struct SystemVolumeCard: View {
 
     @ViewBuilder
     private var playerVolumeSummary: some View {
-        if isPlayerScope, let maximum = playerMaximum, let volume = playerVolumePercent {
-            Text(
-                volume.formatted(.number.precision(.fractionLength(0))) + " / "
-                    + maximum.formatted(.number.precision(.fractionLength(0)))
-            )
-            .font(.subheadline.weight(.medium)).monospacedDigit()
+        if isPlayerScope, let volume = playerVolumePercent {
+            Text((volume / 100).formatted(.percent.precision(.fractionLength(0))))
+                .font(.subheadline.weight(.medium)).monospacedDigit()
         } else if isPlayerScope {
             Text("Unavailable").font(.subheadline).foregroundStyle(.secondary)
         }

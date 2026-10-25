@@ -57,7 +57,7 @@ superseded_by:
   Responsive shell padding now includes the horizontal device safe-area insets
   at each existing breakpoint.
 - The Web integration includes reviewed Media commit
-  `8c57243b4cbabc0e74545117797266f99e25a057`, including bundled adapter
+  `1597cee1b51e68b2bb845cd4e56de86e857406da`, including bundled adapter
   setup and the Chrome delivery acknowledgement fix. Node.js 26.12.0 and pnpm
   12.14.0 passed format check, lint, strict typecheck, tests, and builds for all
   three TypeScript packages: 75 tests (Chrome 40/40, IINA 15/15, Web preview

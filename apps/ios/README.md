@@ -76,7 +76,8 @@ windows appear in a separate player-source picker. The selected source stays
 independent of the frontmost desktop app. A single row contains previous item,
 backward 10 seconds, play/pause, forward 10 seconds, and next item. Seek duration
 is fixed for now; it has no inline editor. These controls and player volume do not retarget
-Mac system input. Player volume follows the selected adapter's reported maximum
+Mac system input. Player volume is displayed as a percentage of unity gain, such
+as 60%, 120%, or 400%, and follows the selected adapter's reported maximum
 and offers fixed 10-percentage-point steps with a stronger 100% detent, even
 when the maximum is higher. The system/player volume scope
 switch defaults to system volume and changes no volume by itself. Older Macs
