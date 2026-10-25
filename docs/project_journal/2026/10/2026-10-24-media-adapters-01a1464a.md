@@ -35,6 +35,9 @@ superseded_by:
 - Player volume stays a gain ratio on the wire (`1.0` is 100%). The IINA
   adapter converts mpv percentage values at its boundary, and iOS converts the
   ratio to percentage only for its display and 10-point slider policy.
+- Player volume summaries use the same percentage format as system volume:
+  60%, 120%, or 400%, without a current/maximum fraction. The displayed percent
+  stays relative to unity gain rather than the player's maximum.
 - IINA sends the plugin API's form-encoded command body and reports effective
   volume zero while muted; only positive player-volume commands clear mute.
   The loopback router uses a two-second deadline while its clients allow three
