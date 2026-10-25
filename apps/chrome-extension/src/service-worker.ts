@@ -43,6 +43,7 @@ interface PendingTabCommand {
 const HOST_NAME = 'com.joeyteng.sofaremote';
 const maximumPendingCommands = 8;
 const nativeMessageByteLimit = 64 * 1024;
+const maximumMediaTargets = 64;
 const targetRefreshIntervalMilliseconds = 2_000;
 const browserCommandTimeoutMilliseconds = 1_500;
 const nativeReconnectInitialDelayMilliseconds = 1_000;
@@ -333,6 +334,7 @@ chrome.runtime.onMessage.addListener(
       }
       const snapshot = validateSnapshot(message.snapshot, expectedKind);
       if (!snapshot) return false;
+      if (!knownMediaTabs.has(tabId) && knownMediaTabs.size >= maximumMediaTargets) return false;
       knownMediaTabs.add(tabId);
       startTargetRefreshIfNeeded();
       postToNative({ type: 'media.targetUpdate', targetId: `chrome:${tabId}`, target: snapshot });

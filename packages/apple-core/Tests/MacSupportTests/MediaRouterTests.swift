@@ -4,6 +4,30 @@ import XCTest
 
 @MainActor
 final class MediaRouterTests: XCTestCase {
+    func testExcessMixedTargetsAreNonfatalAndExistingLeasesRemainLive() throws {
+        let router = MediaRouter()
+        let start = ContinuousClock.now
+        let capabilities = MediaCapabilities(
+            playPause: true, seek: true, next: true, previous: false)
+        for index in 1...WireLimits.maximumMediaTargets {
+            let target = MediaTarget(
+                id: index == 1 ? "iina:1" : "chrome:\(index)", name: "Target \(index)",
+                kind: index == 1 ? .iina : .youtube, capabilities: capabilities)
+            XCTAssertTrue(try router.update(target, at: start))
+        }
+        let excess = MediaTarget(
+            id: "chrome:65", name: "Excess target", kind: .youtube, capabilities: capabilities)
+        XCTAssertFalse(try router.update(excess, at: start))
+        XCTAssertEqual(router.targets.count, WireLimits.maximumMediaTargets)
+        XCTAssertNil(router.targets[excess.id])
+        let refreshed = try XCTUnwrap(router.targets["iina:1"])
+        XCTAssertFalse(try router.update(refreshed, at: start.advanced(by: .seconds(1))))
+        XCTAssertTrue(router.expireStaleTargets(at: start.advanced(by: .seconds(2))).isEmpty)
+        XCTAssertTrue(router.remove(targetID: "chrome:2"))
+        XCTAssertTrue(try router.update(excess))
+        XCTAssertEqual(router.targets.count, WireLimits.maximumMediaTargets)
+    }
+
     func testExactTargetRoutingAndPlayerMaximum() async throws {
         let router = MediaRouter()
         let selected = MediaTarget(

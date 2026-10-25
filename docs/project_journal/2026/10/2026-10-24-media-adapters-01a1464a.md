@@ -69,11 +69,11 @@ superseded_by:
 - CI runs `actionlint` separately, checks `scripts/*.sh` with `bash -n` and
   ShellCheck in a media setup step, and keeps Swift tooling and the Android
   wrapper in the repository shell-check step.
-- Final integrated local Swift checks passed 194 AppleCore package tests, the
+- Final integrated local Swift checks passed 204 AppleCore package tests, the
   macOS app build, generic iOS Simulator build, and generated plist validation. The
   `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
   12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome
-  40/40 and IINA mocks 15/15. `actionlint`, shell syntax checks, ShellCheck
+  41/41 and IINA mocks 15/15. `actionlint`, shell syntax checks, ShellCheck
   0.11.0, and project-journal validation passed. The backend lane reported six
   focused bridge route/lifecycle tests and one localhost HTTP smoke passed.
 - Chrome package tests use DOM fixtures and IINA package tests use mocks. The
@@ -83,6 +83,10 @@ superseded_by:
   companion/extension. Bundled first-install UI acceptance remains separate;
   see the [device acceptance journal](2026-10-24-device-acceptance-01a1464a.md)
   for the source scope and remaining runtime checks.
+- Media registration retains at most 64 Chrome tabs. The shared router also ignores
+  excess valid registrations across Chrome and IINA without returning an HTTP error
+  that would restart the native host. Existing sources continue renewing leases;
+  subsequent snapshots can reuse a released slot. Regression tests cover both limits.
 
 ## Next Steps
 

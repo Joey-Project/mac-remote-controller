@@ -194,6 +194,27 @@ test('startup and installation stay idle until a supported media tab is discover
   assert.equal(harness.pendingTimeoutDelays().length, 0);
 });
 
+test('target registration stays bounded while existing tabs refresh and freed slots are reused', async () => {
+  const harness = await makeHarness();
+  const publish = (tabId) =>
+    harness.workerMessageListener(
+      { type: 'mediaState', snapshot: harness.snapshot },
+      { ...harness.sender, tab: { id: tabId } },
+    );
+  for (let tabId = 1; tabId <= 80; tabId += 1) publish(tabId);
+  const updates = () =>
+    harness.nativeMessages.filter((message) => message.type === 'media.targetUpdate');
+  assert.equal(updates().length, 64);
+  assert.equal(harness.connectAttempts, 1);
+  publish(1);
+  assert.equal(updates().length, 65);
+  harness.tabRemoved.dispatch(1);
+  publish(65);
+  assert.equal(updates().at(-1).targetId, 'chrome:65');
+  assert.equal(updates().length, 66);
+  assert.equal(harness.connectAttempts, 1);
+});
+
 test('service worker renews registered background targets independently of page timers', async () => {
   const harness = await makeHarness();
   harness.workerMessageListener({ type: 'mediaState', snapshot: harness.snapshot }, harness.sender);
