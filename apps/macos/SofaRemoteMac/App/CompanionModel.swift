@@ -161,7 +161,7 @@ final class CompanionModel {
                     code: "control_unavailable", message: error.localizedDescription)
             }
             client.peer.send(session.makeResult(for: accepted, error: failure))
-            sendState(to: client)
+            if accepted.command.name == .systemVolumeSet { refreshStateAndBroadcast() }
         } catch {
             client.session = session
             guard message.connectionID == session.connectionID, let requestID = message.requestID,
@@ -226,20 +226,27 @@ final class CompanionModel {
         }
     }
 
-    private func sendState(to client: ClientConnection) {
+    private func sendState(_ state: RemoteState, to client: ClientConnection) {
         guard let session = client.session else { return }
         client.peer.send(
-            WireMessage(type: .state, connectionID: session.connectionID, state: desktop.state))
+            WireMessage(type: .state, connectionID: session.connectionID, state: state))
+    }
+
+    private func refreshStateAndBroadcast() {
+        let state = desktop.state
+        remoteState = state
+        for client in clients.values where client.session != nil {
+            sendState(state, to: client)
+        }
     }
 
     private func tick() {
-        remoteState = desktop.state
+        refreshStateAndBroadcast()
         if let pairing, pairing.expiresAt <= Date() { closePairing() }
         let expired = clients.values.filter {
             $0.session == nil && Date().timeIntervalSince($0.connectedAt) > 10
         }
         for client in expired { client.peer.close() }
-        for client in clients.values where client.session != nil { sendState(to: client) }
     }
 
     private func refreshConnectedCount() {

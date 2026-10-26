@@ -40,7 +40,9 @@ public final class WebSocketPeer {
                     if !matches { MainActor.assumeIsolated { onTrustFailure?() } }
                 }, .main)
         }
-        let parameters = NWParameters(tls: tls, tcp: NWProtocolTCP.Options())
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        let parameters = NWParameters(tls: tls, tcp: tcp)
         let webSocket = NWProtocolWebSocket.Options()
         webSocket.autoReplyPing = true
         webSocket.maximumMessageSize = 65_536
