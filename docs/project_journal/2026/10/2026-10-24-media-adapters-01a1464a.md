@@ -3,8 +3,8 @@ id: 20261024-media-01a1464a
 title: Native Media Adapters for IINA and Chrome
 status: active
 created: 2026-10-24
-updated: 2026-10-25
-branch: wip/media-adapters
+updated: 2026-10-26
+branch: codex/ready-media-ui-tests
 pr:
 supersedes: []
 superseded_by:
@@ -87,6 +87,10 @@ superseded_by:
   excess valid registrations across Chrome and IINA without returning an HTTP error
   that would restart the native host. Existing sources continue renewing leases;
   subsequent snapshots can reuse a released slot. Regression tests cover both limits.
+- The Debug Simulator `--ui-testing` fixture disables UIKit and SwiftUI animations
+  while retaining every functional assertion. This isolates mode/menu tests from
+  iOS 27 Simulator animation-idle timeouts and transition-time dropped menu taps;
+  normal launches, physical-device UI, and input dispatch remain unchanged.
 
 ## Next Steps
 

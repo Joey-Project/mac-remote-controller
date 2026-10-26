@@ -143,6 +143,9 @@ dimensions before checking control bounds.
 
 The suite exercises the real SwiftUI/UIKit interface against an in-process
 Mac fixture, activated with `--ui-testing` only in Debug Simulator builds. It
+disables UIKit and SwiftUI animations in that fixture so mode and menu assertions
+wait for control state rather than Simulator animation-completion notifications.
+Normal Simulator launches and physical-device builds retain their animations. It
 does not access pairing credentials, discover Macs, connect to the network,
 inject desktop input, or adjust real audio. Assertions inspect the validated
 commands emitted by the interface. This covers UI and command integration;
