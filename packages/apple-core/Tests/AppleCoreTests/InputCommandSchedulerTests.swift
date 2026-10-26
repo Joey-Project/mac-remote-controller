@@ -70,6 +70,57 @@ final class InputCommandSchedulerTests: XCTestCase {
             ])
     }
 
+    func testGestureReleaseMotionSurvivesSaturatedQueue() {
+        var scheduler = InputCommandScheduler(capacity: 3)
+        let dragDown = RemoteCommand(name: .pointerButtonDown, button: .left)
+        let dragMotion = RemoteCommand(name: .pointerMove, x: 12, y: 4)
+        let dragUp = RemoteCommand(name: .pointerButtonUp, button: .left)
+
+        XCTAssertTrue(scheduler.enqueue(dragDown))
+        XCTAssertTrue(scheduler.enqueue(dragMotion))
+        XCTAssertTrue(scheduler.enqueue(dragUp))
+        XCTAssertFalse(scheduler.enqueue(RemoteCommand(name: .pointerMove, x: 2, y: 1)))
+
+        XCTAssertEqual(scheduler.queuedCommands, [dragDown, dragMotion, dragUp])
+    }
+
+    func testSaturatedQueueRejectsReleaseWithoutDroppingDragMotion() {
+        var scheduler = InputCommandScheduler(capacity: 3)
+        let dragDown = RemoteCommand(name: .pointerButtonDown, button: .left)
+        let dragMotion = RemoteCommand(name: .pointerMove, x: 12, y: 4)
+        let shortcut = RemoteCommand(name: .systemShortcut, shortcut: .missionControl)
+        let dragUp = RemoteCommand(name: .pointerButtonUp, button: .left)
+
+        XCTAssertTrue(scheduler.enqueue(dragDown))
+        XCTAssertTrue(scheduler.enqueue(dragMotion))
+        XCTAssertTrue(scheduler.enqueue(shortcut))
+        XCTAssertFalse(scheduler.enqueue(dragUp))
+
+        XCTAssertEqual(scheduler.queuedCommands, [dragDown, dragMotion, shortcut])
+    }
+
+    func testGestureAndShortcutCommandsAreOrderingBarriers() {
+        let barriers = [
+            RemoteCommand(name: .pointerClick, button: .left),
+            RemoteCommand(name: .pointerButtonDown, button: .left),
+            RemoteCommand(name: .pointerButtonUp, button: .left),
+            RemoteCommand(name: .keyboardText, text: "x"),
+            RemoteCommand(name: .keyboardKey, key: .left),
+            RemoteCommand(name: .systemShortcut, shortcut: .missionControl)
+        ]
+
+        for barrier in barriers {
+            var scheduler = InputCommandScheduler(capacity: 2)
+            let precedingMotion = RemoteCommand(name: .pointerMove, x: 3, y: 0)
+            XCTAssertTrue(scheduler.enqueue(precedingMotion))
+            XCTAssertTrue(scheduler.enqueue(barrier))
+            XCTAssertFalse(
+                scheduler.enqueue(RemoteCommand(name: .pointerMove, x: 2, y: 1)),
+                "\(barrier.name.rawValue) must protect preceding pointer motion")
+            XCTAssertEqual(scheduler.queuedCommands, [precedingMotion, barrier])
+        }
+    }
+
     func testSaturatedBarrierQueueDropsOnlyBestEffortPointerDeltas() {
         var scheduler = InputCommandScheduler(capacity: 3)
         let queued = [

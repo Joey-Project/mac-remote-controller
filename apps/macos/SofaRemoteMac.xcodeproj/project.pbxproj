@@ -11,6 +11,7 @@
 		000000000000000000000024 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000025; };
 		000000000000000000000026 /* DesktopController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
 		000000000000000000000030 /* MacBLEPeripheral.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000031 /* MacBLEPeripheral.swift */; };
+		A40000000000000000000001 /* CompanionModel+HeldInputRelease.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */; };
 		000000000000000000000028 /* MacSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000029; };
 /* End PBXBuildFile section */
 
@@ -20,6 +21,7 @@
 		000000000000000000000025 /* CompanionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionModel.swift; sourceTree = "<group>"; };
 		000000000000000000000027 /* DesktopController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopController.swift; sourceTree = "<group>"; };
 		000000000000000000000031 /* MacBLEPeripheral.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBLEPeripheral.swift; sourceTree = "<group>"; };
+		A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+HeldInputRelease.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +52,7 @@
 				000000000000000000000025 /* CompanionModel.swift */,
 				000000000000000000000027 /* DesktopController.swift */,
 				000000000000000000000031 /* MacBLEPeripheral.swift */,
+				A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */,
 			);
 			path = SofaRemoteMac/App;
 			sourceTree = "<group>";
@@ -136,6 +139,7 @@
 				000000000000000000000024 /* CompanionModel.swift in Sources */,
 				000000000000000000000026 /* DesktopController.swift in Sources */,
 				000000000000000000000030 /* MacBLEPeripheral.swift in Sources */,
+				A40000000000000000000001 /* CompanionModel+HeldInputRelease.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -61,10 +61,12 @@ final class RemoteModel {
     var benchmarkTargetID: String?
     var connectionID: String?
     var sequence: UInt64 = 0
-    var pending: [String: (sequence: UInt64, sent: ContinuousClock.Instant)] = [:]
-    private var commandScheduler = InputCommandScheduler(capacity: 8)
+    var pending: [String: (metadata: PendingCommandMetadata, sent: ContinuousClock.Instant)] = [:]
+    @ObservationIgnored var commandScheduler = InputCommandScheduler(capacity: 8)
+    @ObservationIgnored var localPointerDragCoordinator = LocalPointerDragCoordinator()
+    var rejectedLocalDragID: UUID?
     private var deadline: Timer?
-    private var coalescingTimer: Timer?
+    @ObservationIgnored var coalescingTimer: Timer?
     var benchmark: RTTBenchmarkAccumulator?
     var benchmarkRequest: BenchmarkPendingProbe?
     var benchmarkRequestTracker = RTTBenchmarkRequestTracker()
@@ -259,6 +261,7 @@ final class RemoteModel {
         connectionID = nil
         pending.removeAll()
         commandScheduler.reset()
+        resetLocalDragTracking()
         coalescingTimer?.invalidate()
         coalescingTimer = nil
         connectionSummary = "Disconnected"
@@ -281,6 +284,7 @@ extension RemoteModel {
                 connectionID = nil
                 remoteState = nil
                 benchmarkRequestTracker.reset()
+                resetLocalDragTracking()
                 connectionSummary = "Disconnected"
                 errorMessage = nil
                 return
@@ -302,6 +306,7 @@ extension RemoteModel {
         remoteState = nil
         pending.removeAll()
         commandScheduler.reset()
+        resetLocalDragTracking()
         connectionSummary = "Disconnected"
         errorMessage =
             unknown
@@ -312,7 +317,7 @@ extension RemoteModel {
     }
 
     @discardableResult
-    func send(_ command: RemoteCommand) -> Bool {
+    func send(_ command: RemoteCommand, orderedDragInput: Bool = false) -> Bool {
         guard isConnected else { return false }
         #if DEBUG && targetEnvironment(simulator)
             if isUITesting {
@@ -326,11 +331,13 @@ extension RemoteModel {
         do { try command.validate() } catch {
             errorMessage = "The control value is invalid."; return false
         }
-        guard commandScheduler.enqueue(command) else {
-            if !InputCommandScheduler.isBestEffortPointerDelta(command) {
-                errorMessage = "The Mac is busy. Wait for the pending controls to finish."
-            }
-            return false
+        if !orderedDragInput,
+            let accepted = localPointerDragCoordinator.deferCommandIfNeeded(command)
+        {
+            return accepted
+        }
+        guard commandScheduler.enqueue(command, preservingMotion: orderedDragInput) else {
+            return handleQueueRejection(command, orderedDragInput: orderedDragInput)
         }
         if command.name == .pointerMove || command.name == .pointerScroll
             || command.name == .systemVolumeSet
@@ -344,32 +351,4 @@ extension RemoteModel {
         return true
     }
 
-}
-
-extension RemoteModel {
-    private func scheduleCoalescedFlush() {
-        guard coalescingTimer == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.coalescingTimer = nil
-                self?.flushQueuedCommands()
-            }
-        }
-        coalescingTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
-    }
-
-    func flushQueuedCommands() {
-        guard let connectionID, let peer else { return }
-        let available = max(0, 8 - pending.count)
-        for command in commandScheduler.dequeue(maximumCount: available) {
-            sequence += 1
-            let requestID = UUID().uuidString
-            pending[requestID] = (sequence, ContinuousClock.now)
-            peer.send(
-                WireMessage(
-                    type: .command, connectionID: connectionID, requestID: requestID,
-                    sequence: sequence, command: command))
-        }
-    }
 }

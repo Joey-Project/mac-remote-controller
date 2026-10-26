@@ -1,10 +1,10 @@
 import Foundation
 
-/// A bounded FIFO for remote commands. Adjacent pointer deltas are summed, while
-/// clicks and keyboard commands remain ordering barriers.
+/// A bounded FIFO that sums adjacent pointer deltas while preserving control barriers.
 public struct InputCommandScheduler: Sendable {
     public let capacity: Int
     private(set) public var queuedCommands: [RemoteCommand] = []
+    private var protectedPrefixCount = 0
 
     public init(capacity: Int = 8) {
         precondition(capacity > 0)
@@ -20,7 +20,7 @@ public struct InputCommandScheduler: Sendable {
     /// discrete barrier may be discarded; accepted barriers and their preceding
     /// motion remain in order.
     @discardableResult
-    public mutating func enqueue(_ command: RemoteCommand) -> Bool {
+    public mutating func enqueue(_ command: RemoteCommand, preservingMotion: Bool = false) -> Bool {
         guard (try? command.validate()) != nil else { return false }
 
         if command.name == .systemVolumeSet,
@@ -35,16 +35,18 @@ public struct InputCommandScheduler: Sendable {
             let combined = combinedMotion(last, command)
         {
             queuedCommands[queuedCommands.count - 1] = combined
+            if preservingMotion { protectedPrefixCount = queuedCommands.count }
             return true
         }
 
-        if queuedCommands.count == capacity {
+        if queuedCommands.count == capacity, !preservingMotion {
             if isMotion(command) || command.name == .systemVolumeSet {
                 discardTrailingMotion()
             }
         }
         guard queuedCommands.count < capacity else { return false }
         queuedCommands.append(command)
+        if preservingMotion { protectedPrefixCount = queuedCommands.count }
         return true
     }
 
@@ -53,11 +55,13 @@ public struct InputCommandScheduler: Sendable {
         let count = min(maximumCount, queuedCommands.count)
         let commands = Array(queuedCommands.prefix(count))
         queuedCommands.removeFirst(count)
+        protectedPrefixCount = max(0, protectedPrefixCount - count)
         return commands
     }
 
     public mutating func reset() {
         queuedCommands.removeAll(keepingCapacity: true)
+        protectedPrefixCount = 0
     }
 
     private func isMotion(_ command: RemoteCommand) -> Bool {
@@ -65,12 +69,12 @@ public struct InputCommandScheduler: Sendable {
     }
 
     private func isBarrier(_ command: RemoteCommand) -> Bool {
-        command.name == .pointerClick || command.name == .keyboardText
-            || command.name == .keyboardKey
+        !isMotion(command) && command.name != .systemVolumeSet
     }
 
     private mutating func discardTrailingMotion() {
-        let start = queuedCommands.lastIndex(where: isBarrier).map { $0 + 1 } ?? 0
+        let barrierEnd = queuedCommands.lastIndex(where: isBarrier).map { $0 + 1 } ?? 0
+        let start = max(barrierEnd, protectedPrefixCount)
         let indices = queuedCommands[start...].indices.filter { isMotion(queuedCommands[$0]) }
         for index in indices.reversed() { queuedCommands.remove(at: index) }
     }

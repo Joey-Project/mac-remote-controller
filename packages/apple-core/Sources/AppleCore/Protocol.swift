@@ -15,6 +15,9 @@ public enum CommandName: String, Codable, Sendable, Equatable {
     case pointerMove = "pointer.move"
     case pointerClick = "pointer.click"
     case pointerScroll = "pointer.scroll"
+    case pointerButtonDown = "pointer.button.down"
+    case pointerButtonUp = "pointer.button.up"
+    case systemShortcut = "system.shortcut"
     case keyboardText = "keyboard.text"
     case keyboardKey = "keyboard.key"
     case systemVolumeSet = "system.volume.set"
@@ -36,38 +39,12 @@ public enum PointerButton: String, Codable, Sendable, Equatable {
     case right
 }
 
-public struct RemoteState: Codable, Sendable, Equatable {
-    public var accessibilityGranted: Bool
-    public var systemVolume: Double?
-    public var systemVolumeReason: String?
-    public var deviceName: String
-    public var capabilities: [String]?
-
-    public init(
-        accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
-        deviceName: String, capabilities: [String]? = nil
-    ) {
-        self.accessibilityGranted = accessibilityGranted
-        self.systemVolume = systemVolume
-        self.systemVolumeReason = systemVolumeReason
-        self.deviceName = deviceName
-        self.capabilities = capabilities
-    }
-
-    public func validate() throws {
-        if let systemVolume, !systemVolume.isFinite || !(0...1).contains(systemVolume) {
-            throw WireProtocolError.invalidEnvelope("systemVolume must be finite and within 0...1")
-        }
-        guard !deviceName.isEmpty, deviceName.utf8.count <= WireLimits.maximumDeviceNameBytes else {
-            throw WireProtocolError.invalidEnvelope("deviceName is empty or too long")
-        }
-        if let capabilities,
-            capabilities.count > 16
-                || capabilities.contains(where: { $0.isEmpty || $0.utf8.count > 64 })
-        {
-            throw WireProtocolError.invalidEnvelope("capabilities are empty or too large")
-        }
-    }
+/// Fixed public macOS shortcuts; arbitrary key codes and shell actions are never accepted.
+public enum SystemShortcut: String, Codable, Sendable, Equatable {
+    case missionControl = "mission-control"
+    case appExpose = "app-expose"
+    case previousSpace = "previous-space"
+    case nextSpace = "next-space"
 }
 
 public enum WireCapabilities {
@@ -284,6 +261,8 @@ public enum WireLimits {
     public static let protocolVersion = 1
     public static let maximumMessageBytes = 64 * 1024
     public static let maximumTextBytes = 4096
+    /// Maximum supported monotonic client uptime in seconds for pointer tap timestamps.
+    public static let maximumTapTimestampSeconds: TimeInterval = 1_000_000_000
     public static let maximumSequence: UInt64 = 9_007_199_254_740_991
     public static let maximumIdentityBytes = 128
     public static let maximumAuthTokenBytes = 4096
