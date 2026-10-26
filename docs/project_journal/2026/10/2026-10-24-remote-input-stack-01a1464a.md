@@ -4,7 +4,7 @@ title: Responsive input, BLE comparison, gestures, and media adapters
 status: active
 created: 2026-10-24
 updated: 2026-10-25
-branch: wip/input-latency
+branch: codex/ready-input
 pr:
 supersedes: []
 superseded_by:
@@ -92,11 +92,13 @@ superseded_by:
 
 ## Native stack prerequisite and verifier
 
-- The released upstream `@v2` action resolves to v2.2.11 and supports authenticated
-  GitHub-native stacks rooted at the repository default branch. Manually chained
-  base branches still require native stack membership registration.
-- Native stack 10 is registered from `master` in order PR #9, #4, #5, #6, #7, #8.
-  The members remain open and unmerged. See the [GitHub stacked pull request API](https://docs.github.com/en/rest/pulls/stacks).
+- The canonical v2.2.13 verifier/controller retain the floating `@v2` action
+  and support authenticated GitHub-native stacks rooted at the default branch.
+  Chained feature branches also require native stack membership registration.
+- Original stack 10 and its PRs preserve the initial delivery and review history.
+  A clean replacement retains the same functional layers after the verifier
+  rejected historical App-mediated human progress comments as provider evidence.
+  Current membership and merge state belong in the PRs. See the [GitHub stacked pull request API](https://docs.github.com/en/rest/pulls/stacks).
 - Repository PR #9 subscribes the verifier to GitHub's documented
   `pull_request.stacked` activity. Its `actionlint` 1.7.12 compatibility rule is
   limited to the documented event diagnostic; the `stacked_typo` negative control

@@ -1,5 +1,6 @@
 packages:
   - apps/chrome-extension
   - apps/iina-plugin
+  - apps/web-remote
 allowBuilds:
   esbuild: true
