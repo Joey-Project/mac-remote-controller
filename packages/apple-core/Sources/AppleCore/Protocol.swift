@@ -6,6 +6,9 @@ public enum MessageType: String, Codable, Sendable, Equatable {
     case command
     case result
     case state
+    case ping
+    case pong
+    case disconnect
 }
 
 public enum CommandName: String, Codable, Sendable, Equatable {
@@ -33,109 +36,22 @@ public enum PointerButton: String, Codable, Sendable, Equatable {
     case right
 }
 
-public struct RemoteCommand: Codable, Sendable, Equatable {
-    public var name: CommandName
-    public var x: Double?
-    public var y: Double?
-    public var value: Double?
-    public var text: String?
-    public var key: RemoteKey?
-    public var button: PointerButton?
-
-    public init(
-        name: CommandName,
-        x: Double? = nil,
-        y: Double? = nil,
-        value: Double? = nil,
-        text: String? = nil,
-        key: RemoteKey? = nil,
-        button: PointerButton? = nil
-    ) {
-        self.name = name
-        self.x = x
-        self.y = y
-        self.value = value
-        self.text = text
-        self.key = key
-        self.button = button
-    }
-
-    public func validate() throws {
-        switch name {
-        case .pointerMove:
-            try requireCoordinates(limit: 500)
-            try requireOnly(["x", "y"])
-        case .pointerClick:
-            guard button != nil else {
-                throw WireProtocolError.invalidCommand("pointer.click requires button")
-            }
-            try requireOnly(["button"])
-        case .pointerScroll:
-            try requireCoordinates(limit: 100)
-            try requireOnly(["x", "y"])
-        case .keyboardText:
-            guard let text, !text.isEmpty, text.utf8.count <= WireLimits.maximumTextBytes else {
-                throw WireProtocolError.invalidCommand(
-                    "keyboard.text requires 1...4096 UTF-8 bytes")
-            }
-            try requireOnly(["text"])
-        case .keyboardKey:
-            guard key != nil else {
-                throw WireProtocolError.invalidCommand("keyboard.key requires an allowlisted key")
-            }
-            try requireOnly(["key"])
-        case .systemVolumeSet:
-            guard let value, value.isFinite, (0...1).contains(value) else {
-                throw WireProtocolError.invalidCommand(
-                    "system.volume.set value must be finite and within 0...1")
-            }
-            try requireOnly(["value"])
-        }
-    }
-
-    private func requireCoordinates(limit: Double) throws {
-        guard let x, let y, x.isFinite, y.isFinite, abs(x) <= limit, abs(y) <= limit else {
-            throw WireProtocolError.invalidCommand(
-                "\(name.rawValue) requires finite coordinates within ±\(Int(limit))")
-        }
-    }
-
-    private func requireOnly(_ allowed: Set<String>) throws {
-        if x != nil, !allowed.contains("x") {
-            throw WireProtocolError.invalidCommand("unexpected x for \(name.rawValue)")
-        }
-        if y != nil, !allowed.contains("y") {
-            throw WireProtocolError.invalidCommand("unexpected y for \(name.rawValue)")
-        }
-        if value != nil, !allowed.contains("value") {
-            throw WireProtocolError.invalidCommand("unexpected value for \(name.rawValue)")
-        }
-        if text != nil, !allowed.contains("text") {
-            throw WireProtocolError.invalidCommand("unexpected text for \(name.rawValue)")
-        }
-        if key != nil, !allowed.contains("key") {
-            throw WireProtocolError.invalidCommand("unexpected key for \(name.rawValue)")
-        }
-        if button != nil, !allowed.contains("button") {
-            throw WireProtocolError.invalidCommand("unexpected button for \(name.rawValue)")
-        }
-    }
-}
-
 public struct RemoteState: Codable, Sendable, Equatable {
     public var accessibilityGranted: Bool
     public var systemVolume: Double?
     public var systemVolumeReason: String?
     public var deviceName: String
+    public var capabilities: [String]?
 
     public init(
         accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
-        deviceName: String
+        deviceName: String, capabilities: [String]? = nil
     ) {
         self.accessibilityGranted = accessibilityGranted
         self.systemVolume = systemVolume
         self.systemVolumeReason = systemVolumeReason
         self.deviceName = deviceName
+        self.capabilities = capabilities
     }
 
     public func validate() throws {
@@ -145,7 +61,17 @@ public struct RemoteState: Codable, Sendable, Equatable {
         guard !deviceName.isEmpty, deviceName.utf8.count <= WireLimits.maximumDeviceNameBytes else {
             throw WireProtocolError.invalidEnvelope("deviceName is empty or too long")
         }
+        if let capabilities,
+            capabilities.count > 16
+                || capabilities.contains(where: { $0.isEmpty || $0.utf8.count > 64 })
+        {
+            throw WireProtocolError.invalidEnvelope("capabilities are empty or too large")
+        }
     }
+}
+
+public enum WireCapabilities {
+    public static let roundTripProbe = "roundTripProbe.v1"
 }
 
 public struct RemoteError: Codable, Sendable, Equatable {
@@ -230,6 +156,10 @@ public struct WireMessage: Codable, Sendable, Equatable {
             try validateResult()
         case .state:
             try validateState()
+        case .ping, .pong:
+            try validatePing()
+        case .disconnect:
+            try validateDisconnect()
         }
     }
 
@@ -312,6 +242,29 @@ public struct WireMessage: Codable, Sendable, Equatable {
             throw WireProtocolError.invalidEnvelope(
                 "state contains fields from another message type")
         }
+    }
+
+    private func validatePing() throws {
+        guard let connectionID, !connectionID.isEmpty,
+            connectionID.utf8.count <= WireLimits.maximumIdentityBytes,
+            let requestID, UUID(uuidString: requestID) != nil,
+            let sequence, sequence > 0, sequence <= WireLimits.maximumSequence
+        else {
+            throw WireProtocolError.invalidEnvelope(
+                "ping requires connectionId, requestId, and sequence")
+        }
+        guard authToken == nil, deviceName == nil, command == nil, state == nil, error == nil else {
+            throw WireProtocolError.invalidEnvelope(
+                "ping contains fields from another message type")
+        }
+    }
+
+    private func validateDisconnect() throws {
+        guard let connectionID, !connectionID.isEmpty,
+            connectionID.utf8.count <= WireLimits.maximumIdentityBytes,
+            authToken == nil, deviceName == nil, requestID == nil, sequence == nil,
+            command == nil, state == nil, error == nil
+        else { throw WireProtocolError.invalidEnvelope("disconnect has invalid fields") }
     }
 
     private func validateCommandIdentity() throws {
