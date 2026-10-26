@@ -1,8 +1,8 @@
 # Remote protocol v1
 
 Status: the Apple foundation implements discovery, pairing, state, pointer,
-keyboard, system volume, and an authenticated Bluetooth LE transport.
-iPhone/iPad is the first mobile target; Android and media adapters follow.
+keyboard, system volume, authenticated Bluetooth LE, and typed media controls.
+iPhone/iPad is the first mobile target; Android remains future work.
 Physical Bluetooth validation remains outstanding.
 
 ## First slice
@@ -12,7 +12,7 @@ Physical Bluetooth validation remains outstanding.
 3. Read connection, permission, and system-volume state.
 4. Control the desktop pointer and committed text, then system volume.
 
-IINA and Chrome media adapters follow this foundation. Media commands retain an
+IINA and Chrome media adapters use this foundation. Media commands retain an
 explicit selected-source identity independent of desktop focus.
 
 ## Connection and trust
@@ -117,6 +117,7 @@ not prove that the foreground app accepted the input or completed an action.
 | `keyboard.text`       | `text`                            | 1–4096 UTF-8 bytes of committed text                                      |
 | `keyboard.key`        | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`   |
 | `system.volume.set`   | `value`                           | Finite scalar in 0...1                                                    |
+| `media.control`       | `mediaRequest`                    | Exact target ID, typed action, and optional finite value; see below       |
 
 New iOS clients send `tapTimestamp` from `UITouch.timestamp`. The Mac compares
 successive client timestamps only within that client's authenticated session,
@@ -193,7 +194,35 @@ prepare the latest pong. Those Mac-side values are not subtracted from mobile
 RTT because the clocks are independent. Comparison reports are retained per
 Mac so Wi-Fi and Bluetooth results can be viewed after an explicit switch.
 
-## State and future media boundaries
+## Media sources and command
+
+`state.mediaTargets` is optional for compatibility with older companions. If
+present, it is an array of at most 64 unique targets. Each target has a bounded
+opaque `id`, display `name`, `kind` (`iina`, `youtube`, or `bilibili`), typed
+capabilities, and optional current `playerVolume`. Capabilities include
+`playPause`, `seek`, `next`, `previous`, and optional `playerVolumeMaximum`.
+Current player volume must be within the reported maximum. Absence of
+`mediaTargets` means the companion does not provide media controls; an empty
+array means no adapter source is currently available.
+
+`media.control` contains exactly one `mediaRequest` object: `targetId`, `action`,
+and an optional `value`. Actions are `playPause`, `seek`, `next`, `previous`, and
+`setVolume`. Seek is a nonzero finite relative number no greater than 3600
+seconds in magnitude. Set-volume is finite and nonnegative, then checked against
+the selected source's advertised maximum at execution. Other actions reject a
+value. The Mac rejects unsupported capabilities and unavailable targets with a
+result; it never substitutes a foreground player or another tab.
+
+The companion's optional media bridge binds only to IPv4 loopback
+`127.0.0.1:47623`. Chrome uses a pinned native messaging host; IINA uses the
+official plugin HTTP client and polls the companion. A separate random bearer
+token is stored in a per-user mode-0600 companion file. The bridge is media-only,
+rejects cross-origin requests, bounds HTTP bodies, clients, request rate, and
+pending commands, and authenticates each request. No token is exposed to Chrome
+page scripts or content scripts. Adapter polling is not an authenticated
+network pairing mechanism.
+
+## State and media boundaries
 
 The optional `supportsGestures` state flag enables the held-button and fixed
 shortcut commands above. Absence means unsupported; clients must keep these
@@ -240,6 +269,10 @@ buttons, and cancels termination if a release cannot be posted.
 Represent volume as a finite gain ratio: `1.0` means 100%. System volume is in
 `0.0...1.0`. A player's actual reported maximum is independent and may exceed
 `1.0`; do not impose a generic 100% or 1000% player limit.
+Adapters normalize their native volume units at the protocol boundary; for
+example, IINA's mpv percentage is divided by 100 when reported and multiplied
+by 100 only when a gain-ratio command is applied. The mobile UI converts the
+gain ratio to percentage values for display and its 10-point slider policy.
 
 Keep system and selected-player volume separately in state. Switching the UI
 mode sends no volume command. Unavailable values are explicit rather than zero.
@@ -263,5 +296,6 @@ Refresh state where useful and let the user repeat an intentional action.
 
 The foundation tests cover valid round trips, malformed/unknown messages, version
 rejection, duplicate and stale sequences, Unicode text, bounds, and invitation
-expiry. Player gain above 100% and loss of a selected source will be tested with
-the media adapters; the current bindings expose system volume only.
+expiry. Media-adapter fixtures cover player gain above 100%, explicit source
+routing, and source lease expiry. Live-player behavior and physical-device
+acceptance remain separate from these package and fixture tests.

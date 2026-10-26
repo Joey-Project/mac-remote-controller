@@ -21,6 +21,7 @@ public enum CommandName: String, Codable, Sendable, Equatable {
     case keyboardText = "keyboard.text"
     case keyboardKey = "keyboard.key"
     case systemVolumeSet = "system.volume.set"
+    case mediaControl = "media.control"
 }
 
 public enum RemoteKey: String, Codable, Sendable, Equatable {
@@ -267,6 +268,9 @@ public enum WireLimits {
     public static let maximumIdentityBytes = 128
     public static let maximumAuthTokenBytes = 4096
     public static let maximumDeviceNameBytes = 256
+    public static let maximumMediaTargetIDBytes = 128
+    public static let maximumMediaTargetNameBytes = 256
+    public static let maximumMediaTargets = 64
     public static let maximumErrorCodeBytes = 64
     public static let maximumErrorMessageBytes = 1024
 }

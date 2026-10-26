@@ -1,0 +1,19 @@
+{
+  "name": "@mac-remote-controller/iina-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "lint": "oxlint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm run build && node --test"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "iina-plugin-definition": "0.99.4",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "typescript": "7.0.2"
+  }
+}

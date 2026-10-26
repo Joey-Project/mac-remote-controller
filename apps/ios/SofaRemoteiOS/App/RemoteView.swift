@@ -2,11 +2,18 @@ import AppleCore
 import SwiftUI
 import UIKit
 
+enum VolumeScope: Hashable {
+    case system
+    case player
+}
+
 struct RemoteView: View {
     @Bindable var model: RemoteModel
     @State private var showingScanner = false
     @State private var showingBenchmark = false
     @State private var textToSend = ""
+    @State var selectedMediaTargetID: String?
+    @State var volumeScope: VolumeScope = .system
     @State private var isTextComposing = false
     @State private var isTextInputFocused = false
     @State private var localDragID: UUID?
@@ -90,6 +97,12 @@ struct RemoteView: View {
             .onChange(of: model.isConnected) { _, connected in
                 if !connected { resetInteractionState() }
             }
+            .onChange(of: mediaTargetIDs) { _, ids in
+                if let selectedMediaTargetID, ids?.contains(selectedMediaTargetID) == true {
+                    return
+                }
+                selectedMediaTargetID = nil
+            }
             .onChange(of: model.rejectedLocalDragID) { _, rejectedID in
                 if localDragID == rejectedID { localDragID = nil }
             }
@@ -151,11 +164,14 @@ private extension RemoteView {
             .padding(.bottom, 12)
 
             if isVolumePinned {
-                systemVolumeCard
-                    .padding(.horizontal, horizontalInset(for: availableWidth))
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(1)
+                VStack(spacing: 10) {
+                    systemVolumeCard
+                    mediaControlsCard
+                }
+                .padding(.horizontal, horizontalInset(for: availableWidth))
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(1)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: isVolumePinned)
@@ -166,6 +182,7 @@ private extension RemoteView {
             systemVolumeCard
                 .padding(.horizontal, horizontalInset(for: availableWidth))
                 .padding(.top, 8)
+            mediaControlsCard
 
             ScrollView {
                 VStack(spacing: 16) {
@@ -301,7 +318,17 @@ private extension RemoteView {
         }
     }
 
-    private var systemVolumeCard: some View { SystemVolumeCard(model: model) }
+    private var systemVolumeCard: some View {
+        SystemVolumeCard(
+            model: model,
+            volumeScope: $volumeScope,
+            target: selectedMediaTarget,
+            onSetPlayerVolume: { target, value, displayPercent, requestID in
+                model.sendPlayerVolume(
+                    targetID: target.id, gainRatio: value, displayPercent: displayPercent,
+                    requestID: requestID)
+            })
+    }
 
     private var canSendText: Bool {
         remoteEnabled && !isTextComposing && !textToSend.isEmpty && textToSend.utf8.count <= 4_096
@@ -317,6 +344,8 @@ private extension RemoteView {
         releaseLocalDrag()
         selectedMode = .touchpad
         isVolumePinned = false
+        volumeScope = .system
+        selectedMediaTargetID = nil
         isTextInputFocused = false
         isTextComposing = false
         textToSend = ""

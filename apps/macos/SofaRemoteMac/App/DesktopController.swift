@@ -52,6 +52,8 @@ final class DesktopController {
             try executeKeyboard(command, source: source)
         case .systemShortcut, .systemVolumeSet:
             break
+        case .mediaControl:
+            throw ControlError.invalidCommand
         }
     }
 

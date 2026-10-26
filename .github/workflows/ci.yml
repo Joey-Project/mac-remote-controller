@@ -52,6 +52,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
+      - name: Set up pnpm for bundled media adapters
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+      - name: Set up Node for bundled media adapters
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '26.12.0'
+          cache: pnpm
+      - name: Install media adapter build dependencies
+        run: pnpm install --frozen-lockfile
       - name: Test iPhone and iPad controls in Simulator
         run: tooling/swift/test-ios-ui.sh
         timeout-minutes: 40
@@ -117,6 +128,12 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Lint GitHub Actions workflows
         run: actionlint
+      - name: Check media setup shell scripts
+        run: |
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
+          shellcheck scripts/*.sh
       - name: Check repository shell scripts
         run: |
           for script in tooling/swift/*.sh apps/android/gradlew; do

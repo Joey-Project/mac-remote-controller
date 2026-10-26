@@ -71,8 +71,21 @@ Moving the app out of the active state disconnects it. Reconnect intentionally
 when returning. Pending clicks and text are never replayed after a connection
 loss; their outcome may be unknown. No screen preview is transmitted.
 
-Only system volume is available in this slice. Media-source selection, player
-volume, playback controls, and Finder shortcuts follow with the media adapters.
+When the Mac media bridge is enabled, supported Chrome tabs and IINA player
+windows appear in a separate player-source picker. The selected source stays
+independent of the frontmost desktop app. A single row contains previous item,
+backward 10 seconds, play/pause, forward 10 seconds, and next item. Seek duration
+is fixed for now; it has no inline editor. These controls and player volume do not retarget
+Mac system input. Player volume is displayed as a percentage of unity gain, such
+as 60%, 120%, or 400%, and follows the selected adapter's reported maximum
+and offers fixed 10-percentage-point steps with a stronger 100% detent, even
+when the maximum is higher. The system/player volume scope
+switch defaults to system volume and changes no volume by itself. Older Macs
+that omit media targets keep the player controls hidden.
+
+Chrome and IINA require separate local setup on the Mac; see their package
+readmes. No adapter is installed automatically, and media transport failure is
+shown to the user without replaying the command after reconnect.
 
 ## Connection benchmark
 

@@ -1,0 +1,107 @@
+---
+id: 20261024-media-01a1464a
+title: Native Media Adapters for IINA and Chrome
+status: active
+created: 2026-10-24
+updated: 2026-10-25
+branch: wip/media-adapters
+pr:
+supersedes: []
+superseded_by:
+---
+
+# Native Media Adapters for IINA and Chrome
+
+## Summary
+
+- Add explicitly selected Chrome-tab and IINA-window playback targets to the
+  native remote. Media selection remains separate from desktop focus.
+- The browser/player controls share one five-button row: previous item, backward
+  ten seconds, play/pause, forward ten seconds, and next item. Buttons expand
+  equally across the available width, with at least 44-point label height.
+  Seeking is fixed at ten seconds; the inline duration menu and its state are removed.
+
+## Current State
+
+- The Mac companion exposes an optional media-only HTTP bridge on loopback.
+  A random token lives in its mode-0600 configuration. The Chrome Native
+  Messaging host reads that file directly, keeping the credential out of the
+  extension and page. The IINA plugin uses its local preference for the same
+  bridge and does not open a listener.
+- Chrome targets the current YouTube or Bilibili tab. IINA reports an exact
+  target for each player window. Playback, seek, playlist navigation, and
+  player volume are routed to the selected target, independently of frontmost
+  application focus. Unsupported controls fail visibly.
+- Player volume stays a gain ratio on the wire (`1.0` is 100%). The IINA
+  adapter converts mpv percentage values at its boundary, and iOS converts the
+  ratio to percentage only for its display and 10-point slider policy.
+- Player volume summaries use the same percentage format as system volume:
+  60%, 120%, or 400%, without a current/maximum fraction. The displayed percent
+  stays relative to unity gain rather than the player's maximum.
+- IINA sends the plugin API's form-encoded command body and reports effective
+  volume zero while muted; only positive player-volume commands clear mute.
+  The loopback router uses a two-second deadline while its clients allow three
+  seconds, keeps socket and route deadlines independent, and releases capacity
+  after timeout. The Chrome service worker refreshes registered tabs from the
+  current document every two seconds while its native messaging port is
+  connected, so hidden-page timer throttling does not age out an unchanged
+  player source. Muted HTML media also reports effective volume zero.
+- Second-review hardening keeps IINA target IDs and UTF-8 byte limits compatible
+  with JavaScriptCore, and checks playlist availability at command execution.
+  Both bridge routes decode the same Codable HTTP command envelope. Timed-out
+  request ownership is retained for 30 seconds with a 256-entry cap; only a
+  matching late result receives 204. Chrome uses a 1.5-second action deadline,
+  discards late content-script callbacks, and clamps live/DVR seeks to valid
+  seekable ranges, choosing the nearest endpoint across gaps.
+- Chrome reconnects to missing or disconnected Native Messaging hosts with
+  exponential backoff capped at 15 seconds. IINA rereads its bridge port and
+  token each poll, keeps polling while settings are invalid, and yields after
+  each batch of at most eight queued commands.
+- Follow-up review fixes keep commands bound to the selected live player:
+  Chrome resolves controls inside the active site player and rejects actions
+  if that player changes before or during execution; its service worker starts
+  native refresh/reconnect work only while a supported tab is registered and
+  stops it when the last supported tab leaves; IINA rechecks its idle state at
+  command execution and reports failure without changing a player that became
+  idle after its snapshot.
+- The iOS player-volume thumb preserves accepted values through stale state
+  snapshots and reconciles exact volume request results per target.
+- CI runs `actionlint` separately, checks `scripts/*.sh` with `bash -n` and
+  ShellCheck in a media setup step, and keeps Swift tooling and the Android
+  wrapper in the repository shell-check step.
+- Final integrated local Swift checks passed 204 AppleCore package tests, the
+  macOS app build, generic iOS Simulator build, and generated plist validation. The
+  `SofaRemoteNativeHost` release product also builds. Pinned Node 26.12.0/pnpm
+  12.14.0 formatting, lint, strict typecheck, tests, and builds passed: Chrome
+  41/41 and IINA mocks 15/15. `actionlint`, shell syntax checks, ShellCheck
+  0.11.0, and project-journal validation passed. The backend lane reported six
+  focused bridge route/lifecycle tests and one localhost HTTP smoke passed.
+- Chrome package tests use DOM fixtures and IINA package tests use mocks. The
+  user subsequently configured IINA and confirmed playback control. A real
+  iPhone test reconnected the paired Mac and completed three Bilibili seeks with
+  matched successful results and no error alert, using the existing installed
+  companion/extension. Bundled first-install UI acceptance remains separate;
+  see the [device acceptance journal](2026-10-24-device-acceptance-01a1464a.md)
+  for the source scope and remaining runtime checks.
+- Media registration retains at most 64 Chrome tabs. The shared router also ignores
+  excess valid registrations across Chrome and IINA without returning an HTTP error
+  that would restart the native host. Existing sources continue renewing leases;
+  subsequent snapshots can reuse a released slot. Regression tests cover both limits.
+
+## Next Steps
+
+- The user reported an intermittent IINA disconnect after successful setup and
+  explicitly deferred it while Wi-Fi pointer smoothness takes priority. Keep the
+  current media UI and volume behavior unchanged during input performance repairs.
+- Expose seek duration in a future settings screen if needed; keep it out of the
+  compact media control row.
+- Follow the stack acceptance procedure after review and CI. Install only the
+  signed builds selected by the user, configure Chrome and IINA locally, and
+  verify each explicit target plus visible failures for unavailable controls.
+
+## Evidence
+
+- `apps/chrome-extension/README.md` and `apps/iina-plugin/README.md` contain
+  the manual setup commands and installation paths.
+- `apps/macos/README.md` documents the loopback bridge, credential boundary,
+  and explicit media target behavior.
