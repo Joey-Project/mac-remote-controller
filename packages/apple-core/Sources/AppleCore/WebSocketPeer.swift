@@ -4,7 +4,7 @@ import Security
 
 /// All transport callbacks and command execution share the main actor's ordering.
 @MainActor
-public final class WebSocketPeer {
+public final class WebSocketPeer: RemotePeer {
     public var onReady: (() -> Void)?
     public var onMessage: ((WireMessage) -> Void)?
     public var onClose: ((String) -> Void)?

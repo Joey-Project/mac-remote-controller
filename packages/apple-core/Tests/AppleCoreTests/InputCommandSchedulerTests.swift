@@ -152,4 +152,34 @@ final class InputCommandSchedulerTests: XCTestCase {
         XCTAssertTrue(scheduler.queuedCommands.isEmpty)
         XCTAssertTrue(scheduler.enqueue(RemoteCommand(name: .keyboardKey, key: .escape)))
     }
+
+    func testAcknowledgementWindowDrainsQueuedBarriersInOrder() {
+        var scheduler = InputCommandScheduler(capacity: 8)
+        var inFlight: [RemoteCommand] = []
+        let commands = (0..<16).map { index in
+            RemoteCommand(name: .keyboardKey, key: index.isMultiple(of: 2) ? .left : .right)
+        }
+
+        for command in commands {
+            XCTAssertTrue(scheduler.enqueue(command))
+            flushAvailableCommands(from: &scheduler, into: &inFlight)
+        }
+
+        XCTAssertEqual(inFlight, Array(commands.prefix(8)))
+        XCTAssertEqual(scheduler.queuedCommands, Array(commands.suffix(8)))
+
+        for expected in commands.suffix(8) {
+            inFlight.removeFirst()
+            flushAvailableCommands(from: &scheduler, into: &inFlight)
+            XCTAssertEqual(inFlight.count, 8)
+            XCTAssertEqual(inFlight.last, expected)
+        }
+    }
+
+    private func flushAvailableCommands(
+        from scheduler: inout InputCommandScheduler, into inFlight: inout [RemoteCommand]
+    ) {
+        let available = max(0, 8 - inFlight.count)
+        inFlight += scheduler.dequeue(maximumCount: available)
+    }
 }
