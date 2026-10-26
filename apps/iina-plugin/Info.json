@@ -1,0 +1,15 @@
+{
+  "name": "Sofa Remote",
+  "identifier": "com.joeyteng.sofaremote.iina",
+  "version": "0.1.0",
+  "description": "Control a selected IINA player from Sofa Remote.",
+  "author": { "name": "Sofa Remote" },
+  "entry": "main.js",
+  "permissions": ["network-request"],
+  "allowedDomains": ["127.0.0.1"],
+  "preferenceDefaults": {
+    "bridge_port": 47623,
+    "bridge_token": ""
+  },
+  "preferencesPage": "preferences.html"
+}

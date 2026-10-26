@@ -13,6 +13,9 @@
 		000000000000000000000030 /* MacBLEPeripheral.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000031 /* MacBLEPeripheral.swift */; };
 		A40000000000000000000001 /* CompanionModel+HeldInputRelease.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */; };
 		000000000000000000000028 /* MacSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000029; };
+		C40000000000000000000001 /* MediaBridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000002 /* MediaBridgeView.swift */; };
+		C41000000000000000000001 /* MediaAdapterController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41000000000000000000002 /* MediaAdapterController.swift */; };
+		C43000000000000000000001 /* CompanionModel+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43000000000000000000002 /* CompanionModel+Media.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +23,9 @@
 		000000000000000000000011 /* SofaRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SofaRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000025 /* CompanionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionModel.swift; sourceTree = "<group>"; };
 		000000000000000000000027 /* DesktopController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopController.swift; sourceTree = "<group>"; };
+		C40000000000000000000002 /* MediaBridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaBridgeView.swift; sourceTree = "<group>"; };
+		C41000000000000000000002 /* MediaAdapterController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAdapterController.swift; sourceTree = "<group>"; };
+		C43000000000000000000002 /* CompanionModel+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Media.swift"; sourceTree = "<group>"; };
 		000000000000000000000031 /* MacBLEPeripheral.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBLEPeripheral.swift; sourceTree = "<group>"; };
 		A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+HeldInputRelease.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -51,6 +57,9 @@
 				000000000000000000000010 /* SofaRemoteMacApp.swift */,
 				000000000000000000000025 /* CompanionModel.swift */,
 				000000000000000000000027 /* DesktopController.swift */,
+				C40000000000000000000002 /* MediaBridgeView.swift */,
+				C41000000000000000000002 /* MediaAdapterController.swift */,
+				C43000000000000000000002 /* CompanionModel+Media.swift */,
 				000000000000000000000031 /* MacBLEPeripheral.swift */,
 				A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */,
 			);
@@ -74,6 +83,7 @@
 			buildPhases = (
 				000000000000000000000014 /* Sources */,
 				000000000000000000000015 /* Frameworks */,
+				C44000000000000000000001 /* Bundle Media Adapters */,
 				000000000000000000000016 /* Resources */,
 			);
 			buildRules = ();
@@ -130,6 +140,30 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		C44000000000000000000001 /* Bundle Media Adapters */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			name = "Bundle Media Adapters";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/ChromeExtension/manifest.json",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/ChromeExtension/content-script.js",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/ChromeExtension/service-worker.js",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/SofaRemote.iinaplugin/Info.json",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/SofaRemote.iinaplugin/main.js",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/SofaRemote.iinaplugin/preferences.html",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/SofaRemote.iinaplgz",
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/SofaRemoteNativeHost",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash \"$SRCROOT/../../tooling/swift/bundle-media-adapters.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		000000000000000000000014 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -138,6 +172,9 @@
 				000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */,
 				000000000000000000000024 /* CompanionModel.swift in Sources */,
 				000000000000000000000026 /* DesktopController.swift in Sources */,
+				C40000000000000000000001 /* MediaBridgeView.swift in Sources */,
+				C41000000000000000000001 /* MediaAdapterController.swift in Sources */,
+				C43000000000000000000001 /* CompanionModel+Media.swift in Sources */,
 				000000000000000000000030 /* MacBLEPeripheral.swift in Sources */,
 				A40000000000000000000001 /* CompanionModel+HeldInputRelease.swift in Sources */,
 			);

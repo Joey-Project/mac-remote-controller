@@ -1,6 +1,9 @@
 import AppleCore
 import Foundation
 import SwiftUI
+#if DEBUG && targetEnvironment(simulator)
+    import UIKit
+#endif
 
 @main
 struct SofaRemoteiOSApp: App {
@@ -10,7 +13,20 @@ struct SofaRemoteiOSApp: App {
     var body: some Scene {
         WindowGroup {
             RemoteView(model: model)
+                #if DEBUG
+                    .overlay(alignment: .topLeading) {
+                        if model.isLiveMediaTesting {
+                            Text("\(model.liveSuccessfulResults):\(model.liveFailedResults)")
+                            .frame(width: 1, height: 1).opacity(0.01)
+                            .accessibilityIdentifier("live.results")
+                            .allowsHitTesting(false)
+                        }
+                    }
+                #endif
                 #if DEBUG && targetEnvironment(simulator)
+                    .transaction { transaction in
+                        if model.isUITesting { transaction.disablesAnimations = true }
+                    }
                     .overlay(alignment: .topLeading) {
                         if model.isUITesting {
                             Text(model.uiTestCommandLogJSON)
@@ -48,6 +64,8 @@ struct SofaRemoteiOSApp: App {
         init(arguments: [String] = ProcessInfo.processInfo.arguments) {
             isActive = arguments.contains("--ui-testing")
             scenario = Self.scenario(in: arguments)
+            // Functional UI tests must not depend on Simulator animation completion.
+            if isActive { UIView.setAnimationsEnabled(false) }
         }
 
         var commandLogJSON: String {

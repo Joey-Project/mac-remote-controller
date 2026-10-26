@@ -3,15 +3,16 @@
 A native iPhone, iPad, and Android remote for controlling media playback on a Mac
 from the sofa. The clients use SwiftUI and Jetpack Compose, with a Swift Mac
 companion, an IINA plugin, and a TypeScript Chrome extension for YouTube and
-Bilibili. The first Apple slice implements local pairing, a desktop touchpad,
-committed keyboard text, and system volume. Android, IINA, and Chrome media
-adapters remain scaffolds.
+Bilibili. The Apple clients implement local pairing, desktop controls, system
+volume, and typed controls for explicitly selected media sources. Android does
+not yet implement the media adapters.
 
 Manual acceptance on an iPhone XS running iOS 18.7.10 on 2026-10-22 verified
 QR pairing to a Mac, pointer and click control, the committed text
 `你好，世界 👋`, two-finger scrolling, and reconnecting to the paired Mac without
 scanning again. iPad acceptance, system-volume changes, and media playback
-remain unverified.
+remain unverified. Chrome and IINA adapter behavior is covered by local source
+and mock tests; live-site and IINA playback acceptance has not been performed.
 
 ## Layout
 
@@ -20,7 +21,8 @@ apps/
   macos/              Swift macOS companion
   ios/                Universal SwiftUI iPhone and iPad app
   android/            Kotlin and Jetpack Compose app
-  chrome-extension/   TypeScript Manifest V3 extension
+  chrome-extension/   TypeScript Manifest V3 extension and Native Messaging proxy
+  iina-plugin/        TypeScript IINA plugin package
 packages/
   apple-core/         Shared Swift package
   protocol/           Versioned wire contract and cross-client fixtures

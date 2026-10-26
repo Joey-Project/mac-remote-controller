@@ -1,16 +1,92 @@
-# Chrome Extension (Placeholder)
+# Chrome extension: YouTube and Bilibili
 
-This package contains a minimal Manifest V3 service worker scaffold. It does not implement remote control and requests no Chrome or website permissions.
+After the authenticated companion bridge accepts a target snapshot, the native
+host emits a readiness acknowledgement. The extension then resets reconnect
+backoff even if no playback command has been sent. Stale ports and malformed
+acknowledgements do not reset it, and immediate failed connections retain bounded
+exponential retries.
 
-The development toolchain targets Node 26 and pnpm 12.14.0. It pins Oxlint 1.88.0 with `oxlint-tsgolint` 7.0.2004 for type-aware linting, and TypeScript 7.0.2 for the separate `tsc --noEmit` check. Keep the TypeScript compiler and type-aware linter versions aligned when upgrading this toolchain.
+The Manifest V3 extension exposes typed playback, relative seek, player-volume,
+and site-provided episode navigation for HTTPS `www.youtube.com`,
+`www.bilibili.com`, and `bilibili.com` tabs. A tab is an explicit media source;
+desktop focus does not select or switch the player. The extension reports next
+and previous only when the site's episode controls are rendered and enabled,
+and checks the selected control again before invoking it. It returns a visible
+failure if a control disappears after selection.
 
-From the repository root, install the workspace dependencies and build the extension:
+The content script acknowledges command delivery on Chrome's response channel
+before executing the asynchronous action. Its separate, correlated result
+message determines success or failure; the delivery acknowledgement alone
+never completes a media command.
+
+The service worker connects to the separately built native messaging host. The
+host reads the local bridge token from the companion's mode-0600 configuration
+file and proxies only validated media messages over authenticated loopback
+HTTP. The token never enters the extension, page, or content script. The bridge
+accepts no desktop-input commands.
+
+In the Mac companion, choose **Set Up Chrome**. The app installs the bundled
+extension into `~/Library/Application Support/SofaRemote/Integrations/ChromeExtension`
+and registers its bundled Native Messaging helper automatically. Chrome opens
+its extensions page and Finder reveals the extension directory. For first
+installation, enable **Developer mode**, choose **Load unpacked**, and select
+that directory. Chrome requires this browser confirmation for local extensions.
+For updates, reload the existing extension and refresh open video tabs.
+
+## Manual development setup
+
+From the repository root, install the pinned workspace dependencies and build.
+These commands require Node.js 26 or newer and the pnpm version declared in the
+repository. The installer uses Node's JSON serializer to preserve spaces and
+escape special characters in the native host path.
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm --filter @mac-remote-controller/chrome-extension build
+swift build -c release --package-path packages/apple-core --product SofaRemoteNativeHost
 ```
 
-In Chrome, open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `apps/chrome-extension/dist`.
+After enabling the media bridge in the Mac companion, load
+`apps/chrome-extension/dist` through `chrome://extensions` → **Developer mode**
+→ **Load unpacked**. Register the helper for your local Chrome profile with:
 
-Add permissions only alongside a feature that requires them. The placeholder intentionally has none.
+```sh
+scripts/install-chrome-native-host.sh \
+  "$(pwd)/packages/apple-core/.build/release/SofaRemoteNativeHost"
+```
+
+The installer pins the manifest to this extension's fixed public ID and writes
+it under the current user's Chrome NativeMessagingHosts directory. It does not
+install the extension or launch Chrome. Reopen the extension after installing
+the native host. After first loading or reloading the extension, refresh any
+YouTube or Bilibili tabs that were already open so Chrome injects the current
+content script. Later native-host reconnects are handled by the service worker,
+which requests fresh snapshots from registered tabs without waiting for another
+page event. To remove this registration, delete
+`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.joeyteng.sofaremote.json`.
+
+For supported sites, the content script binds to the site's active player:
+the active Shorts renderer or `#movie_player` on YouTube, or the Bilibili player
+container. It ignores unrelated preview videos. If a scoped player is ambiguous
+or changes after its snapshot, the target is unavailable until refreshed, and
+an action is never retried on another video. Episode controls are resolved and
+rechecked inside the same player. SPA navigation, BFCache restore, replaced
+video elements, and tab closure refresh or remove the target. The extension does
+not inject arbitrary JavaScript, run shell commands, or use keyboard shortcuts.
+The extension connects to the native host only while a supported media tab is
+registered; when the last such tab closes or navigates away, it stops refresh
+and retry timers and disconnects, then reconnects when a supported tab reports
+its next snapshot. While connected, the service worker asks each registered tab
+for a current media snapshot every two seconds. This keeps the target lease alive
+when Chrome throttles timers in a hidden, silent page. If the native port
+disconnects or the host is unavailable, one retry timer starts at one second,
+doubles up to a 15-second cap, and runs only while a media tab is registered.
+After reconnecting, the worker asks those tabs for fresh snapshots; pending
+actions are dropped and never replayed. Chrome 105 or newer is required because
+that version keeps an extension service worker alive while its native messaging
+port remains connected. A muted `<video>` is reported with effective volume
+zero; a positive volume command unmutes it.
+
+Site selectors can change without notice. Automated tests use DOM fixtures and
+do not claim live-site compatibility for every account, layout, region, or
+episode. Verify on the desired tab before relying on next/previous controls.

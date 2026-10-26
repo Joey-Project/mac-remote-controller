@@ -8,10 +8,12 @@ public struct RemoteState: Codable, Sendable, Equatable {
     public var systemVolumeReason: String?
     public var deviceName: String
     public var capabilities: [String]?
+    public var mediaTargets: [MediaTarget]?
 
     public init(
         accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
-        deviceName: String, supportsGestures: Bool? = nil, capabilities: [String]? = nil
+        deviceName: String, supportsGestures: Bool? = nil, capabilities: [String]? = nil,
+        mediaTargets: [MediaTarget]? = nil
     ) {
         self.accessibilityGranted = accessibilityGranted
         self.supportsGestures = supportsGestures
@@ -19,6 +21,7 @@ public struct RemoteState: Codable, Sendable, Equatable {
         self.systemVolumeReason = systemVolumeReason
         self.deviceName = deviceName
         self.capabilities = capabilities
+        self.mediaTargets = mediaTargets
     }
 
     public func validate() throws {
@@ -33,6 +36,18 @@ public struct RemoteState: Codable, Sendable, Equatable {
                 || capabilities.contains(where: { $0.isEmpty || $0.utf8.count > 64 })
         {
             throw WireProtocolError.invalidEnvelope("capabilities are empty or too large")
+        }
+        if let mediaTargets {
+            guard mediaTargets.count <= WireLimits.maximumMediaTargets else {
+                throw WireProtocolError.invalidEnvelope("too many media targets")
+            }
+            var targetIDs = Set<String>()
+            for target in mediaTargets {
+                try target.validate()
+                guard targetIDs.insert(target.id).inserted else {
+                    throw WireProtocolError.invalidEnvelope("duplicate media target ID")
+                }
+            }
         }
     }
 }

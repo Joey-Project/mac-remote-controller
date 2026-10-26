@@ -1,10 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "Mac Remote Controller (Placeholder)",
+  "name": "Sofa Remote",
   "version": "0.1.0",
-  "description": "Placeholder extension scaffold; no remote-control behavior is implemented.",
+  "minimum_chrome_version": "105",
+  "description": "Control selected YouTube and Bilibili tabs from Sofa Remote.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwxOYjUXGlLrIEzqUvG+i4ui7T91/uj+PJtO+KQk0elUzZN2rx/axZ66gpQhDbJXIFW0bMXTVT+SAB5r/DD+35wdHPxOlWfLxnBbSH+HtoJdGoWWOr3wbuy5CmNfLcMHB+4M3EDSY8PXhxFc4XDRUiY7Gy2uuVZrQw2XeRf21Wu25o7qMn76mGxV1T9wmJpmwCM5cchm597VWQFVBjI/tY4pEGT2jjCp9lx8d7hE7jAOCtpEvaHnh0/S+cfkATw/lS5ClztFx7Tf8mIYif8cDVwiqN3DkhiCiG8wC08CqlE9KUL/Q05cxj1hZ9PgmU4y8pq/4+EboiOtZ1D8ug8YYEQIDAQAB",
+  "permissions": ["nativeMessaging", "tabs"],
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"
-  }
+  },
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://www.bilibili.com/*",
+    "https://bilibili.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://www.bilibili.com/*",
+        "https://bilibili.com/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
 }

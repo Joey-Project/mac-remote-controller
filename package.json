@@ -11,10 +11,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint:markdown": "markdownlint-cli2",
-    "lint": "pnpm run lint:markdown && pnpm --filter @mac-remote-controller/chrome-extension lint",
-    "typecheck": "pnpm --filter @mac-remote-controller/chrome-extension typecheck",
-    "build": "pnpm --filter @mac-remote-controller/chrome-extension build",
-    "test": "pnpm --filter @mac-remote-controller/chrome-extension test"
+    "lint": "pnpm run lint:markdown && pnpm --filter @mac-remote-controller/chrome-extension lint && pnpm --filter @mac-remote-controller/iina-plugin lint",
+    "typecheck": "pnpm --filter @mac-remote-controller/chrome-extension typecheck && pnpm --filter @mac-remote-controller/iina-plugin typecheck",
+    "build": "pnpm --filter @mac-remote-controller/chrome-extension build && pnpm --filter @mac-remote-controller/iina-plugin build",
+    "test": "pnpm --filter @mac-remote-controller/chrome-extension test && pnpm --filter @mac-remote-controller/iina-plugin test"
   },
   "devDependencies": {
     "markdownlint-cli2": "0.23.3",

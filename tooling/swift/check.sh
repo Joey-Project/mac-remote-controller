@@ -64,14 +64,19 @@ swift test \
     --scratch-path "$tool_root/apple-core-build" \
     --quiet
 
-printf '\n==> macOS app build\n'
-xcodebuild -quiet \
-    -project "$repo_root/apps/macos/SofaRemoteMac.xcodeproj" \
-    -scheme SofaRemoteMac \
-    -destination 'generic/platform=macOS' \
-    -derivedDataPath "$tool_root/DerivedData/macOS" \
-    -clonedSourcePackagesDirPath "$tool_root/SourcePackages" \
-    build CODE_SIGNING_ALLOWED=NO
+printf '\n==> macOS app builds and incremental signing\n'
+mac_app_bundle="$tool_root/DerivedData/macOS/Build/Products/Debug/SofaRemoteMac.app"
+for build_pass in 1 2; do
+    printf 'macOS signed build %s/2\n' "$build_pass"
+    xcodebuild -quiet \
+        -project "$repo_root/apps/macos/SofaRemoteMac.xcodeproj" \
+        -scheme SofaRemoteMac \
+        -destination 'generic/platform=macOS' \
+        -derivedDataPath "$tool_root/DerivedData/macOS" \
+        -clonedSourcePackagesDirPath "$tool_root/SourcePackages" \
+        build CODE_SIGNING_ALLOWED=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=-
+    codesign --verify --deep --strict "$mac_app_bundle"
+done
 
 printf '\n==> iOS app build (generic Simulator)\n'
 xcodebuild -quiet \
