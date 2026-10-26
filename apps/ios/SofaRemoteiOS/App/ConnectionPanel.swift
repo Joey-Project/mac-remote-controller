@@ -111,11 +111,7 @@ extension RemoteModel {
         benchmarkTimeout = nil
         let old = benchmarkReports[target, default: []].filter { $0.transport != report.transport }
         benchmarkReports[target] = Array((old + [report]).suffix(2))
-        benchmarkResultText = benchmarkSummary(report)
-    }
-
-    func benchmarkSummary(_ report: RTTBenchmarkReport) -> String {
-        report.summary
+        benchmarkResultText = report.summary
     }
 
     func receive(_ message: WireMessage) {
@@ -166,11 +162,23 @@ extension RemoteModel {
     }
 
     private func acceptResult(_ message: WireMessage) {
-        guard message.connectionID == connectionID, let id = message.requestID,
-            let request = pending[id], request.sequence == message.sequence
+        guard let id = message.requestID, let request = pending[id],
+            request.metadata.matchesResult(message)
         else { peer?.close(); return }
+        let mustReleaseSession = requiresSafePointerTeardown(
+            metadata: request.metadata, message: message)
+        let otherPendingControlsMayHaveTakenEffect = pending.count > 1
         pending.removeValue(forKey: id)
         if let error = message.error { errorMessage = error.message }
+        if mustReleaseSession {
+            disconnect()
+            errorMessage =
+                otherPendingControlsMayHaveTakenEffect
+                ? "Disconnected to release the pointer. Other pending controls may have taken effect; "
+                    + "they were not retried."
+                : "The Mac could not release the pointer. Reconnect to continue."
+            return
+        }
         flushQueuedCommands()
     }
 

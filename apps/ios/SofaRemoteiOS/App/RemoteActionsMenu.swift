@@ -4,6 +4,11 @@ struct RemoteActionsMenu: View {
     @Bindable var model: RemoteModel
     @Binding var selectedMode: RemoteMode
     @Binding var isVolumePinned: Bool
+    let gesturesSupported: Bool
+    @Binding var threeFingerDragEnabled: Bool
+    @Binding var fourFingerShortcutsEnabled: Bool
+    @Binding var forceClickEnabled: Bool
+    @Binding var hapticsEnabled: Bool
     let onTouchpad: () -> Void
     let onKeyboard: () -> Void
     let onSwitchTransport: () -> Void
@@ -28,6 +33,27 @@ struct RemoteActionsMenu: View {
                 Label("Pin volume over touchpad", systemImage: "speaker.wave.2")
             }
             .accessibilityIdentifier("volume.pin")
+            Divider()
+            Toggle(isOn: $threeFingerDragEnabled) {
+                Label("Three-finger drag", systemImage: "hand.draw")
+            }
+            .disabled(!gesturesSupported)
+            .accessibilityIdentifier("gesture.drag")
+            Toggle(isOn: $fourFingerShortcutsEnabled) {
+                Label("Four-finger Mac shortcuts", systemImage: "rectangle.3.group")
+            }
+            .disabled(!gesturesSupported)
+            .accessibilityIdentifier("gesture.shortcuts")
+            Toggle(isOn: $forceClickEnabled) {
+                Label("Pressure click when supported", systemImage: "hand.point.up.left")
+            }
+            .disabled(!gesturesSupported)
+            .accessibilityIdentifier("gesture.force")
+            Toggle(isOn: $hapticsEnabled) {
+                Label("Haptic feedback", systemImage: "waveform")
+            }
+            .disabled(!gesturesSupported)
+            .accessibilityIdentifier("gesture.haptics")
             Divider()
             Button(action: onSwitchTransport) {
                 Label(

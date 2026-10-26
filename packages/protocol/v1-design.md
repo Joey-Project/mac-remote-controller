@@ -106,14 +106,25 @@ has `code` and `message`. Malformed or incompatible wire envelopes close the
 connection. A result means the Mac submitted the input to its OS API; it does
 not prove that the foreground app accepted the input or completed an action.
 
-| Command             | Fields   | Bounds                                                                  |
-| ------------------- | -------- | ----------------------------------------------------------------------- |
-| `pointer.move`      | `x`, `y` | Relative finite deltas, each within ±500                                |
-| `pointer.click`     | `button` | `left` or `right`, at the current cursor                                |
-| `pointer.scroll`    | `x`, `y` | Pixel deltas, each within ±100                                          |
-| `keyboard.text`     | `text`   | 1–4096 UTF-8 bytes of committed text                                    |
-| `keyboard.key`      | `key`    | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down` |
-| `system.volume.set` | `value`  | Finite scalar in 0...1                                                  |
+| Command               | Fields                            | Bounds                                                                    |
+| --------------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| `pointer.move`        | `x`, `y`                          | Relative finite deltas, each within ±500                                  |
+| `pointer.click`       | `button`, optional `tapTimestamp` | `left` or `right`; client monotonic uptime in `0...1,000,000,000` seconds |
+| `pointer.scroll`      | `x`, `y`                          | Pixel deltas, each within ±100                                            |
+| `pointer.button.down` | `button`                          | Hold `left` or `right`; requires advertised gesture support               |
+| `pointer.button.up`   | `button`                          | Release a held button in the same connection                              |
+| `system.shortcut`     | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`        |
+| `keyboard.text`       | `text`                            | 1–4096 UTF-8 bytes of committed text                                      |
+| `keyboard.key`        | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`   |
+| `system.volume.set`   | `value`                           | Finite scalar in 0...1                                                    |
+
+New iOS clients send `tapTimestamp` from `UITouch.timestamp`. The Mac compares
+successive client timestamps only within that client's authenticated session,
+using the Mac's configured double-click interval; it never subtracts a Mac
+uptime from a client timestamp. This keeps queued taps classified by when the
+touches occurred. The field is optional for older clients, which retain the
+Mac-processing-time behavior. A timebase change or backwards client timestamp
+starts a new single-click sequence.
 
 State contains `deviceName`, `accessibilityGranted`, optional `systemVolume`, and
 optional `systemVolumeReason`. Absent volume means unavailable, never zero.
@@ -126,10 +137,14 @@ commands receive a correlated `result`; they do not imply a following `state`.
 Clients acknowledge commands using `result` and consume state as independent
 snapshots, without waiting for one snapshot per command.
 The client bounds outstanding commands and its unsent queue to eight each.
-Adjacent relative deltas are combined within the wire bounds, and clicks and
-keyboard commands remain ordering barriers. Under overload, only trailing
+Adjacent relative deltas are combined within the wire bounds. All other input
+commands except coalesced system-volume updates are ordering barriers, including
+button holds, releases, and system shortcuts. Under overload, only trailing
 motion after the latest barrier may be replaced; accepted motion before a
 barrier is retained, and a new discrete action is rejected if the queue is full.
+A required button release must either remain behind a bounded retry barrier or
+close the session so the Mac releases held input during cleanup; it must never
+be discarded. A release rejected by the Mac closes the session.
 Adjacent unsent absolute-volume updates retain the latest value. Disconnect
 discards pending and unsent input. Missing command results time out after three
 seconds and close the connection without replaying commands.
@@ -179,6 +194,33 @@ RTT because the clocks are independent. Comparison reports are retained per
 Mac so Wi-Fi and Bluetooth results can be viewed after an explicit switch.
 
 ## State and future media boundaries
+
+The optional `supportsGestures` state flag enables the held-button and fixed
+shortcut commands above. Absence means unsupported; clients must keep these
+controls disabled for legacy companions. Ordinary taps remain atomic clicks.
+The Mac sets native single/double-click state using its configured double-click
+interval, proximity, button, and remote-session identity.
+
+Held pointer ownership is limited to one remote session. Conflicting pointer
+commands from another session fail explicitly. A client must release held input
+when a gesture is cancelled or its surface is removed; the server also releases
+on disconnect, revocation, or eight seconds without valid client activity.
+Four-finger actions request fixed native Dock actions: Mission Control, App
+Exposé, and previous/next Space. The historical `system.shortcut` command name
+remains for wire compatibility; these actions emit no keyboard or modifier
+events and do not depend on local keyboard shortcut assignments. The companion
+checks the undocumented Dock/HID interfaces at runtime and fails visibly when
+unavailable. A successful result acknowledges submission to macOS, not visual
+completion of an animation. No virtual HID device or driver is created.
+
+While a drag's button-down acknowledgement is pending, the client accumulates
+bounded relative displacement. After a successful acknowledgement it sends that
+motion in wire-sized chunks before button-up, including when the fingers have
+already lifted; rejection discards the buffered motion. Later input remains
+behind that release barrier. Backpressure retains unsent drag motion/release;
+the existing command timeout still tears down a stalled connection. Companion
+termination synchronously releases active and pending disconnected-session
+buttons, and cancels termination if a release cannot be posted.
 
 - Desktop input targets the current desktop. It does not change the selected
   media source. Keyboard text contains committed Unicode input, not intermediate

@@ -62,7 +62,8 @@ struct SofaRemoteiOSApp: App {
                 systemVolume: scenario == .unsupportedVolume ? nil : 0,
                 systemVolumeReason: scenario == .unsupportedVolume
                     ? "System volume control is unavailable on this Mac." : nil,
-                deviceName: "UI Test Mac")
+                deviceName: "UI Test Mac",
+                supportsGestures: scenario == .legacyCompanion ? nil : true)
         }
 
         func send(
@@ -101,13 +102,15 @@ struct SofaRemoteiOSApp: App {
             switch argument.dropFirst("--ui-testing-scenario=".count) {
             case "unsupported-volume": return .unsupportedVolume
             case "permission-denied": return .permissionDenied
+            case "legacy-companion": return .legacyCompanion
             default: return nil
             }
         }
     }
 
-    private enum UITestScenario {
+    private enum UITestScenario: Equatable {
         case unsupportedVolume
         case permissionDenied
+        case legacyCompanion
     }
 #endif

@@ -7,12 +7,17 @@ struct RemoteView: View {
     @State private var showingScanner = false
     @State private var showingBenchmark = false
     @State private var textToSend = ""
-    @State private var volumeValue = 0.5
-    @State private var isVolumeEditing = false
     @State private var isTextComposing = false
     @State private var isTextInputFocused = false
+    @State private var localDragID: UUID?
     @State private var selectedMode: RemoteMode = .touchpad
     @State private var isVolumePinned = false
+    @AppStorage("gesture.threeFingerDrag") private var threeFingerDragEnabled = true
+    @AppStorage("gesture.fourFingerShortcuts") private var fourFingerShortcutsEnabled = true
+    @AppStorage("gesture.forceClick") private var forceClickEnabled = true
+    @AppStorage("gesture.haptics") private var hapticsEnabled = false
+
+    private var gesturesSupported: Bool { model.remoteState?.supportsGestures == true }
 
     private var remoteEnabled: Bool {
         model.isConnected && model.remoteState?.accessibilityGranted == true
@@ -40,14 +45,17 @@ struct RemoteView: View {
                         RemoteActionsMenu(
                             model: model, selectedMode: $selectedMode,
                             isVolumePinned: $isVolumePinned,
+                            gesturesSupported: gesturesSupported,
+                            threeFingerDragEnabled: $threeFingerDragEnabled,
+                            fourFingerShortcutsEnabled: $fourFingerShortcutsEnabled,
+                            forceClickEnabled: $forceClickEnabled,
+                            hapticsEnabled: $hapticsEnabled,
                             onTouchpad: {
                                 selectedMode = .touchpad
                                 isTextInputFocused = false
-                                isVolumeEditing = false
                             },
                             onKeyboard: {
                                 selectedMode = .keyboard
-                                isVolumeEditing = false
                             },
                             onSwitchTransport: {
                                 model.selectTransport(
@@ -81,6 +89,9 @@ struct RemoteView: View {
             }
             .onChange(of: model.isConnected) { _, connected in
                 if !connected { resetInteractionState() }
+            }
+            .onChange(of: model.rejectedLocalDragID) { _, rejectedID in
+                if localDragID == rejectedID { localDragID = nil }
             }
         }
         .tint(.accentColor)
@@ -185,10 +196,37 @@ private extension RemoteView {
     private var touchpadCard: some View {
         TouchpadCard(
             isEnabled: remoteEnabled,
+            dragEnabled: gesturesSupported && threeFingerDragEnabled,
+            shortcutsEnabled: gesturesSupported && fourFingerShortcutsEnabled,
+            forceClickEnabled: gesturesSupported && forceClickEnabled,
+            hapticsEnabled: gesturesSupported && hapticsEnabled,
+            rejectedDragID: model.rejectedLocalDragID,
             onMove: { x, y in model.send(RemoteCommand(name: .pointerMove, x: x, y: y)) },
             onScroll: { x, y in model.send(RemoteCommand(name: .pointerScroll, x: x, y: y)) },
-            onTap: { model.send(RemoteCommand(name: .pointerClick, button: .left)) },
-            onRightClick: { model.send(RemoteCommand(name: .pointerClick, button: .right)) }
+            onTap: { timestamp in
+                model.send(
+                    RemoteCommand(name: .pointerClick, button: .left, tapTimestamp: timestamp))
+            },
+            onRightClick: { timestamp in
+                model.send(
+                    RemoteCommand(name: .pointerClick, button: .right, tapTimestamp: timestamp))
+            },
+            onDragBegin: {
+                guard gesturesSupported && threeFingerDragEnabled, localDragID == nil else {
+                    return nil
+                }
+                let dragID = model.beginLocalPointerDrag()
+                localDragID = dragID
+                return dragID
+            },
+            onDragMove: { dragID, x, y in
+                model.sendLocalPointerDragMove(dragID, x: x, y: y)
+            },
+            onDragEnd: { releaseLocalDrag() },
+            onShortcut: { action in
+                guard gesturesSupported && fourFingerShortcutsEnabled else { return }
+                model.send(RemoteCommand(name: .systemShortcut, shortcut: action))
+            }
         )
     }
 
@@ -263,84 +301,30 @@ private extension RemoteView {
         }
     }
 
-    private var systemVolumeCard: some View {
-        let systemVolume = model.remoteState?.systemVolume
-        let volumeText =
-            systemVolume?.formatted(.percent.precision(.fractionLength(0)))
-            ?? "Unavailable"
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Label("Mac volume", systemImage: "speaker.wave.2")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(volumeText)
-                    .font(.subheadline.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(systemVolume == nil ? .secondary : .primary)
-                    .accessibilityLabel(systemVolume == nil ? "Volume unavailable" : volumeText)
-            }
-            HStack(spacing: 10) {
-                Image(systemName: "speaker.fill").foregroundStyle(.secondary)
-                Slider(
-                    value: Binding(
-                        get: { isVolumeEditing ? volumeValue : systemVolume ?? volumeValue },
-                        set: {
-                            volumeValue = $0
-                            model.send(RemoteCommand(name: .systemVolumeSet, value: $0))
-                        }
-                    ), in: 0...1,
-                    onEditingChanged: { editing in
-                        isVolumeEditing = editing
-                        if !editing {
-                            syncSystemVolumeFromRemote()
-                        }
-                    }
-                )
-                .disabled(!model.isConnected || systemVolume == nil)
-                .accessibilityLabel("Mac system volume").accessibilityIdentifier("volume.slider")
-                Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
-            }
-            if systemVolume == nil {
-                Text(
-                    model.remoteState?.systemVolumeReason
-                        ?? "System volume control is unavailable on this Mac."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: 620, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .frame(maxWidth: .infinity).accessibilityElement(children: .contain)
-        .accessibilityIdentifier("volume.card")
-        .onAppear(perform: syncSystemVolumeFromRemote)
-        .onChange(of: model.remoteState?.systemVolume) { _, _ in
-            syncSystemVolumeFromRemote()
-        }
-        .onDisappear {
-            isVolumeEditing = false
-            syncSystemVolumeFromRemote()
-        }
-    }
+    private var systemVolumeCard: some View { SystemVolumeCard(model: model) }
 
     private var canSendText: Bool {
         remoteEnabled && !isTextComposing && !textToSend.isEmpty && textToSend.utf8.count <= 4_096
     }
 
     private func disconnect() {
+        releaseLocalDrag()
         model.disconnect()
         resetInteractionState()
     }
 
     private func resetInteractionState() {
+        releaseLocalDrag()
         selectedMode = .touchpad
         isVolumePinned = false
-        isVolumeEditing = false
-        volumeValue = 0.5
         isTextInputFocused = false
         isTextComposing = false
         textToSend = ""
+    }
+    private func releaseLocalDrag() {
+        guard let dragID = localDragID else { return }
+        localDragID = nil
+        model.endLocalPointerDrag(dragID)
     }
     func keyButton(_ title: String, symbol: String, key: RemoteKey, compact: Bool = false)
         -> some View
@@ -377,8 +361,4 @@ private extension RemoteView {
         return true
     }
 
-    func syncSystemVolumeFromRemote() {
-        guard !isVolumeEditing, let systemVolume = model.remoteState?.systemVolume else { return }
-        volumeValue = systemVolume
-    }
 }

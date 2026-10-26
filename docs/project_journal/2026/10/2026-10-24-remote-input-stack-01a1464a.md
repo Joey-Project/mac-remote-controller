@@ -91,9 +91,10 @@ superseded_by:
 ## Evidence and follow-up
 
 - Foundation: PR #2; connected-screen and Simulator coverage: PR #3.
-- The integrated BLE/input local check passed 72 AppleCore tests, Mac and generic iOS
-  Simulator builds, and plist validation. No simulator UI suite, physical BLE radio, or
-  real RTT comparison was run for this validation.
+- The final Gesture+BLE integration check passed 108 AppleCore tests, macOS and generic
+  iOS Simulator app builds, and plist validation. Full Node format, lint, typecheck, test,
+  and build checks also passed, along with actionlint, shell, and journal validation. No
+  Simulator UI suite, physical BLE radio, or real RTT comparison was run for this check.
 - Per-slice validation and current external-gate state belong in the corresponding PR.
 - Later product work retains numeric-comparison pairing, Control Centre/widgets, and
   installation-entry exploration from the earlier journals.

@@ -4,13 +4,22 @@ import SwiftUI
 
 @main
 struct SofaRemoteMacApp: App {
-    @State private var model = CompanionModel()
+    @NSApplicationDelegateAdaptor(CompanionAppDelegate.self) private var applicationDelegate
 
     var body: some Scene {
         MenuBarExtra("Sofa Remote", systemImage: "appletvremote.gen4") {
-            CompanionView(model: model)
+            CompanionView(model: applicationDelegate.model)
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+@MainActor
+final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
+    let model = CompanionModel()
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        model.prepareForTermination() ? .terminateNow : .terminateCancel
     }
 }
 
