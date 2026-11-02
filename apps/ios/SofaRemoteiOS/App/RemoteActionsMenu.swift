@@ -1,3 +1,4 @@
+import AppleCore
 import SwiftUI
 
 struct RemoteActionsMenu: View {
@@ -55,6 +56,21 @@ struct RemoteActionsMenu: View {
             .disabled(!gesturesSupported)
             .accessibilityIdentifier("gesture.haptics")
             Divider()
+            if model.remoteState?.capabilities?.contains(WireCapabilities.remoteUnlock) == true {
+                Button {
+                    model.send(RemoteCommand(name: .sessionUnlock))
+                } label: {
+                    Label(
+                        model.remoteState?.sessionLocked == false ? "Mac unlocked" : "Unlock Mac",
+                        systemImage: "lock.open")
+                }
+                .disabled(
+                    model.remoteState?.unlockAvailable != true
+                        || model.remoteState?.sessionLocked != true
+                )
+                .accessibilityIdentifier("remote.unlock")
+                Divider()
+            }
             Button(action: onSwitchTransport) {
                 Label(
                     "Switch to \(model.selectedTransport == .wifi ? "Bluetooth LE" : "Wi-Fi")",

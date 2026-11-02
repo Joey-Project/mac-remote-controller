@@ -89,6 +89,13 @@ These are its only accepted fields:
 }
 ```
 
+The Mac companion's **Setup & Recovery → Choose Renewal Setup…** can import this
+configuration and retain its own accepted app copy. **Re-sign & Reinstall…**
+runs `ios-install --manual-recovery`, allowing an unlocked Mac and a paired phone
+over USB or Wi-Fi. That explicit flag is restricted to iOS candidate/install
+commands. Omitting it preserves the locked-device Wi-Fi research requirements;
+the menu-bar action does not change a daily test's configuration or schedule.
+
 No account password or token is accepted. Team and certificate data are derived
 from the existing signed apps. Use the iPhone's provisioning UDID, not its
 CoreDevice identifier. The Mac's provisioning UDID is read separately from

@@ -81,7 +81,11 @@ struct SofaRemoteiOSApp: App {
                 systemVolumeReason: scenario == .unsupportedVolume
                     ? "System volume control is unavailable on this Mac." : nil,
                 deviceName: "UI Test Mac",
-                supportsGestures: scenario == .legacyCompanion ? nil : true)
+                supportsGestures: scenario == .legacyCompanion ? nil : true,
+                capabilities: scenario == .unlockReady || scenario == .unlockDenied
+                    ? [WireCapabilities.remoteUnlock] : nil,
+                sessionLocked: scenario == .unlockReady || scenario == .unlockDenied ? true : nil,
+                unlockAvailable: scenario == .unlockReady ? true : nil)
         }
 
         func send(
@@ -96,6 +100,10 @@ struct SofaRemoteiOSApp: App {
                 state.systemVolume = value
                 remoteState = state
             }
+            if command.name == .sessionUnlock {
+                state.sessionLocked = false
+                remoteState = state
+            }
             return true
         }
 
@@ -108,6 +116,9 @@ struct SofaRemoteiOSApp: App {
 
         private func isSupported(_ command: RemoteCommand, state: RemoteState) -> Bool {
             if command.name == .systemVolumeSet { return state.systemVolume != nil }
+            if command.name == .sessionUnlock {
+                return state.unlockAvailable == true && state.sessionLocked == true
+            }
             return state.accessibilityGranted
         }
 
@@ -121,6 +132,8 @@ struct SofaRemoteiOSApp: App {
             case "unsupported-volume": return .unsupportedVolume
             case "permission-denied": return .permissionDenied
             case "legacy-companion": return .legacyCompanion
+            case "unlock-ready": return .unlockReady
+            case "unlock-denied": return .unlockDenied
             default: return nil
             }
         }
@@ -130,5 +143,7 @@ struct SofaRemoteiOSApp: App {
         case unsupportedVolume
         case permissionDenied
         case legacyCompanion
+        case unlockReady
+        case unlockDenied
     }
 #endif

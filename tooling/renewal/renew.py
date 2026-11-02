@@ -190,14 +190,33 @@ class CommandLog:
 
 
 class Run(CommandLog):
-    def __init__(self, config):
+    def __init__(self, config, manual_recovery=False):
         self.config = config
+        self.manual_recovery = manual_recovery
         root = Path(config["runDirectory"]) / (now().strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8])
         root.mkdir(parents=True, mode=0o700)
         super().__init__(root)
         self.probe = Path(config["probeApp"])
         self.executable = self.probe / "Contents/MacOS/SofaRenewalProbe"
         self.summary = {"startedAt": now().isoformat(), "appLaunched": False, "appUninstalled": False}
+        if manual_recovery:
+            self.summary["manualRecovery"] = True
+
+    def require_mac_lock(self):
+        state = self.locked()
+        if self.manual_recovery:
+            require(isinstance(state, bool), "mac-lock-state-unavailable")
+        else:
+            require(state is True, "mac-must-remain-locked")
+        return state
+
+    def require_phone_state(self, state):
+        if self.manual_recovery:
+            require(isinstance(state["locked"], bool) and state["transport"] in ("wired", "localNetwork"),
+                "paired-phone-state-unavailable")
+        else:
+            require(state["transport"] == "localNetwork" and state["locked"] is True,
+                "locked-wifi-phone-required")
 
     def profile(self, path):
         require(path.stat().st_size <= 1024 * 1024, "profile-too-large")
@@ -239,14 +258,14 @@ class Run(CommandLog):
         config.write_text(json.dumps({"expectedTeamID": team, "targetUDID": device,
             "existingCertificatePath": str(cert), "probeBundleIdentifier": PROBE_ID, "outputDirectory": str(out)}))
         config.chmod(0o600)
-        require(self.locked() is True, "mac-must-remain-locked")
+        self.require_mac_lock()
         started = now()
         self.command("issue-profile", [str(self.executable), "ds", "renewal-probe", "mac-profile" if target == "mac" else "app-profile"],
             seconds=90, environment={"SOFA_RENEWAL_PROBE_CONFIG": str(config)})
         path = out / "probe.mobileprovision"
         profile = self.profile(path)
         validate_profile(profile, team, bundle, device, certificate, old, started)
-        require(self.locked() is True, "mac-lock-state-changed")
+        self.require_mac_lock()
         self.summary.update(target=target, previousExpiration=utc(old["ExpirationDate"]).isoformat(),
             creation=utc(profile["CreationDate"]).isoformat(), expiration=utc(profile["ExpirationDate"]).isoformat(),
             profileSHA256=hashlib.sha256(path.read_bytes()).hexdigest(), profileIdentityVerified=True)
@@ -296,17 +315,21 @@ class Run(CommandLog):
     def install(self, candidate):
         self.verify_signature(candidate)
         before = self.device("before")
-        require(before["transport"] == "localNetwork" and before["locked"] is True, "locked-wifi-phone-required")
-        require(self.locked() is True, "mac-must-remain-locked")
+        self.require_phone_state(before)
+        self.require_mac_lock()
         self.command("install", ["xcrun", "devicectl", "--timeout", "120", "--json-output", str(self.root / "install-private.json"),
             "device", "install", "app", "--device", self.config["deviceIdentifier"], str(candidate)], seconds=130)
         self.summary["installationCommandSucceeded"] = True
         after = self.device("after")
-        require(after["appCount"] == 1 and after["locked"] is True and after["transport"] == "localNetwork", "post-install-state-mismatch")
-        require(self.locked() is True, "mac-lock-state-changed")
-        self.summary.update(installedAppReadback=True, bothDevicesLocked=True, transport="localNetwork")
+        self.require_phone_state(after)
+        require(after["appCount"] == 1, "post-install-state-mismatch")
+        mac_locked = self.require_mac_lock()
+        self.summary.update(installedAppReadback=True,
+            bothDevicesLocked=mac_locked and after["locked"], transport=after["transport"])
 
     def execute(self, action):
+        require(not self.manual_recovery or action in ("ios-candidate", "ios-install"),
+            "manual-recovery-is-ios-only")
         self.verify_signature(self.probe)
         existing = self.profile(self.probe / "Contents/embedded.provisionprofile")
         probe_id = identifier(existing)
@@ -349,9 +372,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("ios-candidate", "ios-install", "mac-candidate", "mac-adopt"))
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--manual-recovery", action="store_true",
+        help="Explicit iOS recovery with either device unlocked and a paired USB or Wi-Fi transport.")
     args = parser.parse_args()
     try:
-        run = Run(read_config(args.config))
+        run = Run(read_config(args.config), manual_recovery=args.manual_recovery)
     except (RenewalError, OSError, ValueError, TypeError):
         print(json.dumps({"status": "failed", "category": "invalid-private-configuration"}))
         return 1

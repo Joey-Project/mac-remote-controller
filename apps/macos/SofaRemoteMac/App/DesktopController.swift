@@ -2,6 +2,7 @@ import AppKit
 import AppleCore
 @preconcurrency import ApplicationServices
 import MacSupport
+import UnlockNative
 
 struct DesktopInputState {
     var scrollAccumulator = PixelScrollAccumulator()
@@ -16,11 +17,14 @@ final class DesktopController {
 
     var state: RemoteState {
         let volume = volumeController.read()
+        let session = SRReadConsole()
         return RemoteState(
             accessibilityGranted: AXIsProcessTrusted(), systemVolume: volume.value,
             systemVolumeReason: volume.reason,
             deviceName: DeviceName.bounded(Host.current().localizedName ?? "", fallback: "Mac"),
-            supportsGestures: true)
+            supportsGestures: true,
+            sessionLocked: session.known && session.loggedIn && session.userID == getuid()
+                ? session.locked : nil)
     }
 
     func requestAccessibility() {
@@ -52,7 +56,7 @@ final class DesktopController {
             try executeKeyboard(command, source: source)
         case .systemShortcut, .systemVolumeSet:
             break
-        case .mediaControl:
+        case .mediaControl, .sessionUnlock:
             throw ControlError.invalidCommand
         }
     }

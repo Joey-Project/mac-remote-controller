@@ -10,6 +10,10 @@ not yet implement the media adapters.
 `apps/web-remote/` is an offline browser interaction preview only; it has no
 Mac connection, pairing, or control transport.
 
+The Mac menu-bar **Setup & Recovery** section also contains experimental
+[remote-unlock helper management and manual phone recovery](apps/macos/UnlockRuntime/README.md).
+Actual locked-session unlock requires separate physical-host acceptance.
+
 Manual acceptance on an iPhone XS running iOS 18.7.10 on 2026-10-22 verified
 QR pairing to a Mac, pointer and click control, the committed text
 `你好，世界 👋`, two-finger scrolling, and reconnecting to the paired Mac without

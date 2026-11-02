@@ -5,6 +5,7 @@ public struct PendingCommandMetadata: Sendable, Equatable {
     public let requestID: String
     public let sequence: UInt64
     public let requiresSessionTeardownOnFailure: Bool
+    public let timeoutSeconds: Double
 
     public init(
         connectionID: String, requestID: String, sequence: UInt64, command: RemoteCommand
@@ -13,6 +14,7 @@ public struct PendingCommandMetadata: Sendable, Equatable {
         self.requestID = requestID
         self.sequence = sequence
         requiresSessionTeardownOnFailure = command.name == .pointerButtonUp
+        timeoutSeconds = command.name == .sessionUnlock ? 12 : 3
     }
 
     public func matchesResult(_ message: WireMessage) -> Bool {

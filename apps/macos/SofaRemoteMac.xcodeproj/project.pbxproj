@@ -16,6 +16,10 @@
 		C40000000000000000000001 /* MediaBridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000002 /* MediaBridgeView.swift */; };
 		C41000000000000000000001 /* MediaAdapterController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41000000000000000000002 /* MediaAdapterController.swift */; };
 		C43000000000000000000001 /* CompanionModel+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43000000000000000000002 /* CompanionModel+Media.swift */; };
+		D50000000000000000000001 /* UnlockController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50000000000000000000002; };
+		D51000000000000000000001 /* UnlockSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51000000000000000000002; };
+		D52000000000000000000001 /* PhoneRecoveryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D52000000000000000000002; };
+		D53000000000000000000001 /* CompanionModel+Unlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = D53000000000000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +32,10 @@
 		C43000000000000000000002 /* CompanionModel+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Media.swift"; sourceTree = "<group>"; };
 		000000000000000000000031 /* MacBLEPeripheral.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBLEPeripheral.swift; sourceTree = "<group>"; };
 		A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+HeldInputRelease.swift"; sourceTree = "<group>"; };
+		D50000000000000000000002 /* UnlockController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockController.swift; sourceTree = "<group>"; };
+		D51000000000000000000002 /* UnlockSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockSetupView.swift; sourceTree = "<group>"; };
+		D52000000000000000000002 /* PhoneRecoveryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneRecoveryController.swift; sourceTree = "<group>"; };
+		D53000000000000000000002 /* CompanionModel+Unlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Unlock.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +68,10 @@
 				C40000000000000000000002 /* MediaBridgeView.swift */,
 				C41000000000000000000002 /* MediaAdapterController.swift */,
 				C43000000000000000000002 /* CompanionModel+Media.swift */,
+				D50000000000000000000002 /* UnlockController.swift */,
+				D51000000000000000000002 /* UnlockSetupView.swift */,
+				D52000000000000000000002 /* PhoneRecoveryController.swift */,
+				D53000000000000000000002 /* CompanionModel+Unlock.swift */,
 				000000000000000000000031 /* MacBLEPeripheral.swift */,
 				A40000000000000000000002 /* CompanionModel+HeldInputRelease.swift */,
 			);
@@ -84,6 +96,7 @@
 				000000000000000000000014 /* Sources */,
 				000000000000000000000015 /* Frameworks */,
 				C44000000000000000000001 /* Bundle Media Adapters */,
+				D54000000000000000000001 /* Bundle Unlock Runtime */,
 				000000000000000000000016 /* Resources */,
 			);
 			buildRules = ();
@@ -162,6 +175,23 @@
 			shellPath = /bin/bash;
 			shellScript = "bash \"$SRCROOT/../../tooling/swift/bundle-media-adapters.sh\"\n";
 		};
+		D54000000000000000000001 /* Bundle Unlock Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			name = "Bundle Unlock Runtime";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/SofaRemoteUnlockHelper",
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/SofaRemoteUnlockInstaller",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/UnlockRuntime/SofaRemoteUnlock.bundle/Contents/Info.plist",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/PhoneRecovery/renew.py",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash \"$SRCROOT/../../tooling/swift/bundle-unlock-runtime.sh\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -175,6 +205,10 @@
 				C40000000000000000000001 /* MediaBridgeView.swift in Sources */,
 				C41000000000000000000001 /* MediaAdapterController.swift in Sources */,
 				C43000000000000000000001 /* CompanionModel+Media.swift in Sources */,
+				D50000000000000000000001 /* UnlockController.swift in Sources */,
+				D51000000000000000000001 /* UnlockSetupView.swift in Sources */,
+				D52000000000000000000001 /* PhoneRecoveryController.swift in Sources */,
+				D53000000000000000000001 /* CompanionModel+Unlock.swift in Sources */,
 				000000000000000000000030 /* MacBLEPeripheral.swift in Sources */,
 				A40000000000000000000001 /* CompanionModel+HeldInputRelease.swift in Sources */,
 			);
@@ -210,6 +244,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.joeyteng.sofaremote.mac;
+				ENABLE_HARDENED_RUNTIME = YES;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
@@ -225,6 +261,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.joeyteng.sofaremote.mac;
+				ENABLE_HARDENED_RUNTIME = YES;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;

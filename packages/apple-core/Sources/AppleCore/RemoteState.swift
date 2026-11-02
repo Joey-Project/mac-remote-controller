@@ -9,11 +9,13 @@ public struct RemoteState: Codable, Sendable, Equatable {
     public var deviceName: String
     public var capabilities: [String]?
     public var mediaTargets: [MediaTarget]?
+    public var sessionLocked: Bool?
+    public var unlockAvailable: Bool?
 
     public init(
         accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
         deviceName: String, supportsGestures: Bool? = nil, capabilities: [String]? = nil,
-        mediaTargets: [MediaTarget]? = nil
+        mediaTargets: [MediaTarget]? = nil, sessionLocked: Bool? = nil, unlockAvailable: Bool? = nil
     ) {
         self.accessibilityGranted = accessibilityGranted
         self.supportsGestures = supportsGestures
@@ -22,6 +24,8 @@ public struct RemoteState: Codable, Sendable, Equatable {
         self.deviceName = deviceName
         self.capabilities = capabilities
         self.mediaTargets = mediaTargets
+        self.sessionLocked = sessionLocked
+        self.unlockAvailable = unlockAvailable
     }
 
     public func validate() throws {

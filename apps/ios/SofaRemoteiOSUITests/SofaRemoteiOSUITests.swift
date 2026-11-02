@@ -217,19 +217,13 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
         XCUIDevice.shared.orientation = .landscapeLeft
         let windowElement = app.windows.firstMatch
-        let orientationDeadline = Date().addingTimeInterval(5)
-        while windowElement.frame.width <= windowElement.frame.height,
-            Date() < orientationDeadline
-        {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        }
-        let landscapeWindow = windowElement.frame
+        let pad = element("touchpad.surface")
+        XCTAssertTrue(pad.waitForExistence(timeout: 5))
+        let landscapeWindow = waitForLandscapeLayout(window: windowElement, surface: pad)
         XCTAssertGreaterThan(
             landscapeWindow.width, landscapeWindow.height,
             "The iPad app window should rotate to landscape before layout checks.")
 
-        let pad = element("touchpad.surface")
-        XCTAssertTrue(pad.waitForExistence(timeout: 5))
         assertInsideWindow(pad.frame, window: landscapeWindow)
         XCTAssertTrue(pad.isHittable)
 
@@ -264,7 +258,33 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
 }
 
-private extension SofaRemoteiOSUITests {
+extension SofaRemoteiOSUITests {
+    @MainActor
+    func waitForLandscapeLayout(window: XCUIElement, surface: XCUIElement) -> CGRect {
+        let deadline = Date().addingTimeInterval(5)
+        var previousWindow = CGRect.zero
+        var previousSurface = CGRect.zero
+        var stableSince = Date()
+        while Date() < deadline {
+            let bounds = window.frame
+            let pad = surface.frame
+            if bounds != previousWindow || pad != previousSurface {
+                stableSince = Date()
+                previousWindow = bounds
+                previousSurface = pad
+            } else if bounds.width > bounds.height, Date().timeIntervalSince(stableSince) >= 0.5 {
+                let metrics = XCTAttachment(string: "Landscape window: \(bounds); touchpad: \(pad)")
+                metrics.name = "Settled landscape geometry"
+                metrics.lifetime = .keepAlways
+                add(metrics)
+                return bounds
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTFail("The landscape window and touchpad geometry did not settle before assertions.")
+        return window.frame
+    }
+
     @MainActor
     func launchApp(scenario: String? = nil) {
         XCTContext.runActivity(named: "Launch UI test app") { _ in

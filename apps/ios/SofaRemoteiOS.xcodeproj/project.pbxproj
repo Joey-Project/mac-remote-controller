@@ -9,6 +9,7 @@
 		100000000000000000000044 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = 100000000000000000000002; remoteInfo = SofaRemoteiOS; };
 /* End PBXContainerItemProxy section */
 /* Begin PBXBuildFile section */
+		D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55000000000000000000002 /* UnlockMenuUITests.swift */; };
 		C46000000000000000000001 /* PairingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46000000000000000000002 /* PairingPanel.swift */; };
 		C45000000000000000000001 /* LiveMediaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C45000000000000000000002 /* LiveMediaUITests.swift */; };
 		A32000000000000000000001 /* TrackpadGestureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A32000000000000000000002 /* TrackpadGestureView.swift */; };
@@ -31,6 +32,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		D55000000000000000000002 /* UnlockMenuUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockMenuUITests.swift; sourceTree = "<group>"; };
 		C46000000000000000000002 /* PairingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPanel.swift; sourceTree = "<group>"; };
 		C45000000000000000000002 /* LiveMediaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveMediaUITests.swift; sourceTree = "<group>"; };
 		A32000000000000000000002 /* TrackpadGestureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackpadGestureView.swift; sourceTree = "<group>"; };
@@ -101,6 +103,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000036 /* SofaRemoteiOSUITests.swift */,
+				D55000000000000000000002 /* UnlockMenuUITests.swift */,
 				C45000000000000000000002 /* LiveMediaUITests.swift */,
 			);
 			path = SofaRemoteiOSUITests;
@@ -221,7 +224,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

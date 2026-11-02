@@ -55,7 +55,10 @@ private struct CompanionView: View {
                     Text(reason).font(.caption).foregroundStyle(.secondary)
                 }
                 Divider()
+                Text("Setup & Recovery").font(.headline)
                 MediaBridgeView(model: model)
+                UnlockSetupView(controller: model.unlockController)
+                PhoneRecoveryView(controller: model.phoneRecovery)
                 Divider()
                 if let invitation = model.invitation {
                     Text("Scan with Sofa Remote on iPhone or iPad.")
@@ -89,6 +92,18 @@ private struct CompanionView: View {
                         HStack {
                             Text(device.name)
                             Spacer()
+                            Toggle(
+                                "Unlock",
+                                isOn: Binding(
+                                    get: {
+                                        model.unlockController.allowedDeviceIDs.contains(device.id)
+                                    },
+                                    set: {
+                                        model.unlockController.setDevice(device.id, allowed: $0)
+                                    })
+                            )
+                            .disabled(
+                                !model.unlockController.reachable || model.unlockController.isBusy)
                             Button("Remove", role: .destructive) { model.revoke(device) }
                         }
                     }
