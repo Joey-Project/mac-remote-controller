@@ -1,0 +1,17 @@
+{
+  "version": "1.24.0",
+  "commit": "70e1568fdfcb20b560774057cd783f02361293b9",
+  "archiveURL": "https://codeload.github.com/xtool-org/xtool/tar.gz/70e1568fdfcb20b560774057cd783f02361293b9",
+  "archiveSHA256": "9f5c887cf245805125f15fd5bdb03587041c1b72e072a80aec6097eaa122814c",
+  "patchSHA256": "1464d6fd2331de52596d0a99fa70008c71a81e5e1e889077ec4b2762a3a7ae1a",
+  "resolvedSHA256": "b2cf9e76840cc07da1e2c915743e84900dfc9b3b54be5260da43f19e96773708",
+  "patchedPaths": [
+    "Sources/xtool/XTool.swift",
+    "Sources/XKit/Utilities/KeyValueStorage.swift",
+    "Sources/XKit/GrandSlam/Anisette/SofaNativeMacAnisetteProvider.swift",
+    "Sources/XToolSupport/AuthCommand.swift",
+    "Sources/XToolSupport/DSCommands/DSCommand.swift",
+    "Sources/XToolSupport/DSCommands/DSRenewalProbeCommand.swift"
+  ],
+  "resolvedSwift64SHA256": "98bb4095252adbb7d0fb9a05e17d2262dc04388c82ae0f997b0a5b4e9d094287"
+}

@@ -1,0 +1,290 @@
+--- a/Sources/xtool/XTool.swift
++++ b/Sources/xtool/XTool.swift
+@@ -10 +10,22 @@
+-        prepareDependencies { _ in
++        let arguments = Array(CommandLine.arguments.dropFirst())
++        let allowed = arguments == ["--help"] || arguments == ["--version"]
++            || arguments == ["auth", "status"]
++            || arguments == ["auth", "login", "--mode", "password"]
++            || arguments == ["ds", "profiles", "list"]
++            || arguments == ["ds", "certificates", "list"]
++            || arguments == ["ds", "teams"]
++            || arguments == ["ds", "renewal-probe", "storage"]
++            || arguments == ["ds", "renewal-probe", "preflight"]
++            || arguments == ["ds", "renewal-probe", "inspect"]
++            || arguments == ["ds", "renewal-probe", "register-device"]
++            || arguments == ["ds", "renewal-probe", "create-profile"]
++            || arguments == ["ds", "renewal-probe", "renew-profile"]
++            || arguments == ["ds", "renewal-probe", "app-profile"]
++            || arguments == ["ds", "renewal-probe", "mac-profile"]
++        guard allowed else {
++            FileHandle.standardError.write(Data("Only scoped renewal-probe commands are enabled.\n".utf8))
++            Foundation.exit(64)
++        }
++        prepareDependencies {
++            $0.keyValueStorage = KeychainStorage(service: "com.joeyteng.sofaremote.renewal-probe.credentials")
++            $0.anisetteDataProvider = SofaNativeMacAnisetteProvider()
+--- a/Sources/XKit/Utilities/KeyValueStorage.swift
++++ b/Sources/XKit/Utilities/KeyValueStorage.swift
+@@ -174 +174 @@
+-            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock
++            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+--- /dev/null
++++ b/Sources/XKit/GrandSlam/Anisette/SofaNativeMacAnisetteProvider.swift
+@@ -0,0 +1,66 @@
++#if os(macOS)
++import Foundation
++import Darwin
++
++@objc private protocol SofaAOSUtilities {
++    static func retrieveOTPHeadersForDSID(_ dsid: String) -> [String: Any]?
++    static var machineUDID: String? { get }
++}
++
++/// Local-only research backend: account authentication remains with Apple.
++public struct SofaNativeMacAnisetteProvider: AnisetteDataProvider {
++    public init() {}
++    public var providerID: String? { "sofa-native-aoskit-v1" }
++
++    private enum Failure: Error { case frameworkUnavailable, missingHeaders, invalidSystemInfo }
++
++    private func systemValue(_ name: String) throws -> String {
++        var count = 0
++        guard sysctlbyname(name, nil, &count, nil, 0) == 0, count > 1, count < 4096 else {
++            throw Failure.invalidSystemInfo
++        }
++        var bytes = [CChar](repeating: 0, count: count)
++        guard sysctlbyname(name, &bytes, &count, nil, 0) == 0 else { throw Failure.invalidSystemInfo }
++        return String(cString: bytes)
++    }
++
++    private func utilities() throws -> SofaAOSUtilities.Type {
++        guard let framework = Bundle(path: "/System/Library/PrivateFrameworks/AOSKit.framework") else {
++            throw Failure.frameworkUnavailable
++        }
++        try framework.loadAndReturnError()
++        guard let runtimeClass = NSClassFromString("AOSUtilities"),
++              runtimeClass.responds(to: NSSelectorFromString("retrieveOTPHeadersForDSID:")),
++              runtimeClass.responds(to: NSSelectorFromString("machineUDID")) else {
++            throw Failure.frameworkUnavailable
++        }
++        return unsafeBitCast(runtimeClass, to: SofaAOSUtilities.Type.self)
++    }
++
++    public func deviceInfo() async throws -> DeviceInfo {
++        guard let deviceID = try utilities().machineUDID, !deviceID.isEmpty else { throw Failure.missingHeaders }
++        let model = try systemValue("hw.model")
++        let build = try systemValue("kern.osversion")
++        let version = ProcessInfo.processInfo.operatingSystemVersion
++        let osVersion = "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
++        let cfNetworkVersion = Bundle(identifier: "com.apple.CFNetwork")?.infoDictionary?["CFBundleVersion"] as? String
++        guard let cfNetworkVersion, !cfNetworkVersion.isEmpty else { throw Failure.invalidSystemInfo }
++        return DeviceInfo(deviceID: deviceID,
++            clientInfo: "<\(model)> <macOS;\(osVersion);\(build)> <com.apple.AuthKit/1 (com.apple.akd/1.0)>",
++            akdUserAgent: "akd/1.0 CFNetwork/\(cfNetworkVersion)")
++    }
++
++    public func fetchAnisetteData() async throws -> AnisetteData {
++        guard let headers = try utilities().retrieveOTPHeadersForDSID("-2"),
++              let machine = headers["X-Apple-MD-M"] as? String, !machine.isEmpty,
++              let otp = headers["X-Apple-MD"] as? String, !otp.isEmpty else {
++            throw Failure.missingHeaders
++        }
++        let device = try await deviceInfo()
++        let routing = (headers["X-Apple-MD-RINFO"] as? NSNumber)?.uint64Value
++            ?? UInt64(headers["X-Apple-MD-RINFO"] as? String ?? "") ?? 84215040
++        return AnisetteData(clientTime: Date(), routingInfo: routing, machineID: machine,
++            localUserID: Data(device.deviceID.utf8).base64EncodedString(), oneTimePassword: otp, deviceInfo: device)
++    }
++}
++#endif
+--- a/Sources/XToolSupport/AuthCommand.swift
++++ b/Sources/XToolSupport/AuthCommand.swift
+@@ -81,4 +81,3 @@
+-          This works by emulating a virtual Mac to interact with Apple services.
+-          We use a third-party service to create a randomized device ID token
+-          (Anisette Data) but your credentials are only ever sent to Apple.
+-          Still, consider using a secondary Apple ID since this is a private API.
++          This local research probe uses this Mac's native AOSKit framework.
++          No public Anisette server is used. Account credentials go only to Apple.
++          Only the independent probe's Keychain service is used for its session.
+--- a/Sources/XToolSupport/DSCommands/DSCommand.swift
++++ b/Sources/XToolSupport/DSCommands/DSCommand.swift
+@@ -31,0 +32 @@
++            DSRenewalProbeCommand.self,
+--- /dev/null
++++ b/Sources/XToolSupport/DSCommands/DSRenewalProbeCommand.swift
+@@ -0,0 +1,173 @@
++import Foundation
++import ArgumentParser
++import XKit
++import DeveloperAPI
++import Dependencies
++
++/// Research-only command; does not invoke certificate creation or revocation.
++struct DSRenewalProbeCommand: AsyncParsableCommand {
++    static let configuration = CommandConfiguration(commandName: "renewal-probe")
++
++    enum Mode: String, ExpressibleByArgument {
++        case storage, preflight, inspect, registerDevice = "register-device", createProfile = "create-profile"
++        case renewProfile = "renew-profile", appProfile = "app-profile", macProfile = "mac-profile"
++    }
++    @Argument var mode: Mode
++
++    private struct Configuration: Decodable {
++        var expectedTeamID: String
++        var targetUDID: String
++        var existingCertificatePath: String
++        var probeBundleIdentifier: String
++        var outputDirectory: String
++    }
++
++    private enum Failure: Error { case invalidConfiguration, wrongTeam, wrongIdentity, deviceMissing, invalidResponse, probeAlreadyExists }
++
++    /// Read-only legacy iOS query, also used by AltSign for free accounts.
++    private struct IOSDevicesRequest: DeveloperServicesRequest {
++        struct Device: Decodable, Sendable {
++            var deviceNumber: String?
++            var deviceId: String?
++        }
++        struct Response: Decodable, Sendable { var devices: [Device] }
++        var teamID: String
++        var action: String { "ios/listDevices" }
++        var parameters: [String: Any] { ["teamId": teamID, "DTDK_Platform": "ios"] }
++        func parse(_ response: Response) -> [Device] { response.devices }
++    }
++
++    private func emit(_ value: [String: Any]) throws {
++        let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
++        print(String(decoding: data, as: UTF8.self))
++    }
++
++    func run() async throws {
++        if mode == .storage {
++            @Dependency(\.keyValueStorage) var storage
++            let key = "SofaRenewalStorageCanary"
++            let canary = Data(UUID().uuidString.utf8)
++            try storage.setData(canary, forKey: key)
++            defer { try? storage.setData(nil, forKey: key) }
++            guard try storage.data(forKey: key) == canary else { throw Failure.invalidResponse }
++            try emit(["isolatedKeychainAccessible": true, "realCredentialsUsed": false])
++            return
++        }
++        if mode == .preflight {
++            @Dependency(\.anisetteDataProvider) var provider
++            let headers = try await provider.fetchAnisetteData()
++            guard !headers.machineID.isEmpty, !headers.oneTimePassword.isEmpty else { throw Failure.invalidResponse }
++            try emit(["nativeAnisetteAvailable": true, "thirdPartyServerContacted": false, "accountCredentialsUsed": false])
++            return
++        }
++
++        guard let configurationPath = ProcessInfo.processInfo.environment["SOFA_RENEWAL_PROBE_CONFIG"] else {
++            throw Failure.invalidConfiguration
++        }
++        let configuration = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: URL(fileURLWithPath: configurationPath)))
++        guard configuration.probeBundleIdentifier == "com.joeyteng.sofaremote.renewalprobe" else { throw Failure.invalidConfiguration }
++        let token = try AuthToken.saved()
++        guard case .xcode(let account) = token, account.teamID == configuration.expectedTeamID else { throw Failure.wrongTeam }
++        let client = DeveloperAPIClient(auth: token.authData())
++        let certificate = try Certificate(data: Data(contentsOf: URL(fileURLWithPath: configuration.existingCertificatePath)))
++        let certificates = try await DeveloperAPIPages {
++            try await client.certificatesGetCollection().ok.body.json
++        } next: {
++            $0.links.next
++        }
++        .map(\.data)
++        .reduce(into: [], +=)
++        let matchingCertificates = certificates.filter { $0.attributes?.serialNumber.map(certificate.hasSerialNumber) == true }
++        guard matchingCertificates.count == 1, let existingCertificate = matchingCertificates.first else { throw Failure.wrongIdentity }
++        if mode == .registerDevice {
++            let response = try await client.devicesCreateInstance(body: .json(.init(data: .init(
++                _type: .devices, attributes: .init(name: "Sofa Remote Test iPhone", platform: .init(.ios),
++                    udid: configuration.targetUDID)))))
++            if (try? response.conflict) != nil {
++                try emit(["deviceAlreadyRegistered": true, "newDeviceCreated": false, "existingCertificateMutated": false])
++            } else {
++                _ = try response.created
++                try emit(["deviceRegistrationSucceeded": true, "newDeviceCreated": true, "existingCertificateMutated": false])
++            }
++            return
++        }
++        let devices = try await DeveloperAPIPages {
++            try await client.devicesGetCollection(query: .init(
++                fields_lbrack_devices_rbrack_: [.udid, .platform, .status, .deviceClass], limit: 100)).ok.body.json
++        } next: {
++            $0.links.next
++        }
++        .map(\.data)
++        .reduce(into: [], +=)
++        let matchingDevices = devices.filter { $0.attributes?.udid?.caseInsensitiveCompare(configuration.targetUDID) == .orderedSame }
++        try emit(["deviceQueryCompleted": true, "returnedDeviceCount": devices.count,
++            "devicesWithUDIDCount": devices.filter { $0.attributes?.udid != nil }.count,
++            "returnedPlatforms": Array(Set(devices.compactMap { $0.attributes?.platform?.rawValue })).sorted(),
++            "matchingDeviceCount": matchingDevices.count, "accountMutated": false])
++        var deviceID = matchingDevices.count == 1 ? matchingDevices.first?.id : nil
++        if deviceID == nil {
++            guard case .xcode(let auth) = token.authData() else { throw Failure.wrongTeam }
++            let legacy = try await DeveloperServicesClient(authData: auth).send(IOSDevicesRequest(teamID: configuration.expectedTeamID))
++            let matches = legacy.filter { $0.deviceNumber?.caseInsensitiveCompare(configuration.targetUDID) == .orderedSame }
++            try emit(["legacyIOSDeviceQueryCompleted": true, "returnedDeviceCount": legacy.count,
++                "devicesWithUDIDCount": legacy.filter { $0.deviceNumber != nil }.count,
++                "matchingDeviceCount": matches.count, "accountMutated": false])
++            guard matches.count == 1 else { throw Failure.deviceMissing }
++            deviceID = matches.first?.deviceId
++        }
++        guard let deviceID else { throw Failure.deviceMissing }
++        let selectedIdentifier: String
++        switch mode {
++        case .appProfile: selectedIdentifier = "com.joeyteng.sofaremote.ios"
++        case .macProfile: selectedIdentifier = "com.joeyteng.sofaremote.renewalprobe.mac"
++        default: selectedIdentifier = configuration.probeBundleIdentifier
++        }
++        let bundleIDs = try await DeveloperAPIPages {
++            try await client.bundleIdsGetCollection(query: .init(
++                filter_lbrack_identifier_rbrack_: [selectedIdentifier])).ok.body.json
++        } next: {
++            $0.links.next
++        }
++        .map(\.data)
++        .reduce(into: [], +=)
++        let matchingBundles = bundleIDs.filter { $0.attributes?.identifier == selectedIdentifier }
++        try emit(["bundleQueryCompleted": true, "exactMatchingCount": matchingBundles.count,
++            "returnedBundleCount": bundleIDs.count, "accountMutated": false])
++        if mode == .inspect {
++            try emit(["authenticatedToApple": true, "expectedTeamMatched": true, "existingCertificateMatched": true,
++                "registeredDeviceMatched": true, "probeIdentifierAlreadyExists": !matchingBundles.isEmpty, "accountMutated": false])
++            return
++        }
++        let bundle: Components.Schemas.BundleId
++        var createdBundle = false
++        if mode == .createProfile || (mode == .appProfile && matchingBundles.isEmpty) {
++            guard matchingBundles.isEmpty else { throw Failure.probeAlreadyExists }
++            bundle = try await client.bundleIdsCreateInstance(body: .json(.init(data: .init(
++                _type: .bundleIds, attributes: .init(name: "Sofa Remote Renewal Probe", platform: .init(.ios),
++                    identifier: selectedIdentifier))))).created.body.json.data
++            createdBundle = true
++        } else {
++            guard matchingBundles.count == 1, let existing = matchingBundles.first else { throw Failure.invalidResponse }
++            bundle = existing
++        }
++        let profile = try await client.profilesCreateInstance(body: .json(.init(data: .init(
++            _type: .profiles,
++            attributes: .init(name: "Sofa Remote \(mode.rawValue) \(UUID().uuidString)", profileType: .init(
++                mode == .macProfile ? .macAppDevelopment : .iosAppDevelopment)),
++            relationships: .init(bundleId: .init(data: .init(_type: .bundleIds, id: bundle.id)),
++                devices: .init(data: [.init(_type: .devices, id: deviceID)]),
++                certificates: .init(data: [.init(_type: .certificates, id: existingCertificate.id)]))
++        )))).created.body.json.data
++        guard let encoded = profile.attributes?.profileContent, let content = Data(base64Encoded: encoded) else {
++            throw Failure.invalidResponse
++        }
++        let directory = URL(fileURLWithPath: configuration.outputDirectory, isDirectory: true)
++        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
++            attributes: [.posixPermissions: 0o700])
++        let destination = directory.appendingPathComponent("probe.mobileprovision")
++        try content.write(to: destination, options: [.atomic])
++        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
++        try emit(["newProfileCreated": true, "reusedExistingCertificate": true, "existingCertificatesMutated": false,
++            "existingProfilesDeleted": false, "existingAppIDReused": !createdBundle, "profilePath": destination.path])
++    }
++}

@@ -63,6 +63,12 @@ jobs:
           cache: pnpm
       - name: Install media adapter build dependencies
         run: pnpm install --frozen-lockfile
+      - name: Reconstruct and build renewal research probe
+        run: |
+          python3 tooling/renewal/prepare.py --destination .codex-tmp/renewal-ci/source
+          swift build --package-path .codex-tmp/renewal-ci/source \
+            --scratch-path .codex-tmp/renewal-ci/Build \
+            --product xtool --force-resolved-versions --disable-sandbox
       - name: Test iPhone and iPad controls in Simulator
         run: tooling/swift/test-ios-ui.sh
         timeout-minutes: 40
@@ -142,3 +148,5 @@ jobs:
           shellcheck tooling/swift/*.sh apps/android/gradlew
       - name: Test iOS simulator lifecycle with mocked tools
         run: bash tooling/swift/test-ios-ui-lifecycle.sh
+      - name: Test background renewal tooling without credentials or devices
+        run: python3 -m unittest discover -s tooling/renewal/tests -v
