@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import tarfile
@@ -51,11 +52,20 @@ def extract(archive_path, destination, commit):
                 raise ValueError("Unsupported source archive member")
 
 
-def prepare(destination, archive_path=None):
+def swift_series(version):
+    match = re.search(r"\bSwift version (\d+\.\d+)\b", version)
+    if match is None or match.group(1) not in ("6.3", "6.4"):
+        raise ValueError("No frozen dependency closure for this Swift toolchain")
+    return match.group(1)
+
+
+def prepare(destination, archive_path=None, series="6.3"):
     if destination.exists():
         raise ValueError("Choose a new destination; existing builds are preserved")
     manifest = json.loads((HERE / "upstream.json").read_text())
-    if digest(HERE / "xtool.patch") != manifest["patchSHA256"] or digest(HERE / "Package.resolved") != manifest["resolvedSHA256"]:
+    resolved = HERE / ("Package.swift-6.4.resolved" if series == "6.4" else "Package.resolved")
+    require_hash = manifest["resolvedSwift64SHA256"] if series == "6.4" else manifest["resolvedSHA256"]
+    if series not in ("6.3", "6.4") or digest(HERE / "xtool.patch") != manifest["patchSHA256"] or digest(resolved) != require_hash:
         raise ValueError("Probe source inputs do not match their manifest")
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="sofa-renewal-", dir=destination.parent) as tmp:
@@ -82,9 +92,9 @@ def prepare(destination, archive_path=None):
             command.append(str(HERE / "xtool.patch"))
             subprocess.run(command, cwd=source, check=True, timeout=20, capture_output=True,
                 env={"PATH": os.environ["PATH"], "GIT_CEILING_DIRECTORIES": str(staging)})
-        shutil.copyfile(HERE / "Package.resolved", source / "Package.resolved")
+        shutil.copyfile(resolved, source / "Package.resolved")
         source.rename(destination)
-    return {"upstreamCommit": manifest["commit"], "source": str(destination), "accountAccessed": False}
+    return {"upstreamCommit": manifest["commit"], "source": str(destination), "swiftSeries": series, "accountAccessed": False}
 
 
 if __name__ == "__main__":
@@ -92,5 +102,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, default=HERE / ".local/source")
     parser.add_argument("--archive", type=Path, help="Optional already-downloaded pinned archive")
+    parser.add_argument("--swift-series", choices=("6.3", "6.4"), help="Defaults to the selected swift executable's version")
     args = parser.parse_args()
-    print(json.dumps(prepare(args.destination.resolve(), args.archive.resolve() if args.archive else None)))
+    version = args.swift_series
+    if version is None:
+        result = subprocess.run(["swift", "--version"], capture_output=True, text=True, timeout=15, check=True)
+        version = swift_series(result.stdout)
+    print(json.dumps(prepare(args.destination.resolve(), args.archive.resolve() if args.archive else None, version)))

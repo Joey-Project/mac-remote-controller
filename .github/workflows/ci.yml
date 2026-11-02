@@ -69,20 +69,6 @@ jobs:
           swift build --package-path .codex-tmp/renewal-ci/source \
             --scratch-path .codex-tmp/renewal-ci/Build \
             --product xtool --force-resolved-versions --disable-sandbox
-      - name: Diagnose newer Swift dependency closure after frozen-build failure
-        if: failure()
-        run: |
-          swift package --package-path .codex-tmp/renewal-ci/source \
-            --scratch-path .codex-tmp/renewal-ci/Build resolve
-      - name: Retain diagnostic dependency closure
-        if: failure()
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: renewal-swift-closure-diagnostic
-          path: .codex-tmp/renewal-ci/source/Package.resolved
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 3
       - name: Test iPhone and iPad controls in Simulator
         run: tooling/swift/test-ios-ui.sh
         timeout-minutes: 40

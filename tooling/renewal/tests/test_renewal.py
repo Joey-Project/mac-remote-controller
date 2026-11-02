@@ -6,7 +6,9 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import select
 import struct
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -72,6 +74,12 @@ class ProfileTests(unittest.TestCase):
         self.assertTrue(renew.authorized_groups({"keychain-access-groups": ["TESTTEAM.app"]}, self.profile))
         self.assertFalse(renew.authorized_groups({"keychain-access-groups": ["OTHERTEAM.app"]}, self.profile))
 
+    def test_actual_leaf_selected_from_multi_certificate_reference(self):
+        self.profile["DeveloperCertificates"] = [b"public-certificate-one", b"public-certificate-two"]
+        self.assertEqual(renew.authorized_leaf(self.profile, b"public-certificate-two"), b"public-certificate-two")
+        with self.assertRaisesRegex(renew.RenewalError, "certificate-mismatch"):
+            renew.authorized_leaf(self.profile, b"public-certificate-other")
+
 
 class PrivateRuntimeTests(unittest.TestCase):
     def setUp(self):
@@ -115,6 +123,41 @@ class PrivateRuntimeTests(unittest.TestCase):
         path.write_text(json.dumps(value))
         with self.assertRaisesRegex(renew.RenewalError, "fields"):
             renew.read_config(path)
+
+    def test_non_object_configs_are_sanitized_before_runtime_access(self):
+        for value in (list(renew.CONFIG_KEYS), None, "invalid", 42):
+            with self.subTest(value=value):
+                path = self.config()
+                path.write_text(json.dumps(value))
+                result = subprocess.run([sys.executable, str(HERE / "renew.py"), "ios-candidate", "--config", str(path)],
+                    capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(json.loads(result.stdout)["category"], "invalid-private-configuration")
+                self.assertNotIn(b"Traceback", result.stderr)
+
+    def test_atomic_publication_keeps_stable_probe_across_process_kill(self):
+        for timing in ("before", "after"):
+            with self.subTest(timing=timing):
+                parent = self.root / timing
+                parent.mkdir()
+                first, second = parent / "staged.app", parent / "probe.app"
+                first.mkdir()
+                second.mkdir()
+                (first / "payload").write_text("new")
+                (second / "payload").write_text("old")
+                os.utime(second, None)  # Benign metadata changes do not block publication.
+                with subprocess.Popen([sys.executable, str(HERE / "tests/atomic_adoption_child.py"),
+                    str(first), str(second), timing], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as child:
+                    try:
+                        readable, _, _ = select.select([child.stdout], [], [], 5)
+                        self.assertTrue(readable, "Child publication fixture did not reach its checkpoint")
+                        self.assertEqual(child.stdout.readline(), b"ready\n")
+                    finally:
+                        if child.poll() is None:
+                            child.kill()
+                        child.wait(timeout=5)
+                self.assertEqual((second / "payload").read_text(), "old" if timing == "before" else "new")
+                self.assertEqual((first / "payload").read_text(), "new" if timing == "before" else "old")
 
     def test_serialize_different_run_directories_using_same_probe(self):
         probe = self.root / "SofaRenewalProbe.app"
@@ -165,7 +208,18 @@ class SourceTests(unittest.TestCase):
         manifest = json.loads((HERE / "upstream.json").read_text())
         self.assertEqual(prepare.digest(HERE / "xtool.patch"), manifest["patchSHA256"])
         self.assertEqual(prepare.digest(HERE / "Package.resolved"), manifest["resolvedSHA256"])
+        self.assertEqual(prepare.digest(HERE / "Package.swift-6.4.resolved"), manifest["resolvedSwift64SHA256"])
         self.assertEqual(len(manifest["patchedPaths"]), 6)
+
+    def test_explicit_toolchain_closures(self):
+        self.assertEqual(prepare.swift_series("Apple Swift version 6.3.3 (release)"), "6.3")
+        self.assertEqual(prepare.swift_series("Apple Swift version 6.4.1 (release)"), "6.4")
+        with self.assertRaises(ValueError):
+            prepare.swift_series("Swift version 6.5.0")
+        old = {p["identity"]: p for p in json.loads((HERE / "Package.resolved").read_text())["pins"]}
+        new = {p["identity"]: p for p in json.loads((HERE / "Package.swift-6.4.resolved").read_text())["pins"]}
+        self.assertEqual({k: v for k, v in old.items() if k != "xctest-dynamic-overlay"},
+            {k: v for k, v in new.items() if k != "swift-issue-reporting"})
 
     def test_archive_traversal_and_links_rejected(self):
         for name, kind in (("xtool-test/../escape", tarfile.REGTYPE), ("xtool-test/link", tarfile.SYMTYPE)):

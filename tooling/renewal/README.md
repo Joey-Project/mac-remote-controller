@@ -14,7 +14,11 @@ probe itself has expired still needs a bootstrap repair design.
 
 The probe is reconstructed from [xtool 1.24.0](https://github.com/xtool-org/xtool/releases/tag/1.24.0),
 commit `70e1568fdfcb20b560774057cd783f02361293b9`. `upstream.json` pins the archive,
-source patch and dependency-lock digests. The six-file patch adds a restricted
+source patch and dependency-lock digests. Swift 6.3 and 6.4 have separate frozen
+closures because a pinned dependency selects a different versioned manifest
+and reporting-package identity. Preparation selects the active Swift series;
+`--swift-series 6.3` or `--swift-series 6.4` makes source-only reconstruction
+explicit. Other Swift series fail until a verified lock is added. The six-file patch adds a restricted
 renewal command, native local AOSKit Anisette, and an isolated Data Protection
 Keychain service using `AfterFirstUnlockThisDeviceOnly`. No public Anisette
 server is used. The MIT license is retained in `XTOOL-LICENSE.md`.
@@ -111,7 +115,9 @@ python3 tooling/renewal/renew.py mac-adopt --config /path/to/configuration-priva
   its application identity. It records lock state and app-presence read-back.
 - `mac-candidate` prepares a self-renewed copy of the Mac probe.
 - `mac-adopt` checks saved-session access in that copy before replacing the
-  configured stable probe path. It retains the previous app alongside that path.
+  configured stable probe path with an atomic sibling-directory exchange. It
+  retains the previous app at the exchange peer path. Process interruption
+  before or after publication leaves a runnable app at the stable path.
 
 Cooperating runs use one nonblocking lock alongside the configured probe, even
 when their receipt directories differ. This prevents overlapping scheduled and

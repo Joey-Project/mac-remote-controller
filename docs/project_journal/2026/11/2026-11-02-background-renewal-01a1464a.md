@@ -22,6 +22,14 @@ superseded_by:
   application identity, original entitlements and executable instruction bytes.
 - Require actual profile expiry advancement, matching Team/device/certificate,
   strict signatures, bounded private logs, and non-overlapping cooperating runs.
+- Publish self-renewed probes through an atomic sibling-directory exchange;
+  process-kill checks before/after publication keep the stable app path present.
+  Select the signing leaf from multi-certificate reference profiles and reject
+  non-object private configuration before any runtime access.
+- Preserve separate frozen Swift 6.3/6.4 closures for a dependency's versioned
+  manifests. CI-derived Swift 6.4 metadata changes only the reporting-library
+  identity/version; unrelated pins are identical. Unsupported toolchains stop
+  before reconstruction rather than silently resolving a different graph.
 - Keep device/account configuration, signed artifacts, certificates, sessions,
   raw logs and machine-specific receipts outside Git. No daily scheduler or
   automatic unlock helper is installed by these tools.

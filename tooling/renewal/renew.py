@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import contextmanager
+import ctypes
 import datetime as dt
 import fcntl
 import hashlib
@@ -14,6 +15,7 @@ import shutil
 import stat
 import struct
 import subprocess
+import sys
 import time
 import uuid
 
@@ -48,7 +50,7 @@ def read_config(path):
         content = source.read(16385)
     require(len(content) <= 16384, "configuration-too-large")
     config = json.loads(content)
-    require(set(config) == CONFIG_KEYS, "unexpected-configuration-fields")
+    require(isinstance(config, dict) and set(config) == CONFIG_KEYS, "unexpected-configuration-fields")
     require(all(isinstance(v, str) and v and "\0" not in v for v in config.values()), "invalid-configuration")
     for key in ("probeApp", "iosApp", "runDirectory"):
         require(Path(config[key]).is_absolute(), "absolute-path-required")
@@ -90,6 +92,36 @@ def authorized_groups(entitlements, profile):
     allowed = profile["Entitlements"].get("keychain-access-groups", [])
     return all(any(rule == group or (rule.endswith("*") and group.startswith(rule[:-1])) for rule in allowed)
         for group in entitlements.get("keychain-access-groups", []))
+
+
+def authorized_leaf(profile, leaf):
+    require(leaf in profile["DeveloperCertificates"], "reference-certificate-mismatch")
+    return leaf
+
+
+def atomic_exchange(first, second):
+    """Keep the stable app directory present across interrupted publication.
+
+    Both sibling directories already exist. The single filesystem operation
+    swaps them; the displaced app remains at the staging path for recovery.
+    Cooperating callers hold exclusive_probe. No timestamp heuristic is used.
+    """
+    require(first.parent == second.parent, "atomic-adoption-needs-same-parent")
+    library = ctypes.CDLL(None, use_errno=True)
+    name = "renameatx_np" if sys.platform == "darwin" else "renameat2" if sys.platform.startswith("linux") else ""
+    exchange = getattr(library, name, None) if name else None
+    require(exchange is not None, "atomic-adoption-unavailable")
+    exchange.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    exchange.restype = ctypes.c_int
+    parent = os.open(first.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        require(all(stat.S_ISDIR(os.stat(p.name, dir_fd=parent, follow_symlinks=False).st_mode) for p in (first, second)),
+            "atomic-adoption-needs-app-directories")
+        # Darwin RENAME_SWAP and Linux RENAME_EXCHANGE both use flag 2.
+        if exchange(parent, os.fsencode(first.name), parent, os.fsencode(second.name), 2) != 0:
+            raise RenewalError("atomic-adoption-exchange-failed")
+    finally:
+        os.close(parent)
 
 
 def instruction_hash(path):
@@ -188,19 +220,18 @@ class Run(CommandLog):
         team, = old["TeamIdentifier"]
         bundle = MAC_ID if target == "mac" else IOS_ID
         require(identifier(old) == f"{team}.{bundle}", "reference-identity-mismatch")
+        self.verify_signature(reference)
+        prefix = self.root / "reference-leaf-"
+        self.command("read-certificate", ["codesign", "-d", f"--extract-certificates={prefix}", str(reference)])
+        certificate = authorized_leaf(old, Path(str(prefix) + "0").read_bytes())
         if target == "mac":
             hardware = json.loads(self.command("hardware", ["system_profiler", "SPHardwareDataType", "-json"]))["SPHardwareDataType"][0]
             devices = [v for k, v in hardware.items() if "udid" in k.lower() and v in old["ProvisionedDevices"]]
             require(len(devices) == 1, "mac-provisioning-udid-mismatch")
             device = devices[0]
-            prefix = self.root / "mac-leaf-"
-            self.command("read-certificate", ["codesign", "-d", f"--extract-certificates={prefix}", str(reference)])
-            certificate = Path(str(prefix) + "0").read_bytes()
-            require(certificate in old["DeveloperCertificates"], "reference-certificate-mismatch")
         else:
             device = self.config["deviceUDID"]
             require(device in old["ProvisionedDevices"], "reference-device-mismatch")
-            certificate, = old["DeveloperCertificates"]
         cert = self.root / "certificate.der"
         cert.write_bytes(certificate)
         out = self.root / "issued"
@@ -278,7 +309,8 @@ class Run(CommandLog):
     def execute(self, action):
         self.verify_signature(self.probe)
         existing = self.profile(self.probe / "Contents/embedded.provisionprofile")
-        require(identifier(existing).split(".", 1)[-1] == MAC_ID, "unexpected-probe-identity")
+        probe_id = identifier(existing)
+        require(isinstance(probe_id, str) and probe_id.split(".", 1)[-1] == MAC_ID, "unexpected-probe-identity")
         require(utc(existing["ExpirationDate"]) > now(), "mac-probe-expired-bootstrap-required")
         mac = action in ("mac-candidate", "mac-adopt")
         reference = self.probe if mac else Path(self.config["iosApp"])
@@ -297,17 +329,13 @@ class Run(CommandLog):
             require(authenticated and self.locked() is True, "candidate-session-or-lock-check-failed")
             suffix = uuid.uuid4().hex
             staged = self.probe.with_name(f".renewal-{suffix}.app")
-            backup = self.probe.with_name(f".previous-{suffix}.app")
-            self.summary.update(stagedProbe=str(staged), previousProbeBackup=str(backup))
+            self.summary.update(stagedProbe=str(staged))
             shutil.copytree(candidate, staged, symlinks=True)
             self.verify_signature(staged)
-            self.probe.rename(backup)
-            try:
-                staged.rename(self.probe)
-            except OSError:
-                backup.rename(self.probe)
-                raise
-            self.summary.update(macProbeUpdated=True, previousProbeBackup=str(backup))
+            (self.root / "adoption-prepared.json").write_text(json.dumps({"stableProbe": str(self.probe),
+                "exchangePeer": str(staged), "candidateSHA256": self.summary["candidateSHA256"]}) + "\n")
+            atomic_exchange(staged, self.probe)
+            self.summary.update(macProbeUpdated=True, previousProbeBackup=str(staged))
             candidate = self.probe
         self.summary.update(status="passed", candidatePath=str(candidate), finishedAt=now().isoformat())
 

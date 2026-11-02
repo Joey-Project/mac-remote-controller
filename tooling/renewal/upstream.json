@@ -12,5 +12,6 @@
     "Sources/XToolSupport/AuthCommand.swift",
     "Sources/XToolSupport/DSCommands/DSCommand.swift",
     "Sources/XToolSupport/DSCommands/DSRenewalProbeCommand.swift"
-  ]
+  ],
+  "resolvedSwift64SHA256": "98bb4095252adbb7d0fb9a05e17d2262dc04388c82ae0f997b0a5b4e9d094287"
 }
