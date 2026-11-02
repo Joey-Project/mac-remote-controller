@@ -41,3 +41,4 @@ bool SRCreateCanaryGrant(const char *directory, uid_t owner, SRConsoleSnapshot s
 bool SRConsumeCanaryGrant(const char *directory, uid_t owner, SRConsoleSnapshot snapshot,
                           double now);
 bool SRRevokeCanaryGrant(const char *directory, uid_t owner);
+bool SRConsumeCurrentCanaryGrant(const char *directory, uid_t owner);

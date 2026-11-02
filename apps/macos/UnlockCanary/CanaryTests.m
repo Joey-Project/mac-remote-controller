@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -216,6 +217,28 @@ static void concurrencyCase(NSString *parent) {
     check(atomic_load(&race.winners) == 1, "one winner among concurrent consumers");
 }
 
+static void publicationWhileConsumingCase(NSString *parent) {
+    NSString *directory = newGrant(parent);
+    int fd = open(directory.fileSystemRepresentation, O_RDONLY | O_DIRECTORY);
+    check(fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) == 0, "hold consumer operation lock");
+    check(renameat(fd, "grant", fd, "claimed-fixture") == 0, "pause after old grant claim");
+    check(!SRCreateCanaryGrant(directory.fileSystemRepresentation, getuid(), fixture(), 101),
+          "replacement cannot publish during old consumption");
+    check(!SRConsumeCanaryGrant(directory.fileSystemRepresentation, getuid(), fixture(), 101),
+          "other consumer refuses busy operation without waiting");
+    check(!SRRevokeCanaryGrant(directory.fileSystemRepresentation, getuid()),
+          "revocation never races an active consumer");
+    check(unlinkat(fd, "claimed-fixture", 0) == 0, "finish old consumption");
+    check(close(fd) == 0, "release operation lock");
+    check(SRCreateCanaryGrant(directory.fileSystemRepresentation, getuid(), fixture(), 101),
+          "replacement publishes after old consumption finishes");
+    check(SRConsumeCanaryGrant(directory.fileSystemRepresentation, getuid(), fixture(), 102),
+          "replacement remains consumable without orphaned authority");
+    NSArray *remaining = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:directory
+                                                                             error:NULL];
+    check(remaining.count == 0, "no orphaned consumed replacement remains");
+}
+
 static AuthorizationResult lastResult;
 static OSStatus captureResult(AuthorizationEngineRef engine, AuthorizationResult result) {
     (void)engine;
@@ -245,6 +268,14 @@ static void callbackCases(void) {
     check(functions->MechanismCreate(plugin, engine, "unlock", &mechanism) !=
               errAuthorizationSuccess,
           "real unlock mechanism is unavailable in canary");
+    check(functions->MechanismCreate(plugin, engine, "OtherPlugin:canary", &mechanism) !=
+              errAuthorizationSuccess,
+          "foreign qualified mechanism denied");
+    check(functions->MechanismCreate(plugin, engine, "SofaRemoteUnlockCanary:canary", &mechanism) ==
+              errAuthorizationSuccess,
+          "qualified canary mechanism creates");
+    check(functions->MechanismDestroy(mechanism) == errAuthorizationSuccess,
+          "qualified mechanism destroyed");
     check(functions->MechanismCreate(plugin, engine, "canary", &mechanism) ==
               errAuthorizationSuccess,
           "canary mechanism creates");
@@ -269,6 +300,7 @@ int main(int argc, const char **argv) {
         semanticCases(parent);
         fileCases(parent);
         concurrencyCase(parent);
+        publicationWhileConsumingCase(parent);
         callbackCases();
         check([[NSFileManager defaultManager] removeItemAtPath:parent error:NULL],
               "remove owned fixtures");

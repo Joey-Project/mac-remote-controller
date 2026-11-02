@@ -19,7 +19,8 @@ static OSStatus destroy(AuthorizationPluginRef plugin) {
 
 static OSStatus create(AuthorizationPluginRef plugin, AuthorizationEngineRef engine,
                        AuthorizationMechanismId name, AuthorizationMechanismRef *result) {
-    if (!plugin || !engine || !name || !result || strcmp(name, "canary"))
+    if (!plugin || !engine || !name || !result ||
+        (strcmp(name, "canary") && strcmp(name, "SofaRemoteUnlockCanary:canary")))
         return errAuthorizationInternal;
     SRMechanism *mechanism = calloc(1, sizeof(*mechanism));
     if (!mechanism)
@@ -33,8 +34,7 @@ static OSStatus create(AuthorizationPluginRef plugin, AuthorizationEngineRef eng
 static OSStatus invoke(AuthorizationMechanismRef reference) {
     @autoreleasepool {
         SRMechanism *mechanism = reference;
-        bool allowed = geteuid() == 0 && SRConsumeCanaryGrant(SR_CANARY_DIRECTORY, 0,
-                                                              SRReadConsole(), SRContinuousTime());
+        bool allowed = geteuid() == 0 && SRConsumeCurrentCanaryGrant(SR_CANARY_DIRECTORY, 0);
         return mechanism->plugin->callbacks->SetResult(
             mechanism->engine, allowed ? kAuthorizationResultAllow : kAuthorizationResultDeny);
     }

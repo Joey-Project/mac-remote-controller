@@ -35,6 +35,10 @@ FIFOs, ownership/permissions, replay, cancellation and 16 concurrent consumers.
 Grant lifetimes use continuous time, including time asleep. Directory child
 churn does not revoke an unchanged file; object replacement, invalid contents
 and access-policy changes are separate refusal conditions.
+Writer, consumer and revoker acquire the same nonblocking directory lock before
+opening a grant, preventing an old consumer from moving a replacement grant.
+The real callback refreshes OS state and time immediately before its decision.
+Only bare and exactly qualified canary mechanism identifiers are allowlisted.
 
 ## Reviewed administrator canary
 

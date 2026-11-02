@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
@@ -124,6 +125,12 @@ static int privateDirectory(const char *path, uid_t owner) {
         close(fd);
         return -1;
     }
+    // Hold one nonblocking operation lock before opening any grant. This keeps
+    // publication, claim and revocation ordered without waiting in authd.
+    if (flock(fd, LOCK_EX | LOCK_NB)) {
+        close(fd);
+        return -1;
+    }
     return fd;
 }
 
@@ -165,8 +172,8 @@ bool SRCreateCanaryGrant(const char *directory, uid_t owner, SRConsoleSnapshot s
     return success;
 }
 
-bool SRConsumeCanaryGrant(const char *directory, uid_t owner, SRConsoleSnapshot snapshot,
-                          double now) {
+static bool consumeGrant(const char *directory, uid_t owner, SRConsoleSnapshot snapshot, double now,
+                         bool observeCurrentSession) {
     int parent = privateDirectory(directory, owner);
     if (parent < 0)
         return false;
@@ -195,6 +202,11 @@ bool SRConsumeCanaryGrant(const char *directory, uid_t owner, SRConsoleSnapshot 
     bool readOK = ownClaim && pread(fd, &grant, sizeof(grant), 0) == sizeof(grant) &&
                   fstat(fd, &final) == 0 && sameObject(initial, final) &&
                   privateGrant(final, owner);
+    if (observeCurrentSession) {
+        // Recheck at the decision, after claiming the selected grant under lock.
+        snapshot = SRReadConsole();
+        now = SRContinuousTime();
+    }
     close(fd);
     if (ownClaim)
         unlinkat(parent, claimed, 0);
@@ -202,6 +214,15 @@ bool SRConsumeCanaryGrant(const char *directory, uid_t owner, SRConsoleSnapshot 
     // The selected property is object identity/access policy; timestamps are irrelevant.
     // Files are immutable publications from the cooperating root-only writer.
     return readOK && SRCanaryMatches(&grant, snapshot, now);
+}
+
+bool SRConsumeCanaryGrant(const char *directory, uid_t owner, SRConsoleSnapshot snapshot,
+                          double now) {
+    return consumeGrant(directory, owner, snapshot, now, false);
+}
+
+bool SRConsumeCurrentCanaryGrant(const char *directory, uid_t owner) {
+    return consumeGrant(directory, owner, (SRConsoleSnapshot){0}, NAN, true);
 }
 
 bool SRRevokeCanaryGrant(const char *directory, uid_t owner) {
