@@ -1,0 +1,8 @@
+.local/
+__pycache__/
+*.pyc
+configuration-private.json
+*.mobileprovision
+*.provisionprofile
+*.der
+*.app/

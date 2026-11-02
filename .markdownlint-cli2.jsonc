@@ -10,6 +10,7 @@
     "!**/.build/**",
     "!**/build/**",
     "!**/.codex-tmp/**",
+    "!tooling/renewal/.local/**",
     "!docs/project_journal/INDEX.md",
   ],
 }
