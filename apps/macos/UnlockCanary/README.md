@@ -54,6 +54,10 @@ resource seal and probe bytes. A reviewed installation requires that exact
 fingerprint, and refuses existing destinations or an existing dedicated right.
 Root operations must be approved through the Mac's normal administrator
 authorization; passwords never belong in arguments, environment or chat.
+The installed definition must retain the exact mechanism, sharing and retry
+settings, plus the system `security` tool's exact creator requirement. The
+tested macOS records that creator information and omits a mechanism timeout;
+the installer does not treat arbitrary extra fields as harmless metadata.
 
 ```sh
 sudo python3 -I tooling/unlock/install_canary.py install \
@@ -66,7 +70,20 @@ non-setuid probe in `/Library/PrivilegedHelperTools`, and owner-private state
 under `/private/var/db/com.joeyteng.sofaremote.unlock-canary`. No agent or daemon
 is registered. Both before and after installation, the existing screen-lock
 policy must match. Partial installation preserves a recovery intent; automatic
-reinstallation or interrupted-install recovery is deliberately not claimed.
+reinstallation is deliberately not claimed.
+
+One narrow incomplete-install recovery is supported after inspecting a failed
+transaction: the root-owned prepared receipt is the only state entry, both
+published artifacts match the reviewed fingerprint and verify their signatures,
+and the dedicated right has the expected definition and creator. This covers
+the first physical trial's OS-normalized-definition refusal. Recovery removes
+those matching test components; it does not complete or retry installation.
+Staged, changed, unknown or already completed state is refused.
+
+```sh
+sudo python3 -I tooling/unlock/install_canary.py recover-incomplete \
+  --expected-build-sha256 REVIEWED_BUILD_SHA256
+```
 
 While the Mac is unlocked, an administrator can arm one five-second canary
 grant and an ordinary user can evaluate the dedicated right:

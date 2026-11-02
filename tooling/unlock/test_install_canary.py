@@ -19,10 +19,20 @@ SPEC.loader.exec_module(installer)
 class InstallerAdmissionTests(unittest.TestCase):
     def test_definition_is_only_the_inert_canary(self):
         self.assertEqual(installer.DEFINITION["mechanisms"], ["SofaRemoteUnlockCanary:canary,privileged"])
-        self.assertTrue(installer.own_definition({**installer.DEFINITION, "created": 1, "version": 0}))
+        self.assertTrue(installer.own_definition({**installer.DEFINITION, **installer.CREATOR, "created": 1, "version": 0}))
+        self.assertFalse(installer.own_definition(installer.DEFINITION))
         self.assertFalse(installer.own_definition({**installer.DEFINITION, "rule": ["allow"]}))
         self.assertFalse(installer.own_definition({**installer.DEFINITION, "shared": True}))
         self.assertFalse(installer.own_definition({"class": "allow"}))
+
+    def test_observed_macos_rule_has_exact_creator_and_no_timeout(self):
+        observed = {"class": "evaluate-mechanisms", "created": 1.0, "modified": 1.0,
+            "identifier": "com.apple.security", "requirement": 'identifier "com.apple.security" and anchor apple',
+            "mechanisms": ["SofaRemoteUnlockCanary:canary,privileged"], "shared": False, "tries": 1, "version": 0}
+        self.assertTrue(installer.own_definition(observed))
+        for change in ({"identifier": "another.creator"}, {"requirement": "allow"}, {"timeout": 300},
+            {"shared": True}, {"shared": 0}, {"tries": True}, {"rule": ["allow"]}):
+            self.assertFalse(installer.own_definition({**observed, **change}), change)
 
     def test_policy_mutations_cannot_target_system_unlock(self):
         for operation in ("write", "remove"):
@@ -127,7 +137,7 @@ class InstallerTransactionTests(unittest.TestCase):
         if operation == "write":
             if self.fail_registration:
                 return 1, b"", b"registration failed"
-            self.policies[name] = {**plistlib.loads(body), "created": 1, "version": 0}
+            self.policies[name] = {**plistlib.loads(body), **installer.CREATOR, "created": 1, "version": 0}
             if self.external_policy_change:
                 self.policies["system.login.screensaver"] = {"class": "rule", "rule": ["new-vendor"]}
         elif operation == "remove":
@@ -194,6 +204,70 @@ class InstallerTransactionTests(unittest.TestCase):
         with self.assertRaises(installer.Refused):
             installer.uninstall()
         self.assertEqual(self.probe.read_bytes(), b"replacement fixture")
+        self.assertEqual(self.writes, ["write"])
+
+    def published_incomplete_fixture(self):
+        # Reproduce the first physical run: both artifacts and the OS-normalized
+        # right exist, but the old installer stopped before its completion files.
+        installer.install(self.build, self.expected)
+        (self.state / "complete").unlink()
+        (self.state / "definition.plist").unlink()
+
+    def test_recover_observed_incomplete_installation(self):
+        self.published_incomplete_fixture()
+        installer.recover_incomplete(self.expected)
+        self.assertFalse(self.plugin.exists())
+        self.assertFalse(self.probe.exists())
+        self.assertFalse(self.state.exists())
+        self.assertIsNone(self.policies[installer.RIGHT])
+        self.assertEqual(self.policies["system.login.screensaver"], self.baseline)
+
+    def test_completed_installation_is_not_incomplete_recovery(self):
+        installer.install(self.build, self.expected)
+        with self.assertRaises(installer.Refused):
+            installer.recover_incomplete(self.expected)
+        self.assertTrue((self.state / "complete").is_file())
+        self.assertEqual(self.writes, ["write"])
+
+    def test_recovery_refuses_mismatched_reviewed_build(self):
+        self.published_incomplete_fixture()
+        with self.assertRaises(installer.Refused):
+            installer.recover_incomplete("0" * 64)
+        self.assertTrue(self.probe.is_file())
+        self.assertEqual(self.writes, ["write"])
+
+    def test_recovery_preserves_unknown_state(self):
+        self.published_incomplete_fixture()
+        unknown = self.state / "unexpected"
+        unknown.write_bytes(b"preserve this evidence")
+        with self.assertRaises(installer.Refused):
+            installer.recover_incomplete(self.expected)
+        self.assertEqual(unknown.read_bytes(), b"preserve this evidence")
+        self.assertEqual(self.writes, ["write"])
+
+    def test_recovery_preserves_replaced_artifact(self):
+        self.published_incomplete_fixture()
+        self.probe.write_bytes(b"replacement fixture")
+        with self.assertRaises(installer.Refused):
+            installer.recover_incomplete(self.expected)
+        self.assertEqual(self.probe.read_bytes(), b"replacement fixture")
+        self.assertEqual(self.writes, ["write"])
+
+    def test_recovery_preserves_foreign_creator(self):
+        self.published_incomplete_fixture()
+        self.policies[installer.RIGHT]["identifier"] = "another.creator"
+        with self.assertRaises(installer.Refused):
+            installer.recover_incomplete(self.expected)
+        self.assertTrue(self.plugin.is_dir())
+        self.assertEqual(self.policies[installer.RIGHT]["identifier"], "another.creator")
+        self.assertEqual(self.writes, ["write"])
+
+    def test_recovery_signature_failure_preserves_state(self):
+        self.published_incomplete_fixture()
+        self.fail_signature = True
+        with self.assertRaises(installer.Refused):
+            installer.recover_incomplete(self.expected)
+        self.assertTrue(self.probe.is_file())
         self.assertEqual(self.writes, ["write"])
 
 

@@ -20,7 +20,10 @@ PLUGIN = Path("/Library/Security/SecurityAgentPlugins/SofaRemoteUnlockCanary.bun
 PROBE = Path("/Library/PrivilegedHelperTools/com.joeyteng.sofaremote.unlock-canary")
 PLUGIN_FILES = ("Contents/Info.plist", "Contents/MacOS/SofaRemoteUnlockCanary", "Contents/_CodeSignature/CodeResources")
 DEFINITION = {"class": "evaluate-mechanisms", "mechanisms": ["SofaRemoteUnlockCanary:canary,privileged"],
-    "shared": False, "tries": 1, "timeout": 0}
+    "shared": False, "tries": 1}
+# authorizationdb records the system security tool as the rule's creator.
+# evaluate-mechanisms does not round-trip a timeout field on the tested OS.
+CREATOR = {"identifier": "com.apple.security", "requirement": 'identifier "com.apple.security" and anchor apple'}
 METADATA = {"created", "modified", "version"}
 
 
@@ -94,7 +97,12 @@ def right_definition(name):
 
 
 def own_definition(value):
-    return isinstance(value, dict) and {key: item for key, item in value.items() if key not in METADATA} == DEFINITION
+    if not isinstance(value, dict):
+        return False
+    actual = {key: item for key, item in value.items() if key not in METADATA}
+    expected = {**DEFINITION, **CREATOR}
+    return actual.keys() == expected.keys() and all(
+        type(actual[key]) is type(item) and actual[key] == item for key, item in expected.items())
 
 
 def verify_signature(path):
@@ -228,10 +236,37 @@ def uninstall():
     STATE.rmdir()
 
 
+def recover_incomplete(expected):
+    # Only the observed post-publication failure is recoverable here. Staging,
+    # partial removal and completed installations retain their separate paths.
+    require(re.fullmatch(r"[a-f0-9]{64}", expected) is not None, "a-reviewed-build-fingerprint-is-required")
+    for parent in (PLUGIN.parent, PROBE.parent, STATE):
+        parent_is_protected(parent)
+    require(stat.S_IMODE(STATE.stat().st_mode) == 0o700, "unsafe-state-directory")
+    require({path.name for path in STATE.iterdir()} == {"receipt.json"},
+        "incomplete-state-needs-manual-diagnosis")
+    receipt = json.loads(read_regular(STATE / "receipt.json", 16384, private=True))
+    require(receipt == {"version": 1, "phase": "prepared", "fingerprint": expected},
+        "incomplete-receipt-mismatch")
+    require(fingerprint(snapshot(PLUGIN, PROBE)) == expected, "installed-artifacts-have-changed")
+    verify_signature(PLUGIN)
+    verify_signature(PROBE)
+    require(own_definition(right_definition(RIGHT)), "authorization-definition-conflict")
+    baseline = right_definition("system.login.screensaver")
+    require(baseline is not None, "system-policy-unavailable")
+    code, _, _ = native("security", ["authorizationdb", "remove", RIGHT])
+    require(code == 0 and right_definition(RIGHT) is None, "canary-right-removal-unconfirmed")
+    remove_known_plugin(PLUGIN)
+    PROBE.unlink()
+    require(right_definition("system.login.screensaver") == baseline, "system-policy-changed-during-recovery")
+    (STATE / "receipt.json").unlink()
+    STATE.rmdir()
+
+
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("plan", "install", "uninstall"))
+    parser.add_argument("operation", choices=("plan", "install", "uninstall", "recover-incomplete"))
     parser.add_argument("--build", type=Path)
     parser.add_argument("--expected-build-sha256")
     args = parser.parse_args()
@@ -248,6 +283,9 @@ def main():
         if args.operation == "install":
             require(args.build is not None and args.expected_build_sha256 is not None, "reviewed-build-required")
             install(args.build, args.expected_build_sha256)
+        elif args.operation == "recover-incomplete":
+            require(args.expected_build_sha256 is not None, "reviewed-build-required")
+            recover_incomplete(args.expected_build_sha256)
         else:
             uninstall()
         print(json.dumps({"status": "passed", "operation": args.operation, "authorizationRight": RIGHT}))
