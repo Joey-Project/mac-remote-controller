@@ -1,7 +1,9 @@
 """Explicit administrator installation for an isolated authorization canary."""
 
 import argparse
+import contextlib
 import ctypes
+import fcntl
 import hashlib
 import json
 import os
@@ -54,7 +56,41 @@ def read_regular(path, maximum=8 * 1024 * 1024, private=False):
 
 
 def snapshot(plugin, probe):
+    # Enumerate only the four fixed directories. Unknown entries stop admission
+    # before teardown, rather than causing a later nonempty-directory failure.
+    tree = {"": {"Contents"}, "Contents": {"Info.plist", "MacOS", "_CodeSignature"},
+        "Contents/MacOS": {"SofaRemoteUnlockCanary"}, "Contents/_CodeSignature": {"CodeResources"}}
+    for name, expected in tree.items():
+        directory = plugin / name
+        info = directory.lstat()
+        require(stat.S_ISDIR(info.st_mode) and not info.st_mode & 0o022, "unsafe-bundle-directory")
+        entries = set()
+        for entry in directory.iterdir():
+            entries.add(entry.name)
+            require(len(entries) <= len(expected), "unexpected-bundle-entry")
+        require(entries == expected, "unexpected-bundle-entry")
     return {**{name: read_regular(plugin / name) for name in PLUGIN_FILES}, "probe": read_regular(probe)}
+
+
+@contextlib.contextmanager
+def state_operation_lock():
+    # Share the native grant writer/consumer's nonblocking directory flock.
+    # Bind identity and access policy; directory child churn is not replacement.
+    before = STATE.lstat()
+    require(stat.S_ISDIR(before.st_mode) and before.st_uid == os.geteuid()
+        and stat.S_IMODE(before.st_mode) == 0o700, "unsafe-state-directory")
+    fd = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        opened = os.fstat(fd)
+        require((before.st_dev, before.st_ino, before.st_uid, before.st_mode)
+            == (opened.st_dev, opened.st_ino, opened.st_uid, opened.st_mode), "state-directory-replaced")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Refused("state-operation-busy") from None
+        yield
+    finally:
+        os.close(fd)
 
 
 def fingerprint(files):
@@ -157,6 +193,11 @@ def install(build, expected):
     baseline = right_definition("system.login.screensaver")
     require(baseline is not None, "system-policy-unavailable")
     STATE.mkdir(mode=0o700)
+    with state_operation_lock():
+        _publish_installation(files, expected, baseline)
+
+
+def _publish_installation(files, expected, baseline):
     # Retain intent even when staging or signature admission fails before publication.
     private_receipt({"version": 1, "phase": "prepared", "fingerprint": expected})
     staged_plugin, staged_probe = STATE / "staged-plugin.bundle", STATE / "staged-probe"
@@ -208,7 +249,7 @@ def install(build, expected):
         raise
 
 
-def uninstall():
+def _uninstall_locked():
     parent_is_protected(STATE)
     require(stat.S_IMODE(STATE.stat().st_mode) == 0o700, "unsafe-state-directory")
     require({path.name for path in STATE.iterdir()}.issubset({"receipt.json", "definition.plist", "complete", "grant"}),
@@ -236,7 +277,12 @@ def uninstall():
     STATE.rmdir()
 
 
-def recover_incomplete(expected):
+def uninstall():
+    with state_operation_lock():
+        _uninstall_locked()
+
+
+def _recover_incomplete_locked(expected):
     # Only the observed post-publication failure is recoverable here. Staging,
     # partial removal and completed installations retain their separate paths.
     require(re.fullmatch(r"[a-f0-9]{64}", expected) is not None, "a-reviewed-build-fingerprint-is-required")
@@ -261,6 +307,11 @@ def recover_incomplete(expected):
     require(right_definition("system.login.screensaver") == baseline, "system-policy-changed-during-recovery")
     (STATE / "receipt.json").unlink()
     STATE.rmdir()
+
+
+def recover_incomplete(expected):
+    with state_operation_lock():
+        _recover_incomplete_locked(expected)
 
 
 def main():

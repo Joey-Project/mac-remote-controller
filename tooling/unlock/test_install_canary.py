@@ -3,6 +3,7 @@
 import importlib.util
 import copy
 import contextlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -269,6 +270,111 @@ class InstallerTransactionTests(unittest.TestCase):
             installer.recover_incomplete(self.expected)
         self.assertTrue(self.probe.is_file())
         self.assertEqual(self.writes, ["write"])
+
+    def test_extra_candidate_bundle_entry_stops_before_publication(self):
+        source = self.build / self.plugin.name
+        (source / "Contents/extra").write_bytes(b"unowned file")
+        with self.assertRaises(installer.Refused):
+            installer.install(self.build, self.expected)
+        self.assertFalse(self.state.exists())
+        self.assertEqual(self.writes, [])
+
+    def test_uninstall_preserves_bundle_with_extra_entries(self):
+        installer.install(self.build, self.expected)
+        extra = self.plugin / "Contents/extra"
+        extra.mkdir()
+        (extra / "evidence").write_bytes(b"preserve")
+        with self.assertRaises(installer.Refused):
+            installer.uninstall()
+        self.assertEqual((extra / "evidence").read_bytes(), b"preserve")
+        self.assertTrue((self.plugin / installer.PLUGIN_FILES[1]).is_file())
+        self.assertIsNotNone(self.policies[installer.RIGHT])
+        self.assertEqual(self.writes, ["write"])
+
+    def test_recovery_preserves_bundle_with_extra_entries(self):
+        self.published_incomplete_fixture()
+        extra = self.plugin / "Contents/MacOS/extra"
+        extra.write_bytes(b"preserve")
+        with self.assertRaises(installer.Refused):
+            installer.recover_incomplete(self.expected)
+        self.assertEqual(extra.read_bytes(), b"preserve")
+        self.assertIsNotNone(self.policies[installer.RIGHT])
+        self.assertEqual(self.writes, ["write"])
+
+    @contextlib.contextmanager
+    def hold_native_operation_lock(self):
+        fd = os.open(self.state, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            yield
+        finally:
+            os.close(fd)
+
+    def test_uninstall_refuses_active_grant_operation(self):
+        installer.install(self.build, self.expected)
+        with self.hold_native_operation_lock(), self.assertRaisesRegex(installer.Refused, "state-operation-busy"):
+            installer.uninstall()
+        self.assertTrue((self.state / "complete").exists())
+        self.assertEqual(self.writes, ["write"])
+        installer.uninstall()
+        self.assertFalse(self.state.exists())
+
+    def test_recovery_refuses_active_grant_operation(self):
+        self.published_incomplete_fixture()
+        with self.hold_native_operation_lock(), self.assertRaisesRegex(installer.Refused, "state-operation-busy"):
+            installer.recover_incomplete(self.expected)
+        self.assertTrue(self.plugin.is_dir())
+        self.assertEqual(self.writes, ["write"])
+        installer.recover_incomplete(self.expected)
+        self.assertFalse(self.state.exists())
+
+    def test_teardown_holds_lock_through_right_and_artifact_removal(self):
+        installer.install(self.build, self.expected)
+        original_native = installer.native
+        original_remove = installer.remove_known_plugin
+        observed = []
+
+        def assert_locked():
+            with self.assertRaises(BlockingIOError), self.hold_native_operation_lock():
+                self.fail("Teardown lost the directory lock")
+
+        def native(tool, arguments, body=None):
+            if arguments[1] == "remove":
+                assert_locked()
+                observed.append("right")
+            return original_native(tool, arguments, body)
+
+        def remove(path):
+            assert_locked()
+            observed.append("bundle")
+            return original_remove(path)
+
+        with patch.object(installer, "native", native), patch.object(installer, "remove_known_plugin", remove):
+            installer.uninstall()
+        self.assertEqual(observed, ["right", "bundle"])
+
+    def test_install_holds_lock_through_artifact_and_right_publication(self):
+        original_publish = installer.publish
+        original_native = installer.native
+        observed = []
+
+        def assert_locked():
+            with self.assertRaises(BlockingIOError), self.hold_native_operation_lock():
+                self.fail("Installation lost the directory lock")
+
+        def publish(source, destination):
+            assert_locked()
+            observed.append("artifact")
+            return original_publish(source, destination)
+
+        def native(tool, arguments, body=None):
+            assert_locked()
+            observed.append("right")
+            return original_native(tool, arguments, body)
+
+        with patch.object(installer, "publish", publish), patch.object(installer, "native", native):
+            installer.install(self.build, self.expected)
+        self.assertEqual(observed, ["artifact", "artifact", "right"])
 
 
 if __name__ == "__main__":

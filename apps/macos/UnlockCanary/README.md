@@ -52,6 +52,8 @@ python3 -I tooling/unlock/install_canary.py plan \
 The returned build fingerprint binds the bundle's executable, Info.plist,
 resource seal and probe bytes. A reviewed installation requires that exact
 fingerprint, and refuses existing destinations or an existing dedicated right.
+Admission checks every entry in the bundle's four fixed directories before
+publication or removal. Extra files and directories are preserved for diagnosis.
 Root operations must be approved through the Mac's normal administrator
 authorization; passwords never belong in arguments, environment or chat.
 The installed definition must retain the exact mechanism, sharing and retry
@@ -71,6 +73,9 @@ under `/private/var/db/com.joeyteng.sofaremote.unlock-canary`. No agent or daemo
 is registered. Both before and after installation, the existing screen-lock
 policy must match. Partial installation preserves a recovery intent; automatic
 reinstallation is deliberately not claimed.
+Installation, removal and incomplete-state recovery hold the same nonblocking
+directory lock as native grant operations, through validation and mutation.
+An active grant operation causes a refusal before teardown begins.
 
 One narrow incomplete-install recovery is supported after inspecting a failed
 transaction: the root-owned prepared receipt is the only state entry, both
