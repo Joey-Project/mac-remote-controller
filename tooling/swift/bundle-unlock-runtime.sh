@@ -40,11 +40,13 @@ lipo -create "${helper_slices[@]}" -output "$helpers/SofaRemoteUnlockHelper"
 lipo -create "${installer_slices[@]}" -output "$helpers/SofaRemoteUnlockInstaller"
 lipo -create "${plugin_slices[@]}" -output "$plugin/Contents/MacOS/SofaRemoteUnlock"
 chmod 755 "$helpers/SofaRemoteUnlockHelper" "$helpers/SofaRemoteUnlockInstaller"
-codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none \
+# Ad-hoc designated requirements bind nested images to their exact slices,
+# including when the outer companion uses a certificate-based identity.
+codesign --force --sign - --timestamp=none \
     --identifier com.joeyteng.sofaremote.unlock.helper "$helpers/SofaRemoteUnlockHelper"
-codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none \
+codesign --force --sign - --timestamp=none \
     --identifier com.joeyteng.sofaremote.unlock.installer "$helpers/SofaRemoteUnlockInstaller"
-codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none "$plugin"
+codesign --force --sign - --timestamp=none "$plugin"
 codesign --verify --strict "$plugin"
 codesign --verify --strict "$helpers/SofaRemoteUnlockHelper"
 codesign --verify --strict "$helpers/SofaRemoteUnlockInstaller"

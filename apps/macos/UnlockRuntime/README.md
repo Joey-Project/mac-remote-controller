@@ -28,7 +28,11 @@ update starts disabled and requires selecting allowed devices again.
 
 The administrator operation first copies the app into a root-private staging
 directory and verifies its pinned complete signature before running its
-installer. Interrupted staging is retained for diagnosis. Changed or unknown
+installer. It rejects links and other non-regular staged objects, validates all
+nested code, then checks the main identity for the running architecture.
+Privileged nested images use ad-hoc signatures to pin their exact slices even
+when the outer app uses a certificate-based signing identity. Interrupted
+staging is retained for diagnosis. Changed or unknown
 system artifacts are preserved, and setup reports a conflict instead of
 overwriting another tool's configuration. A timeout is an unconfirmed operation;
 inspect its status before starting another setup operation.

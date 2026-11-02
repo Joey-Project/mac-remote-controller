@@ -10,6 +10,8 @@ public enum UnlockSetupCommand {
         else { throw UnlockFailure.invalidRequest }
         let source = try quote(app.path)
         let requirement = try quote(clientRequirement)
+        let validation = try validationScript(
+            shellPath: "\"$staging/SofaRemoteMac.app\"", clientRequirement: clientRequirement)
         let operation = uninstall ? "uninstall" : "install"
         // Only system tools run before the entire private copy passes a pinned
         // code-directory requirement. The installer then runs from that copy.
@@ -25,10 +27,40 @@ public enum UnlockSetupCommand {
             }
             trap finish EXIT
             /usr/bin/ditto --noqtn \(source) "$staging/SofaRemoteMac.app"
-            /usr/bin/codesign --verify --deep --strict -R \(requirement) "$staging/SofaRemoteMac.app"
+            \(validation)
             "$staging/SofaRemoteMac.app/Contents/Helpers/SofaRemoteUnlockInstaller" \(operation) \\
                 --app "$staging/SofaRemoteMac.app" --uid \(uid) --client \(requirement)
             completed=1
+            """
+    }
+
+    public static func validationScript(app: URL, clientRequirement: String) throws -> String {
+        try validationScript(shellPath: quote(app.path), clientRequirement: clientRequirement)
+    }
+
+    private static func validationScript(shellPath: String, clientRequirement: String) throws
+        -> String
+    {
+        guard
+            UnlockInstallationRecord.validRequirement(
+                clientRequirement, identifier: UnlockPaths.appIdentifier)
+        else {
+            throw UnlockFailure.invalidRequest
+        }
+        #if arch(arm64)
+            let architecture = "arm64"
+        #else
+            let architecture = "x86_64"
+        #endif
+        let requirement = try quote("=" + clientRequirement)
+        // Containment: every staged object must be a regular file or directory.
+        // This keeps privileged reads/execution inside the private copied tree.
+        // Verify all nested slices, then pin just the running app architecture.
+        return """
+            unsafe=$(/usr/bin/find \(shellPath) ! -type d ! -type f -print -quit)
+            [ -z "$unsafe" ] || exit 1
+            /usr/bin/codesign --verify --deep --strict \(shellPath)
+            /usr/bin/codesign --verify --strict --architecture \(architecture) -R \(requirement) \(shellPath)
             """
     }
 
