@@ -13,10 +13,11 @@ final class UnlockController {
     private(set) var allowedDeviceIDs: [String] = []
     private(set) var message = "Remote unlock is not installed."
     var onChange: (() -> Void)?
+    var pairedDeviceIDs: (() -> Set<String>)?
     private let client = UnlockServiceClient()
     private var active: (connection: UUID, transaction: String)?
     private var starting = false
-    private var queuedDenials: Set<String> = []
+    private var queuedDenials = UnlockDeviceRevocations()
     private var lastRefresh = Date.distantPast
     private var setupFailureMessage: String?
 
@@ -57,6 +58,7 @@ final class UnlockController {
         }
         if let setupFailureMessage { message = setupFailureMessage }
         onChange?()
+        flushDenials()
     }
 
     func manage(uninstall: Bool) {
@@ -109,11 +111,14 @@ final class UnlockController {
     }
 
     func setDevice(_ identifier: String, allowed: Bool) {
-        if !allowed, isBusy {
-            queuedDenials.insert(identifier)
+        if !allowed {
+            queuedDenials.request(identifier)
+            flushDenials()
             return
         }
-        perform(UnlockRequest(allowed ? .allowDevice : .denyDevice, deviceID: identifier))
+        guard !isBusy else { return }
+        queuedDenials.cancel(identifier)
+        perform(UnlockRequest(.allowDevice, deviceID: identifier))
     }
 
     func unlock(device: String, connection: UUID) async throws {
@@ -175,8 +180,15 @@ final class UnlockController {
         isBusy = true
         setupFailureMessage = nil
         Task {
+            var succeeded = false
             do {
                 apply(try await client.send(request))
+                if request.operation == .denyDevice, let identifier = request.deviceID,
+                    queuedDenials.pending.contains(identifier)
+                {
+                    throw UnlockFailure.unknownOutcome
+                }
+                succeeded = true
             } catch {
                 message =
                     (error as? LocalizedError)?.errorDescription
@@ -184,14 +196,14 @@ final class UnlockController {
             }
             isBusy = false
             onChange?()
-            flushDenials()
+            if succeeded { flushDenials() }
         }
     }
 
     private func flushDenials() {
-        guard installed, !needsUpdate else { queuedDenials.removeAll(); return }
-        guard !isBusy, let identifier = queuedDenials.first else { return }
-        queuedDenials.remove(identifier)
+        guard installed, reachable, !needsUpdate, !isBusy,
+            let identifier = queuedDenials.next
+        else { return }
         perform(UnlockRequest(.denyDevice, deviceID: identifier))
     }
 
@@ -200,6 +212,8 @@ final class UnlockController {
         installed = response.installed
         enabled = response.enabled
         allowedDeviceIDs = response.allowedDeviceIDs
+        queuedDenials.reconcile(
+            allowed: Set(response.allowedDeviceIDs), paired: pairedDeviceIDs?())
         needsUpdate = false
         message =
             enabled

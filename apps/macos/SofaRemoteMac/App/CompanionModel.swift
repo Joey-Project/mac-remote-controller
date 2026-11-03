@@ -65,6 +65,9 @@ final class CompanionModel {
                 self?.remoteState.mediaTargets = targets
             }
             mediaAdapters.restoreEnabled()
+            unlockController.pairedDeviceIDs = { [weak self] in
+                Set(self?.pairedDevices.map(\.id) ?? [])
+            }
             unlockController.onChange = { [weak self] in self?.refreshStateAndBroadcast() }
             unlockController.refreshIfDue()
             try startListener()
