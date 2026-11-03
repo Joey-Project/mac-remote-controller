@@ -105,7 +105,9 @@ public enum UnlockDeployment {
             UnlockPaths.daemon.deletingLastPathComponent(),
             UnlockPaths.publicStatus.deletingLastPathComponent()
         ] {
-            try UnlockFiles.ensureDirectory(parent, owner: 0, mode: 0o755)
+            try UnlockFiles.ensureDirectory(
+                parent, owner: 0, mode: 0o755,
+                allowStickyBit: parent == UnlockPaths.helper.deletingLastPathComponent())
         }
         for path in [
             UnlockPaths.plugin, UnlockPaths.helper, UnlockPaths.daemon, UnlockPaths.publicStatus

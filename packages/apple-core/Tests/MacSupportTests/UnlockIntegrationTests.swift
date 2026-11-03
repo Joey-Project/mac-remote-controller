@@ -193,6 +193,53 @@ final class UnlockIntegrationTests: XCTestCase {
             info.st_mode & 0o7777, 0o700, "An existing access policy must not be changed.")
     }
 
+    func testSharedHelperParentAcceptsStickyBitWithoutChangingItsAccessPolicy() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "SofaStickyParent-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for mode: mode_t in [0o755, 0o1755] {
+            XCTAssertEqual(chmod(root.path, mode), 0)
+            var before = stat()
+            XCTAssertEqual(lstat(root.path, &before), 0)
+            try UnlockFiles.ensureDirectory(
+                root, owner: getuid(), mode: 0o755, allowStickyBit: true)
+            var after = stat()
+            XCTAssertEqual(lstat(root.path, &after), 0)
+            XCTAssertEqual(after.st_dev, before.st_dev)
+            XCTAssertEqual(after.st_ino, before.st_ino)
+            XCTAssertEqual(after.st_uid, before.st_uid)
+            XCTAssertEqual(after.st_mode, before.st_mode)
+        }
+        XCTAssertThrowsError(try UnlockFiles.ensureDirectory(root, owner: getuid(), mode: 0o755))
+        XCTAssertThrowsError(
+            try UnlockFiles.ensureDirectory(
+                root, owner: getuid() + 1, mode: 0o755, allowStickyBit: true))
+        let alias = root.deletingLastPathComponent().appendingPathComponent(
+            "SofaStickyLink-\(UUID().uuidString)")
+        XCTAssertEqual(symlink(root.path, alias.path), 0)
+        defer { try? FileManager.default.removeItem(at: alias) }
+        XCTAssertThrowsError(
+            try UnlockFiles.ensureDirectory(
+                alias, owner: getuid(), mode: 0o755, allowStickyBit: true))
+    }
+
+    func testSharedHelperParentStillRejectsWriteAccessAndOtherSpecialBits() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "SofaUnsafeParent-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for mode: mode_t in [0o775, 0o777, 0o1777, 0o2755, 0o4755, 0o700] {
+            XCTAssertEqual(chmod(root.path, mode), 0)
+            XCTAssertThrowsError(
+                try UnlockFiles.ensureDirectory(
+                    root, owner: getuid(), mode: 0o755, allowStickyBit: true))
+            var info = stat()
+            XCTAssertEqual(lstat(root.path, &info), 0)
+            XCTAssertEqual(info.st_mode & 0o7777, mode)
+        }
+    }
+
     func testPrivateRecoveryConfigRejectsCredentialFieldsLinksAndBroadMode() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "SofaRecoveryTest-\(UUID().uuidString)")

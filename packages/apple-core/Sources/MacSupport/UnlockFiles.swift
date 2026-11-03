@@ -26,7 +26,9 @@ public enum UnlockFiles {
         return bytes
     }
 
-    public static func ensureDirectory(_ url: URL, owner: uid_t, mode: mode_t) throws {
+    public static func ensureDirectory(
+        _ url: URL, owner: uid_t, mode: mode_t, allowStickyBit: Bool = false
+    ) throws {
         var value = stat()
         if lstat(url.path, &value) != 0 {
             guard errno == ENOENT, mkdir(url.path, mode) == 0 else {
@@ -44,8 +46,11 @@ public enum UnlockFiles {
                 throw UnlockFailure.unsafeFile
             }
         }
+        // A sticky bit further restricts deletion; it does not grant write
+        // access. Only the shared system helper parent opts into retaining it.
+        let actualMode = value.st_mode & 0o7777
         guard value.st_mode & S_IFMT == S_IFDIR, value.st_uid == owner,
-            value.st_mode & 0o7777 == mode
+            actualMode == mode || (allowStickyBit && actualMode == (mode | S_ISVTX))
         else { throw UnlockFailure.unsafeFile }
     }
 

@@ -18,6 +18,7 @@ final class UnlockController {
     private var starting = false
     private var queuedDenials: Set<String> = []
     private var lastRefresh = Date.distantPast
+    private var setupFailureMessage: String?
 
     func refreshIfDue() {
         guard !isBusy, Date().timeIntervalSince(lastRefresh) >= 5 else { return }
@@ -54,12 +55,14 @@ final class UnlockController {
                     (error as? LocalizedError)?.errorDescription ?? "Unlock helper unavailable."
             }
         }
+        if let setupFailureMessage { message = setupFailureMessage }
         onChange?()
     }
 
     func manage(uninstall: Bool) {
         guard !isBusy else { return }
         isBusy = true
+        setupFailureMessage = nil
         message = uninstall ? "Removing unlock helper…" : "Installing unlock helper…"
         Task {
             do {
@@ -91,6 +94,7 @@ final class UnlockController {
             } catch {
                 message =
                     (error as? LocalizedError)?.errorDescription ?? "Unlock setup did not complete."
+                setupFailureMessage = message
             }
             isBusy = false
             onChange?()
@@ -154,6 +158,7 @@ final class UnlockController {
     private func perform(_ request: UnlockRequest) {
         guard !isBusy else { return }
         isBusy = true
+        setupFailureMessage = nil
         Task {
             do {
                 apply(try await client.send(request))
