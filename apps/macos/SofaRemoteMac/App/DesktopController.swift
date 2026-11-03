@@ -28,8 +28,7 @@ final class DesktopController {
     }
 
     func requestAccessibility() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-        _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        _ = NativeUnlockTrigger.requestAccessibilityIfNeeded()
     }
 
     func execute(_ command: RemoteCommand, input: inout DesktopInputState) throws {

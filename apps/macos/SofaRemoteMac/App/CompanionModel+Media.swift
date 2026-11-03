@@ -29,7 +29,7 @@ extension CompanionModel {
         var state = state
         state.capabilities = [WireCapabilities.roundTripProbe, WireCapabilities.remoteUnlock]
         state.unlockAvailable =
-            unlockController.enabled
+            state.accessibilityGranted && unlockController.reachable && unlockController.enabled
             && client.deviceID.map(unlockController.allowedDeviceIDs.contains) == true
         return state
     }

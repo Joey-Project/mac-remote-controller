@@ -73,6 +73,8 @@ public enum UnlockFailure: String, Error, LocalizedError, Sendable {
     case notInstalled, notEnabled, deviceDenied, consoleUnavailable, wrongUser, notLocked
     case grantRefused, triggerUnavailable, cancelled, timedOut, unknownOutcome, setupIncomplete,
         setupUnconfirmed
+    case accessibilityRequired, passwordControlUnavailable, passwordFieldNotEmpty
+    case passwordControlNotWritable, passwordControlClearFailed
 
     public var errorDescription: String? {
         switch self {
@@ -87,6 +89,14 @@ public enum UnlockFailure: String, Error, LocalizedError, Sendable {
         case .deviceDenied: "Allow this paired device to unlock the Mac in the companion."
         case .notLocked: "This Mac is already unlocked."
         case .triggerUnavailable: "The Mac could not activate its native unlock control."
+        case .accessibilityRequired:
+            "Allow Accessibility in the Mac companion before using remote unlock."
+        case .passwordControlUnavailable:
+            "The Mac's native password control is unavailable. Show its password entry screen and try again."
+        case .passwordFieldNotEmpty:
+            "Clear any partially entered password on the Mac, then try again."
+        case .passwordControlNotWritable, .passwordControlClearFailed:
+            "The Mac could not clear its native password control. Unlock normally and try again."
         case .cancelled: "The unlock request was cancelled."
         case .timedOut, .unknownOutcome: "Unlock was not confirmed. The request was not retried."
         case .busy: "Another unlock or setup operation is in progress."

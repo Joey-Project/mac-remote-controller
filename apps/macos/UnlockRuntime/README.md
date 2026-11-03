@@ -12,6 +12,8 @@ section groups the existing Chrome/IINA setup with these controls:
 
 1. **Install Unlock Helper…** asks for native macOS administrator authorization.
    Installation leaves remote unlock off and preserves the screen-lock rule.
+   If Accessibility is missing, the companion also requests that separate system
+   permission. Enabling unlock waits for the user to grant it in System Settings.
 2. Turn on **Enable remote unlock**, then allow specific paired devices in the
    paired-device list. The iOS remote menu offers **Unlock Mac** only on a
    companion advertising this capability; the action is disabled without
@@ -58,10 +60,15 @@ the console session; it is not cryptographically bound to one loginwindow
 authentication attempt. Existing password/Touch ID authentication remains a
 fallback branch.
 
-The companion attempts a bounded Accessibility `AXConfirm` action on an empty
-native password field. It reads only the character count, never the field
-value, and sends no keyboard events. If that action is unavailable, the request
-is cancelled. There is no silent Return-key or password-typing fallback. Success
+The companion attempts a bounded Accessibility `AXConfirm` action on the exact
+system secure password control. It never reads the field value or sends keyboard
+events. When the OS omits character-count metadata, it sets only an empty string
+through the native setter before confirming. This can clear unsubmitted input;
+confirmation requires the empty write to succeed and the session to remain locked.
+Known nonempty fields and other read failures are refused. If native preparation
+or confirmation is unavailable, the request is cancelled. There is no silent
+Return-key or password-typing fallback. A timed-out confirmation reply is observed
+through the broker rather than re-sent. Success
 requires independently observing the same OS console become unlocked. Physical
 host compatibility, fallback authentication and Keychain health need explicit
 acceptance; compilation or isolated canary success is not full unlock proof.

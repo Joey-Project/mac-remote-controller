@@ -91,6 +91,7 @@ final class UnlockController {
                     uninstall
                     ? "Unlock helper removed. Existing lock-screen authentication restored."
                     : "Helper installed. Enable remote unlock, then allow a paired device below."
+                if !uninstall { _ = ensureAccessibility() }
             } catch {
                 message =
                     (error as? LocalizedError)?.errorDescription ?? "Unlock setup did not complete."
@@ -103,6 +104,7 @@ final class UnlockController {
     }
 
     func setEnabled(_ enabled: Bool) {
+        if enabled, !ensureAccessibility() { return }
         perform(UnlockRequest(enabled ? .enable : .disable))
     }
 
@@ -116,6 +118,9 @@ final class UnlockController {
 
     func unlock(device: String, connection: UUID) async throws {
         guard active == nil, !starting else { throw UnlockFailure.busy }
+        guard NativeUnlockTrigger.accessibilityGranted else {
+            throw UnlockFailure.accessibilityRequired
+        }
         starting = true
         defer { starting = false }
         let response = try await client.send(UnlockRequest(.begin, deviceID: device))
@@ -153,6 +158,16 @@ final class UnlockController {
         Task {
             _ = try? await client.send(UnlockRequest(.cancel, transactionID: active.transaction))
         }
+    }
+
+    private func ensureAccessibility() -> Bool {
+        guard NativeUnlockTrigger.requestAccessibilityIfNeeded() else {
+            message = UnlockFailure.accessibilityRequired.localizedDescription
+            setupFailureMessage = message
+            onChange?()
+            return false
+        }
+        return true
     }
 
     private func perform(_ request: UnlockRequest) {
