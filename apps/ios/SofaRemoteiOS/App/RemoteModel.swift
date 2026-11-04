@@ -8,6 +8,21 @@ struct DiscoveredMac: Identifiable {
     let id: String
     let name: String
     let isPaired: Bool
+    var interfaceIndex: UInt32?
+
+    static func discovered(_ result: NWBrowser.Result, paired: [PairedMac]) -> Self? {
+        guard case let .service(name, _, _, interface) = result.endpoint else { return nil }
+        let saved = paired.first { $0.serviceName == name }
+        let source =
+            interface
+            ?? result.interfaces
+            .filter { $0.type == .wifi || $0.type == .wiredEthernet }
+            .min { $0.index < $1.index }
+        return Self(
+            id: name, name: saved?.name ?? "Mac · \(name.prefix(8))",
+            isPaired: saved != nil,
+            interfaceIndex: source.flatMap { UInt32(exactly: $0.index) })
+    }
 }
 
 enum RemoteMode: String {
@@ -117,11 +132,7 @@ final class RemoteModel {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.discoveredMacs = results.compactMap { result in
-                    guard case let .service(name, _, _, _) = result.endpoint else { return nil }
-                    let saved = self.pairedMacs.first { $0.serviceName == name }
-                    return DiscoveredMac(
-                        id: name, name: saved?.name ?? "Mac · \(name.prefix(8))",
-                        isPaired: saved != nil)
+                    DiscoveredMac.discovered(result, paired: self.pairedMacs)
                 }.sorted { $0.name < $1.name }
             }
         }
@@ -153,7 +164,7 @@ final class RemoteModel {
             return
         }
         benchmarkTargetID = saved.serviceName
-        connect(saved)
+        connect(saved, interfaceIndex: mac.interfaceIndex ?? 0)
     }
 
     func selectTransport(_ transport: RemoteTransportKind) {
@@ -192,7 +203,7 @@ final class RemoteModel {
         discoveredMacs = []
     }
 
-    private func connect(_ mac: PairedMac) {
+    private func connect(_ mac: PairedMac, interfaceIndex: UInt32 = 0) {
         #if DEBUG && targetEnvironment(simulator)
             guard !isUITesting else { return }
         #endif
@@ -209,7 +220,9 @@ final class RemoteModel {
         }
         let resolver = BonjourResolver()
         self.resolver = resolver
-        resolver.resolve(serviceName: mac.serviceName, wakeOnResolve: true) { [weak self] result in
+        resolver.resolve(
+            serviceName: mac.serviceName, wakeOnResolve: true, interfaceIndex: interfaceIndex
+        ) { [weak self] result in
             guard let self, self.attemptID == attempt else { return }
             self.resolver = nil
             switch result {

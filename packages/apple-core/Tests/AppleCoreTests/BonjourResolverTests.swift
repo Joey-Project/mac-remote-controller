@@ -4,11 +4,7 @@ import dnssd
 @testable import AppleCore
 
 final class BonjourResolverTests: XCTestCase {
-    func testOnlyExplicitConnectionResolutionRequestsNetworkWake() {
-        XCTAssertEqual(BonjourResolver.resolveFlags(wakeOnResolve: false), 0)
-        XCTAssertEqual(
-            BonjourResolver.resolveFlags(wakeOnResolve: true),
-            DNSServiceFlags(kDNSServiceFlagsWakeOnResolve))
+    func testResolutionWindowExtendsOnlyWhenWakeIsSupported() {
         XCTAssertEqual(BonjourResolver.resolutionTimeout(wakeOnResolve: false), 5)
         XCTAssertEqual(BonjourResolver.resolutionTimeout(wakeOnResolve: true), 15)
     }

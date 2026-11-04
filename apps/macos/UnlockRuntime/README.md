@@ -75,8 +75,12 @@ not hold the display or system awake between requests. Missing controls still
 fail without input, and preparation does not renew the five-second grant.
 
 An explicit iOS connection to a saved Mac also requests Bonjour wake-on-resolve,
-with a bounded 15-second resolution window. Discovery alone does not request
-wake. Full-system sleep requires working network wake and a network/device
+using the concrete network interface from discovery, with a bounded 15-second
+resolution window. Unknown or reserved interfaces use ordinary resolution.
+Discovery alone does not request
+wake. If the API rejects the wake flag as unsupported or invalid, resolution
+immediately falls back once to ordinary Bonjour and its five-second window.
+Other failures propagate without retry. Full-system sleep requires working network wake and a network/device
 that retains or proxies the service; the sleeping companion cannot execute an
 unlock command itself. Enable **Wake for network access** on the Mac. A closed
 laptop lid, shutdown, unsupported network wake and FileVault preboot remain

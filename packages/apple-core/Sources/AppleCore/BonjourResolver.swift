@@ -43,6 +43,7 @@ public final class BonjourResolver {
     public func resolve(
         serviceName: String,
         wakeOnResolve: Bool = false,
+        interfaceIndex: UInt32 = 0,
         completion: @escaping @MainActor (Result<URL, Error>) -> Void
     ) {
         cancel()
@@ -59,7 +60,7 @@ public final class BonjourResolver {
 
         let (resolveStatus, resolvedRef) = startResolution(
             serviceName: serviceName,
-            context: context
+            context: context, interfaceIndex: interfaceIndex
         )
 
         guard resolveStatus == kDNSServiceErr_NoError, let resolvedRef else {
@@ -87,37 +88,41 @@ public final class BonjourResolver {
         }
         timeoutWorkItem = timeout
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + Self.resolutionTimeout(wakeOnResolve: wakeOnResolve),
+            deadline: .now() + Self.resolutionTimeout(wakeOnResolve: wakesOnResolve),
             execute: timeout
         )
     }
 
     private func startResolution(
         serviceName: String,
-        context: ResolveContext
+        context: ResolveContext, interfaceIndex: UInt32
     ) -> (DNSServiceErrorType, DNSServiceRef?) {
         var resolvedRef: DNSServiceRef?
-        let status = serviceName.withCString { serviceInstance in
-            Self.serviceType.withCString { serviceType in
-                Self.serviceDomain.withCString { serviceDomain in
-                    DNSServiceResolve(
-                        &resolvedRef,
-                        Self.resolveFlags(wakeOnResolve: wakesOnResolve),
-                        0,
-                        serviceInstance,
-                        serviceType,
-                        serviceDomain,
-                        bonjourResolveCallback,
-                        Unmanaged.passUnretained(context).toOpaque()
-                    )
+        let attempt = BonjourResolveAttempt.start(
+            wakeOnResolve: wakesOnResolve, interfaceIndex: interfaceIndex
+        ) { flags in
+            var candidate: DNSServiceRef?
+            let status = serviceName.withCString { serviceInstance in
+                Self.serviceType.withCString { serviceType in
+                    Self.serviceDomain.withCString { serviceDomain in
+                        DNSServiceResolve(
+                            &candidate,
+                            flags,
+                            interfaceIndex,
+                            serviceInstance,
+                            serviceType,
+                            serviceDomain,
+                            bonjourResolveCallback,
+                            Unmanaged.passUnretained(context).toOpaque()
+                        )
+                    }
                 }
             }
+            if status == kDNSServiceErr_NoError { resolvedRef = candidate }
+            return status
         }
-        return (status, resolvedRef)
-    }
-
-    nonisolated static func resolveFlags(wakeOnResolve: Bool) -> DNSServiceFlags {
-        wakeOnResolve ? DNSServiceFlags(kDNSServiceFlagsWakeOnResolve) : 0
+        wakesOnResolve = attempt.usedWake
+        return (attempt.status, resolvedRef)
     }
 
     nonisolated static func resolutionTimeout(wakeOnResolve: Bool) -> TimeInterval {
