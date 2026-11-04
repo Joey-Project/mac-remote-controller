@@ -49,7 +49,13 @@ with connected clients; a volume change triggers an immediate refreshed state.
 Enable **local media adapters** in the companion to expose the authenticated
 media-only bridge on `127.0.0.1:47623`. The companion creates a separate random
 bearer token in `~/Library/Application Support/SofaRemote/media-bridge.json`
-with mode `0600`. The bridge rejects cross-origin requests and does not expose
+with mode `0600`. Configuration is shared by the companion and native host using
+owner-only file permissions, without complete Data Protection. An unreadable
+legacy file with that protection is retained as `media-bridge-protected-*.json`
+in the same private directory before a fresh token is generated. Run both setup
+actions again after this recovery to update IINA and restart Chrome's native host.
+Malformed files and other permission errors are preserved for diagnosis.
+The bridge rejects cross-origin requests and does not expose
 desktop input. Copy the token only into the official IINA plugin preferences;
 Chrome uses a Native Messaging helper that reads the protected file directly.
 Use **Set Up IINA** or **Set Up Chrome** for installation and configuration from

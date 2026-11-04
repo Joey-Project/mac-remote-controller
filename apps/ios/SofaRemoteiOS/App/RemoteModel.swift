@@ -209,7 +209,7 @@ final class RemoteModel {
         }
         let resolver = BonjourResolver()
         self.resolver = resolver
-        resolver.resolve(serviceName: mac.serviceName) { [weak self] result in
+        resolver.resolve(serviceName: mac.serviceName, wakeOnResolve: true) { [weak self] result in
             guard let self, self.attemptID == attempt else { return }
             self.resolver = nil
             switch result {

@@ -20,7 +20,7 @@ public enum BonjourResolverError: Error, LocalizedError, Sendable {
         case .serviceUnavailable(let status):
             "The Bonjour service could not be resolved (status \(status))."
         case .timedOut:
-            "The Bonjour service did not resolve within five seconds."
+            "The Bonjour service resolution timed out."
         case .invalidHost:
             "Bonjour returned an invalid service host."
         }
@@ -31,20 +31,22 @@ public enum BonjourResolverError: Error, LocalizedError, Sendable {
 public final class BonjourResolver {
     private static let serviceType = "_sofaremote._tcp"
     private static let serviceDomain = "local."
-    private static let resolutionTimeout: TimeInterval = 5
 
     private var serviceRef: DNSServiceRef?
     private var callbackContext: ResolveContext?
     private var timeoutWorkItem: DispatchWorkItem?
     private var completion: (@MainActor (Result<URL, Error>) -> Void)?
+    private var wakesOnResolve = false
 
     public init() {}
 
     public func resolve(
         serviceName: String,
+        wakeOnResolve: Bool = false,
         completion: @escaping @MainActor (Result<URL, Error>) -> Void
     ) {
         cancel()
+        wakesOnResolve = wakeOnResolve
         guard UUID(uuidString: serviceName) != nil else {
             completion(.failure(BonjourResolverError.invalidServiceName))
             return
@@ -85,7 +87,7 @@ public final class BonjourResolver {
         }
         timeoutWorkItem = timeout
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + Self.resolutionTimeout,
+            deadline: .now() + Self.resolutionTimeout(wakeOnResolve: wakeOnResolve),
             execute: timeout
         )
     }
@@ -100,7 +102,7 @@ public final class BonjourResolver {
                 Self.serviceDomain.withCString { serviceDomain in
                     DNSServiceResolve(
                         &resolvedRef,
-                        0,
+                        Self.resolveFlags(wakeOnResolve: wakesOnResolve),
                         0,
                         serviceInstance,
                         serviceType,
@@ -112,6 +114,14 @@ public final class BonjourResolver {
             }
         }
         return (status, resolvedRef)
+    }
+
+    nonisolated static func resolveFlags(wakeOnResolve: Bool) -> DNSServiceFlags {
+        wakeOnResolve ? DNSServiceFlags(kDNSServiceFlagsWakeOnResolve) : 0
+    }
+
+    nonisolated static func resolutionTimeout(wakeOnResolve: Bool) -> TimeInterval {
+        wakeOnResolve ? 15 : 5
     }
 
     public func cancel() {

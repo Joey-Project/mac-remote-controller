@@ -67,6 +67,21 @@ private event source with no modifier flags or repeat. Both events are prepared
 before any input, and key-up is posted without an intervening cancellation point.
 The plug-in's one-use grant supplies the authorization decision.
 
+After the helper arms an allowed request, the companion declares user activity
+with macOS's power-management API to wake a sleeping display. It waits up to
+three seconds for the enabled, focused native secure control before submitting
+once. The assertion is released on success, failure or cancellation; it does
+not hold the display or system awake between requests. Missing controls still
+fail without input, and preparation does not renew the five-second grant.
+
+An explicit iOS connection to a saved Mac also requests Bonjour wake-on-resolve,
+with a bounded 15-second resolution window. Discovery alone does not request
+wake. Full-system sleep requires working network wake and a network/device
+that retains or proxies the service; the sleeping companion cannot execute an
+unlock command itself. Enable **Wake for network access** on the Mac. A closed
+laptop lid, shutdown, unsupported network wake and FileVault preboot remain
+outside the supported wake path. Network wake is not evidence of OS unlock.
+
 The companion never reads the field value or supplies a password. When the OS
 omits character-count metadata, it sets only an empty string through the native
 setter. This can clear unsubmitted input; submission requires the empty write to

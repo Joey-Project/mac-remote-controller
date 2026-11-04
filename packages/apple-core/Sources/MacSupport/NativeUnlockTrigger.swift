@@ -1,5 +1,6 @@
 import AppKit
 @preconcurrency import ApplicationServices
+import IOKit.pwr_mgt
 import UnlockNative
 
 public enum NativeUnlockTrigger {
@@ -32,7 +33,7 @@ public enum NativeUnlockTrigger {
         let identifier = application.processIdentifier
         let expectedSession = fingerprint(state)
         let operation = Task.detached(priority: .userInitiated) {
-            try submit(process: identifier, expectedSession: expectedSession)
+            try await prepare(process: identifier, expectedSession: expectedSession)
         }
         try await withTaskCancellationHandler {
             try Task.checkCancellation()
@@ -42,8 +43,40 @@ public enum NativeUnlockTrigger {
         }
     }
 
-    private static func submit(process: pid_t, expectedSession: Data) throws {
-        let deadline = SRContinuousTime() + 0.8
+    private static func prepare(process: pid_t, expectedSession: Data) async throws {
+        try await NativeUnlockPreparation.run(
+            .init(
+                now: { SRContinuousTime() },
+                validate: {
+                    try validateConsole(
+                        expectedSession: expectedSession, deadline: .infinity)
+                },
+                wake: {
+                    var assertion = IOPMAssertionID(kIOPMNullAssertionID)
+                    // A local-style display wake is intentional: authentication needs
+                    // loginwindow's visible secure control, even for a remote request.
+                    guard
+                        IOPMAssertionDeclareUserActivity(
+                            "Sofa Remote authorized unlock" as CFString,
+                            kIOPMUserActiveLocal, &assertion) == kIOReturnSuccess
+                    else { throw UnlockFailure.displayWakeUnavailable }
+                    return { _ = IOPMAssertionRelease(assertion) }
+                },
+                find: { deadline in
+                    try findControl(
+                        process: process, deadline: min(deadline, SRContinuousTime() + 0.15))
+                },
+                submit: { control, deadline in
+                    let root = AXUIElementCreateApplication(process)
+                    AXUIElementSetMessagingTimeout(root, 0.05)
+                    try activateControl(
+                        control, root: root, process: process,
+                        expectedSession: expectedSession, deadline: deadline)
+                },
+                pause: { try await Task.sleep(for: .milliseconds(100)) }))
+    }
+
+    private static func findControl(process: pid_t, deadline: TimeInterval) throws -> AXUIElement? {
         let root = AXUIElementCreateApplication(process)
         var queue = [root]
         var visited = 0
@@ -57,10 +90,12 @@ public enum NativeUnlockTrigger {
                 element, kAXIdentifierAttribute as CFString, &identifier) == .success,
                 identifier as? String == "UserPasswordTextField"
             {
-                try activateControl(
-                    element, root: root, process: process,
-                    expectedSession: expectedSession, deadline: deadline)
-                return
+                if booleanAttribute(element, kAXEnabledAttribute as CFString),
+                    booleanAttribute(element, kAXFocusedAttribute as CFString),
+                    matchesFocus(element, root: root, process: process)
+                {
+                    return element
+                }
             }
             var children: CFTypeRef?
             if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children)
@@ -70,7 +105,7 @@ public enum NativeUnlockTrigger {
                 queue.append(contentsOf: elements.prefix(max(0, 128 - visited - queue.count)))
             }
         }
-        throw UnlockFailure.passwordControlUnavailable
+        return nil
     }
 
     private static func activateControl(

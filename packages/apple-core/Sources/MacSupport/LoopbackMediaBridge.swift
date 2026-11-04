@@ -4,50 +4,6 @@ import Foundation
 import Network
 import Security
 
-public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
-    public let port: UInt16
-    public let token: String
-
-    public static let defaultPort: UInt16 = 47_623
-    public static let fileName = "media-bridge.json"
-
-    public static var configurationURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SofaRemote", isDirectory: true)
-            .appendingPathComponent(fileName)
-    }
-
-    public static func loadOrCreate() throws -> Self {
-        let url = configurationURL
-        if FileManager.default.fileExists(atPath: url.path) {
-            let data = try Data(contentsOf: url)
-            let value = try JSONDecoder().decode(Self.self, from: data)
-            guard value.port > 0, value.token.utf8.count >= 32 else {
-                throw MediaBridgeError.invalidConfiguration
-            }
-            try FileManager.default.setAttributes(
-                [.posixPermissions: 0o600], ofItemAtPath: url.path)
-            return value
-        }
-
-        var bytes = [UInt8](repeating: 0, count: 32)
-        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
-            throw MediaBridgeError.randomUnavailable
-        }
-        let configuration = Self(port: defaultPort, token: Data(bytes).base64URLString)
-        let directory = url.deletingLastPathComponent()
-        try FileManager.default.createDirectory(
-            at: directory, withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700])
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        try encoder.encode(configuration).write(
-            to: url, options: [.atomic, .completeFileProtection])
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-        return configuration
-    }
-}
-
 public enum MediaBridgeError: Error, LocalizedError {
     case invalidConfiguration
     case randomUnavailable
@@ -201,11 +157,4 @@ public final class LoopbackMediaBridge {
         active.connection.cancel()
     }
 
-}
-
-private extension Data {
-    var base64URLString: String {
-        base64EncodedString().replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-    }
 }
