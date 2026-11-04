@@ -1,5 +1,44 @@
 import XCTest
 
+/// Explicit opt-in only: this test can unlock the named, already paired Mac.
+final class LiveUnlockUITests: XCTestCase {
+    @MainActor
+    func testOneRequestAgainstThePairedPhysicalMac() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["SOFA_REMOTE_LIVE_UNLOCK_TEST"] == "1",
+            let expectedMac = environment["SOFA_REMOTE_LIVE_MAC_NAME"], !expectedMac.isEmpty
+        else {
+            throw XCTSkip("Requires explicit authorization for the named physical Mac.")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "com.joeyteng.sofaremote.ios")
+        app.activate()
+        if app.alerts["Connection problem"].exists { app.alerts.buttons["OK"].tap() }
+        let menu = element("remote.menu", in: app)
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "Connect the physical phone first.")
+        XCTAssertTrue(app.navigationBars[expectedMac].exists, "The connected Mac must match.")
+        menu.tap()
+        let unlock = element("remote.unlock", in: app)
+        XCTAssertTrue(unlock.waitForExistence(timeout: 3))
+        XCTAssertTrue(unlock.isEnabled)
+        XCTAssertEqual(unlock.label, "Unlock Mac", "The Mac must begin locked.")
+        unlock.tap()
+        if app.alerts["Connection problem"].waitForExistence(timeout: 12) {
+            XCTFail("The paired Mac did not confirm this single unlock request.")
+            return
+        }
+        menu.tap()
+        XCTAssertTrue(unlock.waitForExistence(timeout: 3))
+        XCTAssertEqual(unlock.label, "Mac unlocked")
+        XCTAssertFalse(unlock.isEnabled)
+    }
+
+    @MainActor
+    private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+}
+
 extension SofaRemoteiOSUITests {
     @MainActor
     func testUnlockNeedsExplicitMenuActionAndUsesOnePayloadFreeCommand() throws {

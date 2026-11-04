@@ -3,21 +3,21 @@ import XCTest
 @testable import MacSupport
 
 final class NativeUnlockControlTests: XCTestCase {
-    func testKnownEmptyControlConfirmsWithoutWriting() throws {
+    func testKnownEmptyControlSubmitsWithoutWriting() throws {
         var events: [String] = []
         try NativeUnlockControlPolicy.activate(
             snapshot(), validateContext: { events.append("check") },
-            clear: { events.append("clear") }, confirm: { events.append("confirm") })
-        XCTAssertEqual(events, ["check", "confirm"])
+            clear: { events.append("clear") }, submit: { events.append("submit") })
+        XCTAssertEqual(events, ["check", "submit"])
     }
 
-    func testUnsupportedCountClearsBeforeConfirmingAndRevalidates() throws {
+    func testUnsupportedCountClearsBeforeSubmittingAndRevalidates() throws {
         var events: [String] = []
         try NativeUnlockControlPolicy.activate(
             snapshot(count: nil, status: .attributeUnsupported),
             validateContext: { events.append("check") }, clear: { events.append("clear") },
-            confirm: { events.append("confirm") })
-        XCTAssertEqual(events, ["check", "clear", "check", "confirm"])
+            submit: { events.append("submit") })
+        XCTAssertEqual(events, ["check", "clear", "check", "submit"])
     }
 
     func testPartiallyEnteredPasswordIsNotSubmittedOrChangedWhenCountIsKnown() {
@@ -25,12 +25,12 @@ final class NativeUnlockControlTests: XCTestCase {
         XCTAssertThrowsError(
             try NativeUnlockControlPolicy.activate(
                 snapshot(count: 3), validateContext: { events.append("check") },
-                clear: { events.append("clear") }, confirm: { events.append("confirm") })
+                clear: { events.append("clear") }, submit: { events.append("submit") })
         ) { XCTAssertEqual($0 as? UnlockFailure, .passwordFieldNotEmpty) }
         XCTAssertTrue(events.isEmpty)
     }
 
-    func testOtherReadFailuresAndInvalidCountsNeverClearOrConfirm() {
+    func testOtherReadFailuresAndInvalidCountsNeverClearOrSubmit() {
         for control in [
             snapshot(count: nil, status: .apiDisabled),
             snapshot(count: nil, status: .cannotComplete),
@@ -40,7 +40,7 @@ final class NativeUnlockControlTests: XCTestCase {
             XCTAssertThrowsError(
                 try NativeUnlockControlPolicy.activate(
                     control, validateContext: { events.append("check") },
-                    clear: { events.append("clear") }, confirm: { events.append("confirm") }))
+                    clear: { events.append("clear") }, submit: { events.append("submit") }))
             XCTAssertTrue(events.isEmpty)
         }
     }
@@ -53,19 +53,25 @@ final class NativeUnlockControlTests: XCTestCase {
         wrongRole.role = kAXButtonRole
         var wrongSubrole = valid
         wrongSubrole.subrole = nil
-        var noConfirm = valid
-        noConfirm.supportsConfirm = false
-        for control in [wrongIdentifier, wrongRole, wrongSubrole, noConfirm] {
+        var disabled = valid
+        disabled.enabled = false
+        var unfocused = valid
+        unfocused.focused = false
+        var anotherFocusedControl = valid
+        anotherFocusedControl.matchesFocusedElement = false
+        for control in [
+            wrongIdentifier, wrongRole, wrongSubrole, disabled, unfocused, anotherFocusedControl
+        ] {
             var events: [String] = []
             XCTAssertThrowsError(
                 try NativeUnlockControlPolicy.activate(
                     control, validateContext: { events.append("check") },
-                    clear: { events.append("clear") }, confirm: { events.append("confirm") }))
+                    clear: { events.append("clear") }, submit: { events.append("submit") }))
             XCTAssertTrue(events.isEmpty)
         }
     }
 
-    func testFailedEmptyWriteNeverConfirms() {
+    func testFailedEmptyWriteNeverSubmits() {
         for failure in [UnlockFailure.passwordControlNotWritable, .passwordControlClearFailed] {
             var events: [String] = []
             XCTAssertThrowsError(
@@ -75,13 +81,13 @@ final class NativeUnlockControlTests: XCTestCase {
                     clear: {
                         events.append("clear"); throw failure
                     },
-                    confirm: { events.append("confirm") })
+                    submit: { events.append("submit") })
             ) { XCTAssertEqual($0 as? UnlockFailure, failure) }
             XCTAssertEqual(events, ["check", "clear"])
         }
     }
 
-    func testSessionChangeAfterClearingPreventsConfirmation() {
+    func testSessionChangeAfterClearingPreventsSubmission() {
         var events: [String] = []
         var checks = 0
         XCTAssertThrowsError(
@@ -91,7 +97,7 @@ final class NativeUnlockControlTests: XCTestCase {
                     checks += 1
                     events.append("check")
                     if checks == 2 { throw UnlockFailure.consoleUnavailable }
-                }, clear: { events.append("clear") }, confirm: { events.append("confirm") })
+                }, clear: { events.append("clear") }, submit: { events.append("submit") })
         ) { XCTAssertEqual($0 as? UnlockFailure, .consoleUnavailable) }
         XCTAssertEqual(events, ["check", "clear", "check"])
     }
@@ -102,31 +108,65 @@ final class NativeUnlockControlTests: XCTestCase {
             try NativeUnlockControlPolicy.activate(
                 snapshot(count: nil, status: .attributeUnsupported),
                 validateContext: { throw CancellationError() },
-                clear: { events.append("clear") }, confirm: { events.append("confirm") }))
+                clear: { events.append("clear") }, submit: { events.append("submit") }))
         XCTAssertTrue(events.isEmpty)
     }
 
-    func testUncertainConfirmationIsSentOnceForIndependentOSObservation() throws {
+    func testSubmissionIsSentOnceForIndependentOSObservation() throws {
         var attempts = 0
         try NativeUnlockControlPolicy.activate(
             snapshot(), validateContext: {}, clear: { XCTFail("Unexpected write") },
-            confirm: {
+            submit: {
                 attempts += 1
-                try NativeUnlockControlPolicy.checkConfirmationReply(.cannotComplete)
             })
         XCTAssertEqual(attempts, 1)
     }
 
-    func testConfirmationFailureIsNotRetried() {
+    func testSubmissionFailureIsNotRetried() {
         var count = 0
         XCTAssertThrowsError(
             try NativeUnlockControlPolicy.activate(
                 snapshot(), validateContext: {}, clear: { XCTFail("Unexpected write") },
-                confirm: {
+                submit: {
                     count += 1
-                    try NativeUnlockControlPolicy.checkConfirmationReply(.actionUnsupported)
+                    throw UnlockFailure.triggerUnavailable
                 }))
         XCTAssertEqual(count, 1)
+    }
+
+    func testLostFocusAfterClearingPreventsSubmission() {
+        var events: [String] = []
+        var checks = 0
+        XCTAssertThrowsError(
+            try NativeUnlockControlPolicy.activate(
+                snapshot(count: nil, status: .attributeUnsupported),
+                validateContext: {
+                    checks += 1
+                    if checks == 2 { throw UnlockFailure.passwordControlUnavailable }
+                }, clear: { events.append("clear") }, submit: { events.append("submit") })
+        ) { XCTAssertEqual($0 as? UnlockFailure, .passwordControlUnavailable) }
+        XCTAssertEqual(events, ["clear"])
+    }
+
+    func testCancellationBeforeKnownEmptySubmissionDoesNotPost() {
+        var submitted = false
+        XCTAssertThrowsError(
+            try NativeUnlockControlPolicy.activate(
+                snapshot(), validateContext: { throw CancellationError() },
+                clear: { XCTFail("Unexpected write") }, submit: { submitted = true }))
+        XCTAssertFalse(submitted)
+    }
+
+    func testReturnPairUsesOneUnmodifiedNonRepeatingKeyAndItsRelease() throws {
+        // Create events only: unit tests never dispatch keyboard input.
+        let pair = try XCTUnwrap(NativeUnlockReturnPair())
+        XCTAssertEqual(pair.down.type, .keyDown)
+        XCTAssertEqual(pair.up.type, .keyUp)
+        for event in [pair.down, pair.up] {
+            XCTAssertTrue(event.flags.isEmpty)
+            XCTAssertEqual(event.getIntegerValueField(.keyboardEventKeycode), 36)
+            XCTAssertEqual(event.getIntegerValueField(.keyboardEventAutorepeat), 0)
+        }
     }
 
     private func snapshot(count: Int? = 0, status: AXError = .success)
@@ -135,6 +175,6 @@ final class NativeUnlockControlTests: XCTestCase {
         NativeUnlockControlSnapshot(
             identifier: "UserPasswordTextField", role: kAXTextFieldRole,
             subrole: kAXSecureTextFieldSubrole, countStatus: status,
-            characterCount: count, supportsConfirm: true)
+            characterCount: count, enabled: true, focused: true, matchesFocusedElement: true)
     }
 }

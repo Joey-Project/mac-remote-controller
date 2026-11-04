@@ -6,26 +6,21 @@ struct NativeUnlockControlSnapshot {
     var subrole: String?
     var countStatus: AXError
     var characterCount: Int?
-    var supportsConfirm: Bool
+    var enabled: Bool
+    var focused: Bool
+    var matchesFocusedElement: Bool
 }
 
 enum NativeUnlockControlPolicy {
-    static func checkConfirmationReply(_ status: AXError) throws {
-        // A timed-out reply does not prove the action was undelivered. The
-        // broker must observe the OS result; the action is never replayed.
-        guard status == .success || status == .cannotComplete else {
-            throw UnlockFailure.triggerUnavailable
-        }
-    }
-
     static func activate(
         _ control: NativeUnlockControlSnapshot,
         validateContext: () throws -> Void,
         clear: () throws -> Void,
-        confirm: () throws -> Void
+        submit: () throws -> Void
     ) throws {
         guard control.identifier == "UserPasswordTextField", control.role == kAXTextFieldRole,
-            control.subrole == kAXSecureTextFieldSubrole, control.supportsConfirm
+            control.subrole == kAXSecureTextFieldSubrole,
+            control.enabled, control.focused, control.matchesFocusedElement
         else { throw UnlockFailure.passwordControlUnavailable }
 
         let needsClearing: Bool
@@ -49,6 +44,6 @@ enum NativeUnlockControlPolicy {
             try clear()
         }
         try validateContext()
-        try confirm()
+        try submit()
     }
 }

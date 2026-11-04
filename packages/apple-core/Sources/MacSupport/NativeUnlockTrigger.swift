@@ -12,15 +12,17 @@ public enum NativeUnlockTrigger {
         return AXIsProcessTrusted()
     }
 
-    /// Confirm only the system secure password control. Never read its value,
-    /// supply a password, send key events, or select a button by its title.
+    /// Submit one neutral Return pair only at the empty, focused system secure
+    /// password control. The authorization plug-in supplies the approval.
     @MainActor public static func perform() async throws {
         let state = SRReadConsole()
-        guard state.known, state.loggedIn, state.locked, state.userID == getuid()
+        guard SRUnlockEligible(state), state.userID == getuid()
         else {
             throw UnlockFailure.consoleUnavailable
         }
-        guard AXIsProcessTrusted() else { throw UnlockFailure.accessibilityRequired }
+        guard AXIsProcessTrusted(), CGPreflightPostEventAccess() else {
+            throw UnlockFailure.accessibilityRequired
+        }
         let applications = NSRunningApplication.runningApplications(
             withBundleIdentifier: "com.apple.loginwindow")
         guard applications.count == 1, let application = applications.first,
@@ -28,7 +30,10 @@ public enum NativeUnlockTrigger {
                 == "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow"
         else { throw UnlockFailure.passwordControlUnavailable }
         let identifier = application.processIdentifier
-        let operation = Task.detached(priority: .userInitiated) { try confirm(process: identifier) }
+        let expectedSession = fingerprint(state)
+        let operation = Task.detached(priority: .userInitiated) {
+            try submit(process: identifier, expectedSession: expectedSession)
+        }
         try await withTaskCancellationHandler {
             try Task.checkCancellation()
             try await operation.value
@@ -37,12 +42,12 @@ public enum NativeUnlockTrigger {
         }
     }
 
-    private static func confirm(process: pid_t) throws {
-        let deadline = ProcessInfo.processInfo.systemUptime + 0.8
+    private static func submit(process: pid_t, expectedSession: Data) throws {
+        let deadline = SRContinuousTime() + 0.8
         let root = AXUIElementCreateApplication(process)
         var queue = [root]
         var visited = 0
-        while !queue.isEmpty, visited < 128, ProcessInfo.processInfo.systemUptime < deadline {
+        while !queue.isEmpty, visited < 128, SRContinuousTime() < deadline {
             try Task.checkCancellation()
             let element = queue.removeFirst()
             AXUIElementSetMessagingTimeout(element, 0.05)
@@ -52,7 +57,9 @@ public enum NativeUnlockTrigger {
                 element, kAXIdentifierAttribute as CFString, &identifier) == .success,
                 identifier as? String == "UserPasswordTextField"
             {
-                try activateControl(element, identifier: identifier as? String, deadline: deadline)
+                try activateControl(
+                    element, root: root, process: process,
+                    expectedSession: expectedSession, deadline: deadline)
                 return
             }
             var children: CFTypeRef?
@@ -67,7 +74,8 @@ public enum NativeUnlockTrigger {
     }
 
     private static func activateControl(
-        _ element: AXUIElement, identifier: String?, deadline: TimeInterval
+        _ element: AXUIElement, root: AXUIElement, process: pid_t,
+        expectedSession: Data, deadline: TimeInterval
     ) throws {
         var count: CFTypeRef?
         let countStatus = AXUIElementCopyAttributeValue(
@@ -75,29 +83,64 @@ public enum NativeUnlockTrigger {
         let number = count.flatMap {
             CFGetTypeID($0) == CFNumberGetTypeID() ? $0 as? NSNumber : nil
         }
-        var actions: CFArray?
-        let actionStatus = AXUIElementCopyActionNames(element, &actions)
         let control = NativeUnlockControlSnapshot(
-            identifier: identifier,
+            identifier: stringAttribute(element, kAXIdentifierAttribute as CFString),
             role: stringAttribute(element, kAXRoleAttribute as CFString),
             subrole: stringAttribute(element, kAXSubroleAttribute as CFString),
             countStatus: countStatus, characterCount: number?.intValue,
-            supportsConfirm: actionStatus == .success
-                && (actions as? [String])?.contains(kAXConfirmAction) == true)
+            enabled: booleanAttribute(element, kAXEnabledAttribute as CFString),
+            focused: booleanAttribute(element, kAXFocusedAttribute as CFString),
+            matchesFocusedElement: matchesFocus(element, root: root, process: process))
+        // Build both events before any empty write or keyboard dispatch.
+        guard let events = NativeUnlockReturnPair() else { throw UnlockFailure.triggerUnavailable }
         try NativeUnlockControlPolicy.activate(
             control,
             validateContext: {
-                try Task.checkCancellation()
-                let current = SRReadConsole()
-                guard ProcessInfo.processInfo.systemUptime < deadline,
-                    current.known, current.loggedIn, current.locked, current.userID == getuid()
-                else { throw UnlockFailure.consoleUnavailable }
+                try validateConsole(expectedSession: expectedSession, deadline: deadline)
+                guard booleanAttribute(element, kAXEnabledAttribute as CFString),
+                    booleanAttribute(element, kAXFocusedAttribute as CFString),
+                    matchesFocus(element, root: root, process: process),
+                    CGPreflightPostEventAccess(), SRContinuousTime() < deadline
+                else { throw UnlockFailure.passwordControlUnavailable }
+                try validateConsole(expectedSession: expectedSession, deadline: deadline)
             },
             clear: { try clearControl(element) },
-            confirm: {
-                try NativeUnlockControlPolicy.checkConfirmationReply(
-                    AXUIElementPerformAction(element, kAXConfirmAction as CFString))
-            })
+            submit: { events.post() })
+    }
+
+    private static func validateConsole(expectedSession: Data, deadline: TimeInterval) throws {
+        try Task.checkCancellation()
+        let current = SRReadConsole()
+        guard SRContinuousTime() < deadline,
+            SRUnlockEligible(current), current.userID == getuid(),
+            fingerprint(current) == expectedSession
+        else { throw UnlockFailure.consoleUnavailable }
+    }
+
+    private static func fingerprint(_ state: SRConsoleSnapshot) -> Data {
+        var state = state
+        var result = withUnsafeBytes(of: &state.sessionUUID) { Data($0) }
+        result.append(withUnsafeBytes(of: &state.bootUUID) { Data($0) })
+        return result
+    }
+
+    private static func matchesFocus(
+        _ element: AXUIElement, root: AXUIElement, process: pid_t
+    ) -> Bool {
+        var owner: pid_t = -1
+        var focused: CFTypeRef?
+        return AXUIElementGetPid(element, &owner) == .success && owner == process
+            && AXUIElementCopyAttributeValue(
+                root, kAXFocusedUIElementAttribute as CFString, &focused) == .success
+            && focused.map { CFEqual($0, element) } == true
+    }
+
+    private static func booleanAttribute(_ element: AXUIElement, _ name: CFString) -> Bool {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, name, &value) == .success,
+            let value, CFGetTypeID(value) == CFBooleanGetTypeID()
+        else { return false }
+        return value as? Bool == true
     }
 
     private static func clearControl(_ element: AXUIElement) throws {
@@ -117,5 +160,33 @@ public enum NativeUnlockTrigger {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, name, &value) == .success else { return nil }
         return value as? String
+    }
+}
+
+struct NativeUnlockReturnPair {
+    private let source: CGEventSource
+    let down: CGEvent
+    let up: CGEvent
+
+    init?() {
+        guard let source = CGEventSource(stateID: .privateState),
+            let down = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: true),
+            let up = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: false)
+        else { return nil }
+        self.source = source
+        self.down = down
+        self.up = up
+        for event in [down, up] {
+            event.flags = []
+            event.setIntegerValueField(.keyboardEventAutorepeat, value: 0)
+        }
+    }
+
+    func post() {
+        withExtendedLifetime(source) {
+            down.post(tap: .cghidEventTap)
+            // Release the key without a cancellation point after key-down.
+            up.post(tap: .cghidEventTap)
+        }
     }
 }

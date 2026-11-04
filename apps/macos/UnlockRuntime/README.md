@@ -60,15 +60,19 @@ the console session; it is not cryptographically bound to one loginwindow
 authentication attempt. Existing password/Touch ID authentication remains a
 fallback branch.
 
-The companion attempts a bounded Accessibility `AXConfirm` action on the exact
-system secure password control. It never reads the field value or sends keyboard
-events. When the OS omits character-count metadata, it sets only an empty string
-through the native setter before confirming. This can clear unsubmitted input;
-confirmation requires the empty write to succeed and the session to remain locked.
-Known nonempty fields and other read failures are refused. If native preparation
-or confirmation is unavailable, the request is cancelled. There is no silent
-Return-key or password-typing fallback. A timed-out confirmation reply is observed
-through the broker rather than re-sent. Success
+The companion locates the exact system secure password control through
+Accessibility and requires it to be enabled and focused, including a matching
+loginwindow focused element. It submits one Return key-down/key-up pair from a
+private event source with no modifier flags or repeat. Both events are prepared
+before any input, and key-up is posted without an intervening cancellation point.
+The plug-in's one-use grant supplies the authorization decision.
+
+The companion never reads the field value or supplies a password. When the OS
+omits character-count metadata, it sets only an empty string through the native
+setter. This can clear unsubmitted input; submission requires the empty write to
+succeed and the same console session and boot to remain locked. Known nonempty
+fields, other read failures, lost focus and failed preparation cancel the request.
+The submission is not retried or replaced with another UI action. Success
 requires independently observing the same OS console become unlocked. Physical
 host compatibility, fallback authentication and Keychain health need explicit
 acceptance; compilation or isolated canary success is not full unlock proof.
