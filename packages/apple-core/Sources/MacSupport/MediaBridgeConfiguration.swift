@@ -24,9 +24,9 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
             try FileManager.default.attributesOfItem(atPath: $0.path)
         }
     ) throws -> Self {
-        let files = FileManager.default
         try validateDirectory(url.deletingLastPathComponent())
         var original: stat?
+        var loaded: Self?
         var info = stat()
         if lstat(url.path, &info) == 0 {
             guard info.st_mode & S_IFMT == S_IFREG, info.st_uid == getuid() else {
@@ -37,8 +37,7 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
                 guard value.port > 0, value.token.utf8.count >= 32 else {
                     throw MediaBridgeError.invalidConfiguration
                 }
-                try files.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-                return value
+                loaded = value
             } catch {
                 // Only recover the specific legacy Data Protection failure. Keep corrupt,
                 // foreign-owned and ordinary permission-denied files for explicit diagnosis.
@@ -48,11 +47,31 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
                 else { throw error }
                 original = info
             }
+            if let loaded {
+                return try finishReadable(loaded, at: url, original: info, attributes: attributes)
+            }
         } else if errno != ENOENT {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         let value = try fresh()
         try write(value, to: url, preserving: original)
+        return value
+    }
+
+    private static func finishReadable(
+        _ value: Self, at url: URL, original: stat,
+        attributes: (URL) throws -> [FileAttributeKey: Any]
+    ) throws -> Self {
+        let protection = try attributes(url)[.protectionKey] as? FileProtectionType
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        if protection == .complete {
+            // Preserve readable legacy credentials while making them available to the
+            // separately signed native host when locked. A migration failure must not
+            // enter the unreadable-file recovery path and generate a different token.
+            var privateOriginal = original
+            privateOriginal.st_mode = (original.st_mode & ~0o7777) | 0o600
+            try write(value, to: url, preserving: privateOriginal)
+        }
         return value
     }
 

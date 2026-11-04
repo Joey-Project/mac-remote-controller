@@ -48,6 +48,30 @@ final class MediaBridgeConfigurationTests: XCTestCase {
         XCTAssertEqual(mode?.intValue, 0o600)
     }
 
+    func testReadableCompleteProtectionMigratesWithoutChangingTokenOrPort() throws {
+        let generated = try MediaBridgeConfiguration.loadOrCreate(at: url)
+        let original = MediaBridgeConfiguration(port: 48_888, token: generated.token)
+        try JSONEncoder().encode(original).write(to: url)
+        let bytes = try Data(contentsOf: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        let migrated = try MediaBridgeConfiguration.loadOrCreate(
+            at: url, attributes: { _ in [.protectionKey: FileProtectionType.complete] })
+        XCTAssertEqual(migrated, original)
+        XCTAssertEqual(try MediaBridgeConfiguration.loadOrCreate(at: url), original)
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        XCTAssertNotEqual(attrs[.protectionKey] as? FileProtectionType, .complete)
+        XCTAssertEqual((attrs[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        let backups = try FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil
+        ).filter { $0.lastPathComponent.hasPrefix("media-bridge-protected-") }
+        XCTAssertEqual(backups.count, 1)
+        let backup = try XCTUnwrap(backups.first)
+        XCTAssertEqual(try Data(contentsOf: backup), bytes)
+        XCTAssertEqual(
+            (try FileManager.default.attributesOfItem(atPath: backup.path)[.posixPermissions]
+                as? NSNumber)?.intValue, 0o600)
+    }
+
     func testCocoaWrappedProtectionFailureCanRecover() throws {
         _ = try MediaBridgeConfiguration.loadOrCreate(at: url)
         let error = NSError(
@@ -79,6 +103,9 @@ final class MediaBridgeConfigurationTests: XCTestCase {
         let bytes = Data("invalid configuration".utf8)
         try bytes.write(to: url)
         XCTAssertThrowsError(try MediaBridgeConfiguration.loadOrCreate(at: url))
+        XCTAssertThrowsError(
+            try MediaBridgeConfiguration.loadOrCreate(
+                at: url, attributes: { _ in [.protectionKey: FileProtectionType.complete] }))
         XCTAssertEqual(try Data(contentsOf: url), bytes)
     }
 

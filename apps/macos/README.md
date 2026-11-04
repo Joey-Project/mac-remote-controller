@@ -50,7 +50,9 @@ Enable **local media adapters** in the companion to expose the authenticated
 media-only bridge on `127.0.0.1:47623`. The companion creates a separate random
 bearer token in `~/Library/Application Support/SofaRemote/media-bridge.json`
 with mode `0600`. Configuration is shared by the companion and native host using
-owner-only file permissions, without complete Data Protection. An unreadable
+owner-only file permissions, without complete Data Protection. Readable legacy
+complete-protection files are migrated while preserving their port and token;
+the original is retained with mode `0600`. An unreadable
 legacy file with that protection is retained as `media-bridge-protected-*.json`
 in the same private directory before a fresh token is generated. Run both setup
 actions again after this recovery to update IINA and restart Chrome's native host.
