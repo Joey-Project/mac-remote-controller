@@ -85,6 +85,9 @@ that retains or proxies the service; the sleeping companion cannot execute an
 unlock command itself. Enable **Wake for network access** on the Mac. A closed
 laptop lid, shutdown, unsupported network wake and FileVault preboot remain
 outside the supported wake path. Network wake is not evidence of OS unlock.
+If sleep resumes to an unselected-user screen, this version reports the native
+password control unavailable. Automatic selection of the already logged-in user
+is still under investigation; network reconnection alone does not complete unlock.
 
 The companion never reads the field value or supplies a password. When the OS
 omits character-count metadata, it sets only an empty string through the native

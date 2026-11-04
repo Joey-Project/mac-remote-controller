@@ -61,6 +61,16 @@ final class NativeUnlockPreparationTests: XCTestCase {
         } catch { XCTAssertTrue(error is CancellationError) }
         XCTAssertEqual(harness.events, ["wake", "release"])
     }
+
+    func testSlowDiscoveryCannotSubmitAfterThePreparationDeadline() async {
+        let harness = Harness()
+        harness.discoveryUsesDeadline = true
+        do {
+            try await NativeUnlockPreparation.run(harness.operations)
+            XCTFail("Expected preparation timeout")
+        } catch { XCTAssertEqual(error as? UnlockFailure, .passwordControlUnavailable) }
+        XCTAssertEqual(harness.events, ["wake", "release"])
+    }
 }
 
 private final class Harness {
@@ -71,6 +81,7 @@ private final class Harness {
     var invalid = false
     var invalidAfterWake = false
     var cancelDuringPause = false
+    var discoveryUsesDeadline = false
     var submitFailure: UnlockFailure?
 
     var operations: NativeUnlockPreparation.Operations<Int> {
@@ -85,7 +96,8 @@ private final class Harness {
                 self.events.append("wake")
                 return { self.events.append("release") }
             },
-            find: { _ in
+            find: { deadline in
+                if self.discoveryUsesDeadline { self.time = deadline; return 1 }
                 self.searches += 1
                 return self.ready && self.searches >= 3 ? 1 : nil
             },

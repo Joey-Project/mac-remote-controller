@@ -63,8 +63,7 @@ public enum NativeUnlockTrigger {
                     return { _ = IOPMAssertionRelease(assertion) }
                 },
                 find: { deadline in
-                    try findControl(
-                        process: process, deadline: min(deadline, SRContinuousTime() + 0.15))
+                    try findControl(process: process, deadline: deadline)
                 },
                 submit: { control, deadline in
                     let root = AXUIElementCreateApplication(process)
