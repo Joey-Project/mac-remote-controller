@@ -106,18 +106,19 @@ has `code` and `message`. Malformed or incompatible wire envelopes close the
 connection. A result means the Mac submitted the input to its OS API; it does
 not prove that the foreground app accepted the input or completed an action.
 
-| Command               | Fields                            | Bounds                                                                    |
-| --------------------- | --------------------------------- | ------------------------------------------------------------------------- |
-| `pointer.move`        | `x`, `y`                          | Relative finite deltas, each within ±500                                  |
-| `pointer.click`       | `button`, optional `tapTimestamp` | `left` or `right`; client monotonic uptime in `0...1,000,000,000` seconds |
-| `pointer.scroll`      | `x`, `y`                          | Pixel deltas, each within ±100                                            |
-| `pointer.button.down` | `button`                          | Hold `left` or `right`; requires advertised gesture support               |
-| `pointer.button.up`   | `button`                          | Release a held button in the same connection                              |
-| `system.shortcut`     | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`        |
-| `keyboard.text`       | `text`                            | 1–4096 UTF-8 bytes of committed text                                      |
-| `keyboard.key`        | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`   |
-| `system.volume.set`   | `value`                           | Finite scalar in 0...1                                                    |
-| `media.control`       | `mediaRequest`                    | Exact target ID, typed action, and optional finite value; see below       |
+| Command               | Fields                            | Bounds                                                                          |
+| --------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
+| `pointer.move`        | `x`, `y`                          | Relative finite deltas, each within ±500                                        |
+| `pointer.click`       | `button`, optional `tapTimestamp` | `left` or `right`; client monotonic uptime in `0...1,000,000,000` seconds       |
+| `pointer.scroll`      | `x`, `y`                          | Pixel deltas, each within ±100                                                  |
+| `pointer.button.down` | `button`                          | Hold `left` or `right`; requires advertised gesture support                     |
+| `pointer.button.up`   | `button`                          | Release a held button in the same connection                                    |
+| `system.shortcut`     | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`              |
+| `keyboard.text`       | `text`                            | 1–4096 UTF-8 bytes of committed text                                            |
+| `keyboard.key`        | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`         |
+| `system.volume.set`   | `value`                           | Finite scalar in 0...1                                                          |
+| `media.control`       | `mediaRequest`                    | Exact target ID, typed action, and optional finite value; see below             |
+| `session.unlock`      | None                              | Explicit one-shot unlock; requires `sessionUnlock.v1` and per-device permission |
 
 New iOS clients send `tapTimestamp` from `UITouch.timestamp`. The Mac compares
 successive client timestamps only within that client's authenticated session,
@@ -149,6 +150,25 @@ be discarded. A release rejected by the Mac closes the session.
 Adjacent unsent absolute-volume updates retain the latest value. Disconnect
 discards pending and unsent input. Missing command results time out after three
 seconds and close the connection without replaying commands.
+
+### Existing-session unlock
+
+`sessionUnlock.v1` advertises an optional, experimental unlock operation.
+Optional `sessionLocked` and `unlockAvailable` booleans describe independently
+observed console lock state and helper enablement/per-device permission. Missing
+values mean unknown or unavailable. Old clients can ignore these fields; new
+clients hide the action when the capability is absent and disable it unless
+both booleans are true. The authenticated pairing determines device identity;
+the command cannot claim a different device or carry a password, key, or path.
+
+Unlock results have a twelve-second client deadline; all existing input command
+deadlines remain three seconds. This result is an exception to input submission
+acknowledgments: success requires observing the same logged-in OS console
+become unlocked. A transport loss or unconfirmed result is never replayed.
+The helper's one-use grant lasts at most five seconds and the companion attempts
+only native Accessibility confirmation of an empty password field. Refer to
+[the runtime guide](../../apps/macos/UnlockRuntime/README.md) for the session-wide
+authorization window, native-trigger limitations and physical acceptance gates.
 
 ### Bluetooth LE transport
 

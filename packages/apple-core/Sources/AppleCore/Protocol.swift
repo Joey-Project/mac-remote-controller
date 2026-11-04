@@ -22,6 +22,7 @@ public enum CommandName: String, Codable, Sendable, Equatable {
     case keyboardKey = "keyboard.key"
     case systemVolumeSet = "system.volume.set"
     case mediaControl = "media.control"
+    case sessionUnlock = "session.unlock"
 }
 
 public enum RemoteKey: String, Codable, Sendable, Equatable {
@@ -50,6 +51,7 @@ public enum SystemShortcut: String, Codable, Sendable, Equatable {
 
 public enum WireCapabilities {
     public static let roundTripProbe = "roundTripProbe.v1"
+    public static let remoteUnlock = "sessionUnlock.v1"
 }
 
 public struct RemoteError: Codable, Sendable, Equatable {

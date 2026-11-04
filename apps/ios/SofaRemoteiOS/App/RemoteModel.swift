@@ -249,7 +249,9 @@ final class RemoteModel {
                 let now = ContinuousClock.now
                 let timedOut =
                     self.isConnected
-                    ? self.pending.values.contains { now - $0.sent > .seconds(3) }
+                    ? self.pending.values.contains {
+                        now - $0.sent > .seconds($0.metadata.timeoutSeconds)
+                    }
                     : now - started > .seconds(12)
                 if timedOut {
                     self.peer?.close()

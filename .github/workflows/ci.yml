@@ -63,6 +63,11 @@ jobs:
           cache: pnpm
       - name: Install media adapter build dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build and test isolated authorization canary
+        run: |
+          python3 -I tooling/unlock/build_canary.py --output .codex-tmp/unlock-canary-ci
+          python3 -m unittest discover -s tooling/unlock -p 'test_*.py' -v
+          python3 -I tooling/unlock/test_runtime.py --output .codex-tmp/unlock-runtime-ci
       - name: Reconstruct and build renewal research probe
         run: |
           python3 tooling/renewal/prepare.py --destination .codex-tmp/renewal-ci/source

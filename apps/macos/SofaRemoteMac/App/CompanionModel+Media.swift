@@ -21,12 +21,16 @@ extension CompanionModel {
         guard let session = client.session else { return }
         client.peer.send(
             WireMessage(
-                type: .state, connectionID: session.connectionID, state: stateForClient(state)))
+                type: .state, connectionID: session.connectionID,
+                state: stateForClient(state, client: client)))
     }
 
-    func stateForClient(_ state: RemoteState) -> RemoteState {
+    func stateForClient(_ state: RemoteState, client: ClientConnection) -> RemoteState {
         var state = state
-        state.capabilities = [WireCapabilities.roundTripProbe]
+        state.capabilities = [WireCapabilities.roundTripProbe, WireCapabilities.remoteUnlock]
+        state.unlockAvailable =
+            state.accessibilityGranted && unlockController.reachable && unlockController.enabled
+            && client.deviceID.map(unlockController.allowedDeviceIDs.contains) == true
         return state
     }
 
