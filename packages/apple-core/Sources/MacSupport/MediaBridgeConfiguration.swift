@@ -22,6 +22,11 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
         read: (URL) throws -> Data = { try Data(contentsOf: $0) },
         attributes: (URL) throws -> [FileAttributeKey: Any] = {
             try FileManager.default.attributesOfItem(atPath: $0.path)
+        },
+        replace: (URL, URL) throws -> Void = { source, target in
+            guard rename(source.path, target.path) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
         }
     ) throws -> Self {
         try validateDirectory(url.deletingLastPathComponent())
@@ -48,19 +53,21 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
                 original = info
             }
             if let loaded {
-                return try finishReadable(loaded, at: url, original: info, attributes: attributes)
+                return try finishReadable(
+                    loaded, at: url, original: info, attributes: attributes, replace: replace)
             }
         } else if errno != ENOENT {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         let value = try fresh()
-        try write(value, to: url, preserving: original)
+        try write(value, to: url, preserving: original, replace: replace)
         return value
     }
 
     private static func finishReadable(
         _ value: Self, at url: URL, original: stat,
-        attributes: (URL) throws -> [FileAttributeKey: Any]
+        attributes: (URL) throws -> [FileAttributeKey: Any],
+        replace: (URL, URL) throws -> Void
     ) throws -> Self {
         let protection = try attributes(url)[.protectionKey] as? FileProtectionType
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
@@ -70,7 +77,7 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
             // enter the unreadable-file recovery path and generate a different token.
             var privateOriginal = original
             privateOriginal.st_mode = (original.st_mode & ~0o7777) | 0o600
-            try write(value, to: url, preserving: privateOriginal)
+            try write(value, to: url, preserving: privateOriginal, replace: replace)
         }
         return value
     }
@@ -105,7 +112,10 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
         else { throw MediaBridgeError.invalidConfiguration }
     }
 
-    private static func write(_ value: Self, to url: URL, preserving original: stat?) throws {
+    private static func write(
+        _ value: Self, to url: URL, preserving original: stat?,
+        replace: (URL, URL) throws -> Void
+    ) throws {
         let files = FileManager.default
         let directory = url.deletingLastPathComponent()
         try files.createDirectory(
@@ -123,22 +133,30 @@ public struct MediaBridgeConfiguration: Codable, Sendable, Equatable {
         try handle.write(contentsOf: JSONEncoder().encode(value))
         try handle.synchronize()
         if let original {
-            var current = stat()
             // Preserve the admitted object and its owner-only access policy. Directory
             // entry churn and timestamps are not evidence that this file was replaced.
-            guard lstat(url.path, &current) == 0,
-                current.st_dev == original.st_dev, current.st_ino == original.st_ino,
-                current.st_uid == original.st_uid, current.st_mode == original.st_mode
-            else { throw MediaBridgeError.invalidConfiguration }
+            try validateOriginal(at: url, original: original)
             let backup = directory.appendingPathComponent(
                 "media-bridge-protected-\(UUID().uuidString).json")
-            try files.moveItem(at: url, to: backup)
-            do { try files.moveItem(at: staging, to: url) } catch {
-                try? files.moveItem(at: backup, to: url); throw error
+            // Hard-link the admitted object without opening protected contents. The
+            // canonical path remains present even if publication is interrupted.
+            guard link(url.path, backup.path) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
+            try validateOriginal(at: backup, original: original)
+            try validateOriginal(at: url, original: original)
+            try replace(staging, url)
         } else {
             // Do not overwrite another process's freshly created configuration.
             try files.moveItem(at: staging, to: url)
         }
+    }
+
+    private static func validateOriginal(at url: URL, original: stat) throws {
+        var current = stat()
+        guard lstat(url.path, &current) == 0,
+            current.st_dev == original.st_dev, current.st_ino == original.st_ino,
+            current.st_uid == original.st_uid, current.st_mode == original.st_mode
+        else { throw MediaBridgeError.invalidConfiguration }
     }
 }

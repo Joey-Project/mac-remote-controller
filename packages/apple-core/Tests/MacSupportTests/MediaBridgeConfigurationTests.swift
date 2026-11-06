@@ -129,4 +129,47 @@ final class MediaBridgeConfigurationTests: XCTestCase {
                 at: linked.appendingPathComponent("config.json")))
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: external.path), [])
     }
+
+    func testReadableMigrationInterruptionPreservesCanonicalCredentials() throws {
+        try assertInterruptedMigration(unreadable: false)
+    }
+
+    func testUnreadableRecoveryInterruptionPreservesCanonicalCredentials() throws {
+        try assertInterruptedMigration(unreadable: true)
+    }
+
+    private func assertInterruptedMigration(unreadable: Bool) throws {
+        let original = try MediaBridgeConfiguration.loadOrCreate(at: url)
+        let bytes = try Data(contentsOf: url)
+        var identity = stat()
+        XCTAssertEqual(lstat(url.path, &identity), 0)
+        var publications = 0
+        XCTAssertThrowsError(
+            try MediaBridgeConfiguration.loadOrCreate(
+                at: url,
+                read: { path in
+                    if unreadable { throw POSIXError(.EPERM) }
+                    return try Data(contentsOf: path)
+                },
+                attributes: { _ in [.protectionKey: FileProtectionType.complete] },
+                replace: { _, canonical in
+                    publications += 1
+                    XCTAssertEqual(try Data(contentsOf: canonical), bytes)
+                    let backups = try FileManager.default.contentsOfDirectory(
+                        at: self.directory, includingPropertiesForKeys: nil
+                    ).filter { $0.lastPathComponent.hasPrefix("media-bridge-protected-") }
+                    XCTAssertEqual(backups.count, 1)
+                    let backup = try XCTUnwrap(backups.first)
+                    var saved = stat()
+                    XCTAssertEqual(lstat(backup.path, &saved), 0)
+                    XCTAssertEqual(saved.st_ino, identity.st_ino)
+                    XCTAssertEqual(saved.st_dev, identity.st_dev)
+                    XCTAssertEqual(saved.st_mode, identity.st_mode)
+                    XCTAssertEqual(try Data(contentsOf: backup), bytes)
+                    throw POSIXError(.ECANCELED)
+                }))
+        XCTAssertEqual(publications, 1)
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+        XCTAssertEqual(try MediaBridgeConfiguration.loadOrCreate(at: url), original)
+    }
 }
