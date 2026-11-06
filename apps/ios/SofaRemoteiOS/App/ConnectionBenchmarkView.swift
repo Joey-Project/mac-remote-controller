@@ -1,12 +1,11 @@
 import AppleCore
 import SwiftUI
 
-struct ConnectionBenchmarkSheet: View {
+struct ConnectionBenchmarkView: View {
     @Bindable var model: RemoteModel
-    @Binding var isPresented: Bool
 
     var body: some View {
-        NavigationStack {
+        ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Label("Authenticated round trips", systemImage: "arrow.left.arrow.right")
                     .font(.title3.weight(.semibold))
@@ -64,12 +63,6 @@ struct ConnectionBenchmarkSheet: View {
             .padding(24)
             .navigationTitle("Benchmark")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { isPresented = false }
-                }
-            }
         }
-        .presentationDetents([.medium, .large])
     }
 }

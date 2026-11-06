@@ -48,7 +48,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
     @MainActor
     func testPinningVolumePersistsAcrossModesWithoutSendingCommands() throws {
-        launchApp()
+        launchApp(scenario: "long-name")
         defer { terminateApp() }
 
         let menu = element("remote.menu")
@@ -56,37 +56,40 @@ final class SofaRemoteiOSUITests: XCTestCase {
         XCTAssertFalse(element("volume.card").exists)
         XCTAssertEqual(try commands().count, 0)
 
-        menu.tap()
         element("mode.keyboard").tap()
         XCTAssertTrue(element("volume.card").waitForExistence(timeout: 3))
         XCTAssertEqual(try commands().count, 0)
-        element("remote.menu").tap()
         element("mode.touchpad").tap()
         XCTAssertFalse(element("volume.card").exists)
 
-        element("remote.menu").tap()
         element("volume.pin").tap()
         let pinnedCard = element("volume.card")
         XCTAssertTrue(pinnedCard.waitForExistence(timeout: 3))
         let touchpadFrame = pinnedCard.frame
 
-        element("remote.menu").tap()
         element("mode.keyboard").tap()
         let keyboardVolume = element("volume.card")
         XCTAssertTrue(keyboardVolume.waitForExistence(timeout: 3))
         XCTAssertTrue(element("keyboard.text").waitForExistence(timeout: 3))
         assertSameFrame(keyboardVolume.frame, touchpadFrame)
 
-        element("remote.menu").tap()
         element("mode.touchpad").tap()
         XCTAssertTrue(element("touchpad.surface").waitForExistence(timeout: 3))
         assertSameFrame(element("volume.card").frame, touchpadFrame)
         XCTAssertEqual(try commands().count, 0, "Changing visible controls must not send input.")
 
-        element("remote.menu").tap()
         element("volume.pin").tap()
         XCTAssertFalse(element("volume.card").exists)
         XCTAssertEqual(try commands().count, 0, "Pinning or unpinning volume is local UI state.")
+        let toolbarControls = [
+            "mode.keyboard", "volume.pin", "remote.menu", "remote.connectionDetails"
+        ]
+        for identifier in toolbarControls {
+            let control = element(identifier)
+            XCTAssertTrue(control.isHittable)
+            assertInsideWindow(control.frame)
+        }
+        attachScreenshot("Touchpad toolbar with long Mac name")
     }
 
     @MainActor
@@ -94,15 +97,17 @@ final class SofaRemoteiOSUITests: XCTestCase {
         launchApp()
         defer { terminateApp() }
 
-        element("remote.menu").tap()
-        let gesturePreferences = [
-            "gesture.drag", "gesture.shortcuts", "gesture.force", "gesture.haptics"
-        ]
-        for identifier in gesturePreferences {
+        openSettings()
+        for identifier in ["gesture.drag", "gesture.shortcuts"] {
             XCTAssertTrue(element(identifier).waitForExistence(timeout: 3))
             XCTAssertTrue(element(identifier).isEnabled)
         }
-        element("gesture.shortcuts").tap()
+        XCTAssertFalse(element("gesture.force").isEnabled)
+        XCTAssertTrue(element("settings.forceUnavailable").exists)
+        XCTAssertFalse(element("gesture.haptics").isEnabled)
+        XCTAssertTrue(element("settings.hapticsUnavailable").exists)
+        attachScreenshot("Gesture and feedback settings")
+        element("gesture.shortcuts").switches.firstMatch.tap()
         XCTAssertEqual(try commands().count, 0, "Gesture preferences are local settings.")
     }
 
@@ -111,7 +116,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
         launchApp(scenario: "legacy-companion")
         defer { terminateApp() }
 
-        element("remote.menu").tap()
+        openSettings()
         let gesturePreferences = [
             "gesture.drag", "gesture.shortcuts", "gesture.force", "gesture.haptics"
         ]
@@ -162,9 +167,16 @@ final class SofaRemoteiOSUITests: XCTestCase {
         textField.typeText("Remote draft 42")
         XCTAssertEqual(try commands().count, 0)
 
-        element("remote.menu").tap()
+        openSettings()
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+        XCTAssertTrue(textField.waitForExistence(timeout: 3))
+        XCTAssertEqual(textField.value as? String, "Remote draft 42")
+        element("remote.connectionDetails").tap()
+        XCTAssertTrue(element("connection.done").waitForExistence(timeout: 3))
+        element("connection.done").tap()
+        XCTAssertTrue(textField.waitForExistence(timeout: 3))
+        XCTAssertEqual(textField.value as? String, "Remote draft 42")
         element("mode.touchpad").tap()
-        element("remote.menu").tap()
         element("mode.keyboard").tap()
         XCTAssertTrue(textField.waitForExistence(timeout: 3))
         XCTAssertEqual(textField.value as? String, "Remote draft 42")
@@ -181,7 +193,8 @@ final class SofaRemoteiOSUITests: XCTestCase {
         launchApp()
         defer { terminateApp() }
 
-        element("remote.menu").tap()
+        element("remote.connectionDetails").tap()
+        XCTAssertTrue(element("connection.done").waitForExistence(timeout: 3))
         element("remote.disconnect").tap()
         XCTAssertTrue(app.staticTexts["Connect to your Mac"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Scan pairing QR code"].exists)
@@ -193,7 +206,8 @@ final class SofaRemoteiOSUITests: XCTestCase {
         launchApp()
         defer { terminateApp() }
 
-        element("remote.menu").tap()
+        element("remote.connectionDetails").tap()
+        attachScreenshot("Connected Mac details")
         element("remote.benchmark").tap()
 
         let runButton = app.buttons["Run benchmark"]
@@ -305,10 +319,24 @@ extension SofaRemoteiOSUITests {
 
     @MainActor
     func chooseKeyboardMode() {
-        let menu = element("remote.menu")
-        XCTAssertTrue(menu.waitForExistence(timeout: 5))
-        menu.tap()
-        element("mode.keyboard").tap()
+        let button = element("mode.keyboard")
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        button.tap()
+    }
+
+    @MainActor
+    func openSettings() {
+        element("remote.menu").tap()
+        element("remote.settings").tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func attachScreenshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor

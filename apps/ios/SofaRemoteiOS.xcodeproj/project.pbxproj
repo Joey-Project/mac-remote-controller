@@ -9,6 +9,11 @@
 		100000000000000000000044 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = 100000000000000000000002; remoteInfo = SofaRemoteiOS; };
 /* End PBXContainerItemProxy section */
 /* Begin PBXBuildFile section */
+		E60000000000000000000009 /* RemoteKeyboardControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6000000000000000000000A /* RemoteKeyboardControls.swift */; };
+		E60000000000000000000001 /* RemoteToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000002 /* RemoteToolbar.swift */; };
+		E60000000000000000000003 /* RemoteSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000004 /* RemoteSettingsView.swift */; };
+		E60000000000000000000005 /* ConnectionDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000006 /* ConnectionDetailsView.swift */; };
+		E60000000000000000000007 /* SettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000008 /* SettingsUITests.swift */; };
 		D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55000000000000000000002 /* UnlockMenuUITests.swift */; };
 		C46000000000000000000001 /* PairingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46000000000000000000002 /* PairingPanel.swift */; };
 		C45000000000000000000001 /* LiveMediaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C45000000000000000000002 /* LiveMediaUITests.swift */; };
@@ -27,11 +32,16 @@
 		C42000000000000000000001 /* MediaControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42000000000000000000002 /* MediaControls.swift */; };
 		100000000000000000000051 /* IOSBLEPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000052 /* IOSBLEPeer.swift */; };
 		B20000000000000000000001 /* RemoteActionsMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* RemoteActionsMenu.swift */; };
-		B20000000000000000000003 /* ConnectionBenchmarkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ConnectionBenchmarkSheet.swift */; };
+		B20000000000000000000003 /* ConnectionBenchmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ConnectionBenchmarkView.swift */; };
 		A31000000000000000000001 /* LocalPointerDragCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31000000000000000000002 /* LocalPointerDragCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E6000000000000000000000A /* RemoteKeyboardControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteKeyboardControls.swift; sourceTree = "<group>"; };
+		E60000000000000000000002 /* RemoteToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteToolbar.swift; sourceTree = "<group>"; };
+		E60000000000000000000004 /* RemoteSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSettingsView.swift; sourceTree = "<group>"; };
+		E60000000000000000000006 /* ConnectionDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionDetailsView.swift; sourceTree = "<group>"; };
+		E60000000000000000000008 /* SettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
 		D55000000000000000000002 /* UnlockMenuUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockMenuUITests.swift; sourceTree = "<group>"; };
 		C46000000000000000000002 /* PairingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPanel.swift; sourceTree = "<group>"; };
 		C45000000000000000000002 /* LiveMediaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveMediaUITests.swift; sourceTree = "<group>"; };
@@ -51,7 +61,7 @@
 		C42000000000000000000002 /* MediaControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaControls.swift; sourceTree = "<group>"; };
 		100000000000000000000052 /* IOSBLEPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSBLEPeer.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* RemoteActionsMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteActionsMenu.swift; sourceTree = "<group>"; };
-		B20000000000000000000004 /* ConnectionBenchmarkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBenchmarkSheet.swift; sourceTree = "<group>"; };
+		B20000000000000000000004 /* ConnectionBenchmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBenchmarkView.swift; sourceTree = "<group>"; };
 		A31000000000000000000002 /* LocalPointerDragCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPointerDragCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -91,7 +101,11 @@
 				100000000000000000000032 /* ConnectionPanel.swift */,
 				C46000000000000000000002 /* PairingPanel.swift */,
 				B20000000000000000000002 /* RemoteActionsMenu.swift */,
-				B20000000000000000000004 /* ConnectionBenchmarkSheet.swift */,
+				E60000000000000000000002 /* RemoteToolbar.swift */,
+				E6000000000000000000000A /* RemoteKeyboardControls.swift */,
+				E60000000000000000000004 /* RemoteSettingsView.swift */,
+				E60000000000000000000006 /* ConnectionDetailsView.swift */,
+				B20000000000000000000004 /* ConnectionBenchmarkView.swift */,
 				100000000000000000000033 /* TouchpadView.swift */,
 				A32000000000000000000002 /* TrackpadGestureView.swift */,
 				100000000000000000000035 /* CommittedTextInput.swift */,
@@ -104,6 +118,7 @@
 			children = (
 				100000000000000000000036 /* SofaRemoteiOSUITests.swift */,
 				D55000000000000000000002 /* UnlockMenuUITests.swift */,
+				E60000000000000000000008 /* SettingsUITests.swift */,
 				C45000000000000000000002 /* LiveMediaUITests.swift */,
 			);
 			path = SofaRemoteiOSUITests;
@@ -217,14 +232,18 @@
 				100000000000000000000030 /* ConnectionPanel.swift in Sources */,
 				C46000000000000000000001 /* PairingPanel.swift in Sources */,
 				B20000000000000000000001 /* RemoteActionsMenu.swift in Sources */,
-				B20000000000000000000003 /* ConnectionBenchmarkSheet.swift in Sources */,
+				E60000000000000000000001 /* RemoteToolbar.swift in Sources */,
+				E60000000000000000000009 /* RemoteKeyboardControls.swift in Sources */,
+				E60000000000000000000003 /* RemoteSettingsView.swift in Sources */,
+				E60000000000000000000005 /* ConnectionDetailsView.swift in Sources */,
+				B20000000000000000000003 /* ConnectionBenchmarkView.swift in Sources */,
 				100000000000000000000031 /* TouchpadView.swift in Sources */,
 				A32000000000000000000001 /* TrackpadGestureView.swift in Sources */,
 				100000000000000000000034 /* CommittedTextInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
