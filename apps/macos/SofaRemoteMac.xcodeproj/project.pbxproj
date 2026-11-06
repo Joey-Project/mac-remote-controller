@@ -23,6 +23,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E60000000000000000000001 /* DevelopmentSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = DevelopmentSigning.xcconfig; sourceTree = "<group>"; };
 		000000000000000000000010 /* SofaRemoteMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SofaRemoteMacApp.swift; sourceTree = "<group>"; };
 		000000000000000000000011 /* SofaRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SofaRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000025 /* CompanionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionModel.swift; sourceTree = "<group>"; };
@@ -54,6 +55,7 @@
 		000000000000000000000007 = {
 			isa = PBXGroup;
 			children = (
+				E60000000000000000000001 /* DevelopmentSigning.xcconfig */,
 				000000000000000000000008 /* App */,
 				000000000000000000000009 /* Products */,
 			);
@@ -237,6 +239,7 @@
 		};
 		000000000000000000000022 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E60000000000000000000001 /* DevelopmentSigning.xcconfig */;
 			buildSettings = {
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SofaRemoteMac/Info.plist;
@@ -254,6 +257,7 @@
 		};
 		000000000000000000000023 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E60000000000000000000001 /* DevelopmentSigning.xcconfig */;
 			buildSettings = {
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SofaRemoteMac/Info.plist;

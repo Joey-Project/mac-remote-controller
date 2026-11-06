@@ -155,3 +155,5 @@ jobs:
         run: bash tooling/swift/test-ios-ui-lifecycle.sh
       - name: Test background renewal tooling without credentials or devices
         run: python3 -m unittest discover -s tooling/renewal/tests -v
+      - name: Test development signing admission without credentials
+        run: python3 -m unittest discover -s tooling/swift/tests -v

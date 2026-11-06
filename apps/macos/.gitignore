@@ -12,6 +12,7 @@ xcuserdata/
 *.xcarchive
 *.xcresult
 .swiftlint_cache
+DevelopmentSigning.local.xcconfig
 *.p12
 *.pfx
 *.p8

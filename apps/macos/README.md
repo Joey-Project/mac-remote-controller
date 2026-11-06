@@ -24,6 +24,67 @@ For local device testing, install and launch the companion at
 launching copies from DerivedData or temporary build directories. Keep the same
 development signing identity as well as the installation path between updates.
 
+## Stable local development signing
+
+Configure an existing **Apple Development** identity once on each development Mac:
+
+```sh
+python3 tooling/swift/development_signing.py configure
+python3 tooling/swift/development_signing.py build
+```
+
+Run these commands from the repository root with the pinned dependencies installed
+and Node.js 26 or newer on `PATH`. When more than one development identity exists,
+select its exact certificate SHA-1 with `configure --identity SHA1`. Configuration
+pins that certificate and its Team in the ignored
+`apps/macos/DevelopmentSigning.local.xcconfig`; it stores no private key or Apple
+account credentials. Both Xcode configurations load the same pin. A missing or
+unavailable identity stops the development build instead of choosing ad-hoc signing
+or silently rotating certificates. Explicit certificate rotation can require new
+system permissions.
+Direct Xcode builds also fail without the local pin; the shared configuration
+uses an intentionally unavailable identity until configuration is complete.
+
+The verified development app is built separately at
+`.codex-tmp/development-macos/DerivedData/Build/Products/Debug/SofaRemoteMac.app`.
+After preserving the previous app and stopping the companion, install this bundle
+at `$HOME/Applications/SofaRemoteMac.app`, then verify the installed copy:
+
+```sh
+python3 tooling/swift/development_signing.py verify "$HOME/Applications/SofaRemoteMac.app"
+```
+
+The verifier requires the selected Apple certificate, expected Team and bundle ID,
+Hardened Runtime, strict nested signatures and no debug/injection entitlements.
+It rejects a designated requirement tied to a changing code hash. The separate
+`tooling/swift/check.sh` output is an ad-hoc CI artifact, unsuitable for installation.
+Both build commands unregister their temporary app product from Launch Services,
+preserving its files and the installed app's registration at the fixed path.
+Cleanup also runs when the build or signature admission fails.
+Changing from the old ad-hoc app to this certificate may require one initial
+Accessibility/Keychain authorization. Later builds retain the same privacy identity.
+If the old entry is hidden or the new app cannot be added, quit System Settings
+and reset only this app's stale Accessibility approval with
+`tccutil reset Accessibility com.joeyteng.sofaremote.mac`. Reopen the installed
+companion and choose **Allow Accessibility…** to grant its new certificate
+identity normally. This is an explicit migration repair, never part of a build
+or a routine update.
+The unlock helper still pins the exact companion code hash: helper updates continue
+to require the existing administrator-authorized setup. This does not broaden its
+trusted clients or modify lock-screen authentication policy.
+
+Offline admission tests run in CI; configured Macs also run real certificate
+continuity and negative-signature cases with:
+
+```sh
+python3 -m unittest discover -s tooling/swift/tests -v
+```
+
+See [Apple's signing guidance](https://developer.apple.com/forums/thread/751658)
+and [designated requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements/).
+
+## Remote control
+
 System volume targets the current default audio output. Fixed-volume outputs
 such as some HDMI or digital devices report that volume control is unavailable.
 The app does not silently substitute another volume target. Stereo channel
