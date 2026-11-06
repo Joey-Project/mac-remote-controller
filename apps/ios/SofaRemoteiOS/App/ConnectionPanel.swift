@@ -152,7 +152,9 @@ extension RemoteModel {
             connectionSummary = "Connected to \(state.deviceName)"
             discoveredMacs = discoveredMacs.map {
                 $0.id == saved.serviceName
-                    ? DiscoveredMac(id: $0.id, name: saved.name, isPaired: true) : $0
+                    ? DiscoveredMac(
+                        id: $0.id, name: saved.name, isPaired: true,
+                        interfaceIndex: $0.interfaceIndex) : $0
             }
         } catch { peer?.close(); errorMessage = error.localizedDescription }
     }

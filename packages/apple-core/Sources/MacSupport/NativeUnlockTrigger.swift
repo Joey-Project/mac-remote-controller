@@ -1,5 +1,6 @@
 import AppKit
 @preconcurrency import ApplicationServices
+import IOKit.pwr_mgt
 import UnlockNative
 
 public enum NativeUnlockTrigger {
@@ -31,8 +32,10 @@ public enum NativeUnlockTrigger {
         else { throw UnlockFailure.passwordControlUnavailable }
         let identifier = application.processIdentifier
         let expectedSession = fingerprint(state)
+        let currentNames = [NSFullUserName(), NSUserName()]
         let operation = Task.detached(priority: .userInitiated) {
-            try submit(process: identifier, expectedSession: expectedSession)
+            try await prepare(
+                process: identifier, expectedSession: expectedSession, currentNames: currentNames)
         }
         try await withTaskCancellationHandler {
             try Task.checkCancellation()
@@ -42,35 +45,47 @@ public enum NativeUnlockTrigger {
         }
     }
 
-    private static func submit(process: pid_t, expectedSession: Data) throws {
-        let deadline = SRContinuousTime() + 0.8
-        let root = AXUIElementCreateApplication(process)
-        var queue = [root]
-        var visited = 0
-        while !queue.isEmpty, visited < 128, SRContinuousTime() < deadline {
-            try Task.checkCancellation()
-            let element = queue.removeFirst()
-            AXUIElementSetMessagingTimeout(element, 0.05)
-            visited += 1
-            var identifier: CFTypeRef?
-            if AXUIElementCopyAttributeValue(
-                element, kAXIdentifierAttribute as CFString, &identifier) == .success,
-                identifier as? String == "UserPasswordTextField"
-            {
-                try activateControl(
-                    element, root: root, process: process,
-                    expectedSession: expectedSession, deadline: deadline)
-                return
-            }
-            var children: CFTypeRef?
-            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children)
-                == .success,
-                let elements = children as? [AXUIElement]
-            {
-                queue.append(contentsOf: elements.prefix(max(0, 128 - visited - queue.count)))
-            }
-        }
-        throw UnlockFailure.passwordControlUnavailable
+    private static func prepare(
+        process: pid_t, expectedSession: Data, currentNames: [String]
+    ) async throws {
+        try await NativeUnlockPreparation.run(
+            .init(
+                now: { SRContinuousTime() },
+                validate: {
+                    try validateConsole(
+                        expectedSession: expectedSession, deadline: .infinity)
+                },
+                wake: {
+                    var assertion = IOPMAssertionID(kIOPMNullAssertionID)
+                    // A local-style display wake is intentional: authentication needs
+                    // loginwindow's visible secure control, even for a remote request.
+                    guard
+                        IOPMAssertionDeclareUserActivity(
+                            "Sofa Remote authorized unlock" as CFString,
+                            kIOPMUserActiveLocal, &assertion) == kIOReturnSuccess
+                    else { throw UnlockFailure.displayWakeUnavailable }
+                    return { _ = IOPMAssertionRelease(assertion) }
+                },
+                find: { deadline in
+                    try NativeUnlockDiscovery.find(
+                        process: process, currentNames: currentNames, deadline: deadline)
+                },
+                selectUser: { control, deadline in
+                    try NativeUnlockDiscovery.selectUser(
+                        control, process: process, currentNames: currentNames,
+                        validateContext: {
+                            try validateConsole(
+                                expectedSession: expectedSession, deadline: deadline)
+                        })
+                },
+                submit: { control, deadline in
+                    let root = AXUIElementCreateApplication(process)
+                    AXUIElementSetMessagingTimeout(root, 0.05)
+                    try activateControl(
+                        control.element, root: root, process: process,
+                        expectedSession: expectedSession, deadline: deadline)
+                },
+                pause: { try await Task.sleep(for: .milliseconds(100)) }))
     }
 
     private static func activateControl(

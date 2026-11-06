@@ -1,8 +1,14 @@
 import Foundation
 import XCTest
+import dnssd
 @testable import AppleCore
 
 final class BonjourResolverTests: XCTestCase {
+    func testResolutionWindowExtendsOnlyWhenWakeIsSupported() {
+        XCTAssertEqual(BonjourResolver.resolutionTimeout(wakeOnResolve: false), 5)
+        XCTAssertEqual(BonjourResolver.resolutionTimeout(wakeOnResolve: true), 15)
+    }
+
     func testBuildsWSSURLFromResolvedHostAndPort() throws {
         let url = try BonjourResolver.webSocketURL(host: "sofa-mac.local.", port: 12_345)
 

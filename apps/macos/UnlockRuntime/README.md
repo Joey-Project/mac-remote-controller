@@ -67,6 +67,45 @@ private event source with no modifier flags or repeat. Both events are prepared
 before any input, and key-up is posted without an intervening cancellation point.
 The plug-in's one-use grant supplies the authorization decision.
 
+After the helper arms an allowed request, the companion declares user activity
+with macOS's power-management API to wake a sleeping display. It waits up to
+three seconds for the enabled, focused native secure control before submitting
+once. The assertion is released on success, failure or cancellation; it does
+not hold the display or system awake between requests. Preparation does not
+renew the five-second grant.
+
+If loginwindow shows its native user collection, the same preparation window
+can press the unique button identifying the current already logged-in account.
+The complete bounded collection must be readable and focused; ambiguous names,
+other accounts, disabled controls and changed console sessions are refused.
+Account selection is attempted once, then the focused secure password control
+must be found independently before authentication is submitted. A native action
+timeout is observed without replaying the action. No password is read or typed.
+
+An explicit iOS connection to a saved Mac also requests Bonjour wake-on-resolve,
+using the concrete network interface from discovery, with a bounded 15-second
+resolution window. Unknown or reserved interfaces use ordinary resolution.
+Discovery alone does not request
+wake. If the API rejects the wake flag as unsupported or invalid, resolution
+immediately falls back once to ordinary Bonjour and its five-second window.
+Other failures propagate without retry. Full-system sleep requires working network wake and a network/device
+that retains or proxies the service; the sleeping companion cannot execute an
+unlock command itself. Enable **Wake for network access** on the Mac. A closed
+laptop lid, shutdown, unsupported network wake and FileVault preboot remain
+outside the supported wake path. Network wake is not evidence of OS unlock.
+The current-user selector is based on read-only inspection of this host's native
+loginwindow collection. Other system versions or account layouts may refuse
+selection. On the tested host, paired-phone unlock has succeeded with a black
+display, at the unselected-user screen, and after manual system sleep. These are
+separate acceptance cases; network reconnection alone does not complete unlock.
+
+The remote menu follows the system's authentication-lock state. A configured
+macOS password delay can leave **Mac unlocked** visible and the action disabled
+during the grace period after wake. The tested host has a 60-second delay;
+its wake-to-authorization interval was approximately 58 seconds. To require
+authentication immediately, choose **Immediately** for the password requirement
+in macOS **Lock Screen** settings. The app does not change this global setting.
+
 The companion never reads the field value or supplies a password. When the OS
 omits character-count metadata, it sets only an empty string through the native
 setter. This can clear unsubmitted input; submission requires the empty write to

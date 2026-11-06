@@ -20,7 +20,7 @@ public enum BonjourResolverError: Error, LocalizedError, Sendable {
         case .serviceUnavailable(let status):
             "The Bonjour service could not be resolved (status \(status))."
         case .timedOut:
-            "The Bonjour service did not resolve within five seconds."
+            "The Bonjour service resolution timed out."
         case .invalidHost:
             "Bonjour returned an invalid service host."
         }
@@ -31,20 +31,23 @@ public enum BonjourResolverError: Error, LocalizedError, Sendable {
 public final class BonjourResolver {
     private static let serviceType = "_sofaremote._tcp"
     private static let serviceDomain = "local."
-    private static let resolutionTimeout: TimeInterval = 5
 
     private var serviceRef: DNSServiceRef?
     private var callbackContext: ResolveContext?
     private var timeoutWorkItem: DispatchWorkItem?
     private var completion: (@MainActor (Result<URL, Error>) -> Void)?
+    private var wakesOnResolve = false
 
     public init() {}
 
     public func resolve(
         serviceName: String,
+        wakeOnResolve: Bool = false,
+        interfaceIndex: UInt32 = 0,
         completion: @escaping @MainActor (Result<URL, Error>) -> Void
     ) {
         cancel()
+        wakesOnResolve = wakeOnResolve
         guard UUID(uuidString: serviceName) != nil else {
             completion(.failure(BonjourResolverError.invalidServiceName))
             return
@@ -57,7 +60,7 @@ public final class BonjourResolver {
 
         let (resolveStatus, resolvedRef) = startResolution(
             serviceName: serviceName,
-            context: context
+            context: context, interfaceIndex: interfaceIndex
         )
 
         guard resolveStatus == kDNSServiceErr_NoError, let resolvedRef else {
@@ -85,33 +88,45 @@ public final class BonjourResolver {
         }
         timeoutWorkItem = timeout
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + Self.resolutionTimeout,
+            deadline: .now() + Self.resolutionTimeout(wakeOnResolve: wakesOnResolve),
             execute: timeout
         )
     }
 
     private func startResolution(
         serviceName: String,
-        context: ResolveContext
+        context: ResolveContext, interfaceIndex: UInt32
     ) -> (DNSServiceErrorType, DNSServiceRef?) {
         var resolvedRef: DNSServiceRef?
-        let status = serviceName.withCString { serviceInstance in
-            Self.serviceType.withCString { serviceType in
-                Self.serviceDomain.withCString { serviceDomain in
-                    DNSServiceResolve(
-                        &resolvedRef,
-                        0,
-                        0,
-                        serviceInstance,
-                        serviceType,
-                        serviceDomain,
-                        bonjourResolveCallback,
-                        Unmanaged.passUnretained(context).toOpaque()
-                    )
+        let attempt = BonjourResolveAttempt.start(
+            wakeOnResolve: wakesOnResolve, interfaceIndex: interfaceIndex
+        ) { flags in
+            var candidate: DNSServiceRef?
+            let status = serviceName.withCString { serviceInstance in
+                Self.serviceType.withCString { serviceType in
+                    Self.serviceDomain.withCString { serviceDomain in
+                        DNSServiceResolve(
+                            &candidate,
+                            flags,
+                            interfaceIndex,
+                            serviceInstance,
+                            serviceType,
+                            serviceDomain,
+                            bonjourResolveCallback,
+                            Unmanaged.passUnretained(context).toOpaque()
+                        )
+                    }
                 }
             }
+            if status == kDNSServiceErr_NoError { resolvedRef = candidate }
+            return status
         }
-        return (status, resolvedRef)
+        wakesOnResolve = attempt.usedWake
+        return (attempt.status, resolvedRef)
+    }
+
+    nonisolated static func resolutionTimeout(wakeOnResolve: Bool) -> TimeInterval {
+        wakeOnResolve ? 15 : 5
     }
 
     public func cancel() {

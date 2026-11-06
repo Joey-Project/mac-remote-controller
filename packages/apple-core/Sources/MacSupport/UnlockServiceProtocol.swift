@@ -74,10 +74,12 @@ public enum UnlockFailure: String, Error, LocalizedError, Sendable {
     case grantRefused, triggerUnavailable, cancelled, timedOut, unknownOutcome, setupIncomplete,
         setupUnconfirmed
     case accessibilityRequired, passwordControlUnavailable, passwordFieldNotEmpty
+    case displayWakeUnavailable
     case passwordControlNotWritable, passwordControlClearFailed
 
     public var errorDescription: String? {
         switch self {
+        case .displayWakeUnavailable: "The Mac could not wake its display for remote unlock."
         case .setupUnconfirmed:
             "Setup could not be confirmed. Check the helper status before retrying."
         case .signature: "The helper or companion signing identity could not be verified."
