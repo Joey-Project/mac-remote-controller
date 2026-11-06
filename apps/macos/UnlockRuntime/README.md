@@ -95,9 +95,16 @@ laptop lid, shutdown, unsupported network wake and FileVault preboot remain
 outside the supported wake path. Network wake is not evidence of OS unlock.
 The current-user selector is based on read-only inspection of this host's native
 loginwindow collection. Other system versions or account layouts may refuse
-selection. Full-system sleep followed by automatic selection and unlock still
-requires separate hardware acceptance; network reconnection alone does not
-complete unlock.
+selection. On the tested host, paired-phone unlock has succeeded with a black
+display, at the unselected-user screen, and after manual system sleep. These are
+separate acceptance cases; network reconnection alone does not complete unlock.
+
+The remote menu follows the system's authentication-lock state. A configured
+macOS password delay can leave **Mac unlocked** visible and the action disabled
+during the grace period after wake. The tested host has a 60-second delay;
+its wake-to-authorization interval was approximately 58 seconds. To require
+authentication immediately, choose **Immediately** for the password requirement
+in macOS **Lock Screen** settings. The app does not change this global setting.
 
 The companion never reads the field value or supplies a password. When the OS
 omits character-count metadata, it sets only an empty string through the native
