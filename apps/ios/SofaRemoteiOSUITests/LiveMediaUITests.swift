@@ -23,7 +23,6 @@ final class LiveMediaUITests: XCTestCase {
             paired.tap()
         }
         XCTAssertTrue(menu.waitForExistence(timeout: 15))
-        menu.tap()
         element("mode.keyboard", in: app).tap()
         let picker = element("media.target", in: app)
         XCTAssertTrue(picker.waitForExistence(timeout: 10))

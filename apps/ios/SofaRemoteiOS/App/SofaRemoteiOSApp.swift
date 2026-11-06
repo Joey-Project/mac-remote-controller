@@ -74,7 +74,7 @@ struct SofaRemoteiOSApp: App {
         }
 
         var initialState: RemoteState? {
-            guard isActive else { return nil }
+            guard isActive, scenario != .disconnected else { return nil }
             let controls = scenario?.supportsSessionControls == true
             let known = scenario != .sessionControlsUnknown
             let locked: Bool? =
@@ -88,7 +88,8 @@ struct SofaRemoteiOSApp: App {
                 systemVolume: scenario == .unsupportedVolume ? nil : 0,
                 systemVolumeReason: scenario == .unsupportedVolume
                     ? "System volume control is unavailable on this Mac." : nil,
-                deviceName: "UI Test Mac",
+                deviceName: scenario == .longName
+                    ? "Living Room MacBook Pro with an external display" : "UI Test Mac",
                 supportsGestures: scenario == .legacyCompanion ? nil : true,
                 capabilities: controls
                     ? [
@@ -157,6 +158,8 @@ struct SofaRemoteiOSApp: App {
     }
 
     private enum UITestScenario: String, Equatable {
+        case disconnected
+        case longName = "long-name"
         case unsupportedVolume = "unsupported-volume"
         case permissionDenied = "permission-denied"
         case legacyCompanion = "legacy-companion"

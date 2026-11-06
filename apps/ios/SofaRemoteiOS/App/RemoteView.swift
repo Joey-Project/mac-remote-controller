@@ -10,7 +10,8 @@ enum VolumeScope: Hashable {
 struct RemoteView: View {
     @Bindable var model: RemoteModel
     @State private var showingScanner = false
-    @State private var showingBenchmark = false
+    @State private var showingConnectionDetails = false
+    @State private var showingSettings = false
     @State private var textToSend = ""
     @State var selectedMediaTargetID: String?
     @State var volumeScope: VolumeScope = .system
@@ -47,32 +48,33 @@ struct RemoteView: View {
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if model.isConnected {
+                if model.isConnected && !showingSettings {
+                    RemoteToolbar(
+                        model: model, selectedMode: selectedMode,
+                        isVolumePinned: $isVolumePinned,
+                        onSwitchMode: switchMode,
+                        onConnectionDetails: {
+                            prepareForPresentation()
+                            showingConnectionDetails = true
+                        },
+                        onSettings: openSettings)
+                } else if !showingSettings {
                     ToolbarItem(placement: .topBarTrailing) {
-                        RemoteActionsMenu(
-                            model: model, selectedMode: $selectedMode,
-                            isVolumePinned: $isVolumePinned,
-                            gesturesSupported: gesturesSupported,
-                            threeFingerDragEnabled: $threeFingerDragEnabled,
-                            fourFingerShortcutsEnabled: $fourFingerShortcutsEnabled,
-                            forceClickEnabled: $forceClickEnabled,
-                            hapticsEnabled: $hapticsEnabled,
-                            onTouchpad: {
-                                selectedMode = .touchpad
-                                isTextInputFocused = false
-                            },
-                            onKeyboard: {
-                                selectedMode = .keyboard
-                            },
-                            onSwitchTransport: {
-                                model.selectTransport(
-                                    model.selectedTransport == .wifi ? .bluetooth : .wifi)
-                                resetInteractionState()
-                            },
-                            onBenchmark: { showingBenchmark = true },
-                            onDisconnect: disconnect)
+                        Button(action: openSettings) {
+                            Image(systemName: "gearshape")
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .accessibilityLabel("Settings")
+                        .accessibilityIdentifier("remote.settings")
                     }
                 }
+            }
+            .navigationDestination(isPresented: $showingSettings) {
+                RemoteSettingsView(
+                    threeFingerDragEnabled: $threeFingerDragEnabled,
+                    fourFingerShortcutsEnabled: $fourFingerShortcutsEnabled,
+                    forceClickEnabled: $forceClickEnabled, hapticsEnabled: $hapticsEnabled,
+                    companionSupportsGestures: model.isConnected ? gesturesSupported : nil)
             }
             .sheet(isPresented: $showingScanner) {
                 PairingScanner { code in
@@ -80,8 +82,16 @@ struct RemoteView: View {
                     model.pair(invitation: code)
                 }
             }
-            .sheet(isPresented: $showingBenchmark) {
-                ConnectionBenchmarkSheet(model: model, isPresented: $showingBenchmark)
+            .sheet(isPresented: $showingConnectionDetails) {
+                ConnectionDetailsView(
+                    model: model,
+                    onSwitchTransport: {
+                        showingConnectionDetails = false
+                        model.selectTransport(
+                            model.selectedTransport == .wifi ? .bluetooth : .wifi)
+                        resetInteractionState()
+                    },
+                    onDisconnect: disconnect)
             }
             .alert(
                 "Connection problem",
@@ -95,7 +105,10 @@ struct RemoteView: View {
                 Text(model.errorMessage ?? "Please try again.")
             }
             .onChange(of: model.isConnected) { _, connected in
-                if !connected { resetInteractionState() }
+                if !connected {
+                    showingConnectionDetails = false
+                    resetInteractionState()
+                }
             }
             .onChange(of: mediaTargetIDs) { _, ids in
                 if let selectedMediaTargetID, ids?.contains(selectedMediaTargetID) == true {
@@ -282,40 +295,15 @@ private extension RemoteView {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            keyboardKeypad
+            RemoteKeyboardControls(isEnabled: remoteEnabled) { key in
+                model.send(RemoteCommand(name: .keyboardKey, key: key))
+            }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             Color(uiColor: .secondarySystemGroupedBackground),
             in: RoundedRectangle(cornerRadius: 18))
-    }
-
-    private var keyboardKeypad: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                keyButton("Return", symbol: "return", key: .returnKey)
-                keyButton("Escape", symbol: "escape", key: .escape)
-                keyButton("Delete", symbol: "delete.left", key: .backspace)
-            }
-            directionalPad
-        }
-    }
-
-    private var directionalPad: some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 6), count: 4),
-            spacing: 6
-        ) {
-            Color.clear.frame(height: 54).accessibilityHidden(true)
-            Color.clear.frame(height: 54).accessibilityHidden(true)
-            keyButton("Up", symbol: "arrow.up", key: .up, compact: true)
-            Color.clear.frame(height: 54).accessibilityHidden(true)
-            keyButton("Space", symbol: "space", key: .space)
-            keyButton("Left", symbol: "arrow.left", key: .left, compact: true)
-            keyButton("Down", symbol: "arrow.down", key: .down, compact: true)
-            keyButton("Right", symbol: "arrow.right", key: .right, compact: true)
-        }
     }
 
     private var systemVolumeCard: some View {
@@ -334,7 +322,23 @@ private extension RemoteView {
         remoteEnabled && !isTextComposing && !textToSend.isEmpty && textToSend.utf8.count <= 4_096
     }
 
+    private func prepareForPresentation() {
+        releaseLocalDrag()
+        isTextInputFocused = false
+    }
+
+    private func switchMode() {
+        prepareForPresentation()
+        selectedMode = selectedMode == .touchpad ? .keyboard : .touchpad
+    }
+
+    private func openSettings() {
+        prepareForPresentation()
+        showingSettings = true
+    }
+
     private func disconnect() {
+        showingConnectionDetails = false
         releaseLocalDrag()
         model.disconnect()
         resetInteractionState()
@@ -354,31 +358,6 @@ private extension RemoteView {
         guard let dragID = localDragID else { return }
         localDragID = nil
         model.endLocalPointerDrag(dragID)
-    }
-    func keyButton(_ title: String, symbol: String, key: RemoteKey, compact: Bool = false)
-        -> some View
-    {
-        Button {
-            model.send(RemoteCommand(name: .keyboardKey, key: key))
-        } label: {
-            Group {
-                if compact {
-                    Image(systemName: symbol).font(.headline)
-                } else {
-                    VStack(spacing: 6) {
-                        Image(systemName: symbol)
-                        Text(title).font(.caption2)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 54)
-        }
-        .buttonStyle(.bordered)
-        .frame(minWidth: 44)
-        .disabled(!remoteEnabled)
-        .accessibilityLabel(compact ? "\(title) arrow key" : "\(title) key")
-        .accessibilityIdentifier("key.\(key.rawValue)")
     }
     func sendTextFromButton() { _ = sendText(textToSend) }
 
