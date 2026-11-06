@@ -1,12 +1,18 @@
 import Foundation
 
-/// Retries discovery only. Once a control is selected, submission is never replayed.
+/// Retries discovery only. User selection and authentication are each attempted once.
 enum NativeUnlockPreparation {
+    enum Step<Control> {
+        case password(Control)
+        case userSelection(Control)
+    }
+
     struct Operations<Control> {
         var now: () -> TimeInterval
         var validate: () throws -> Void
         var wake: () throws -> (() -> Void)
-        var find: (TimeInterval) throws -> Control?
+        var find: (TimeInterval) throws -> Step<Control>?
+        var selectUser: (Control, TimeInterval) throws -> Void
         var submit: (Control, TimeInterval) throws -> Void
         var pause: () async throws -> Void
     }
@@ -17,17 +23,26 @@ enum NativeUnlockPreparation {
         let deadline = operations.now() + 3
         let release = try operations.wake()
         defer { release() }
+        var selectedUser = false
         while operations.now() < deadline {
             try Task.checkCancellation()
             try operations.validate()
-            if let control = try operations.find(deadline) {
+            if let step = try operations.find(deadline) {
                 try Task.checkCancellation()
                 try operations.validate()
                 guard operations.now() < deadline else {
                     throw UnlockFailure.passwordControlUnavailable
                 }
-                try operations.submit(control, deadline)
-                return
+                switch step {
+                case .password(let control):
+                    try operations.submit(control, deadline)
+                    return
+                case .userSelection(let control) where !selectedUser:
+                    selectedUser = true
+                    try operations.selectUser(control, deadline)
+                case .userSelection:
+                    break
+                }
             }
             try await operations.pause()
         }

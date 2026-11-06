@@ -71,8 +71,16 @@ After the helper arms an allowed request, the companion declares user activity
 with macOS's power-management API to wake a sleeping display. It waits up to
 three seconds for the enabled, focused native secure control before submitting
 once. The assertion is released on success, failure or cancellation; it does
-not hold the display or system awake between requests. Missing controls still
-fail without input, and preparation does not renew the five-second grant.
+not hold the display or system awake between requests. Preparation does not
+renew the five-second grant.
+
+If loginwindow shows its native user collection, the same preparation window
+can press the unique button identifying the current already logged-in account.
+The complete bounded collection must be readable and focused; ambiguous names,
+other accounts, disabled controls and changed console sessions are refused.
+Account selection is attempted once, then the focused secure password control
+must be found independently before authentication is submitted. A native action
+timeout is observed without replaying the action. No password is read or typed.
 
 An explicit iOS connection to a saved Mac also requests Bonjour wake-on-resolve,
 using the concrete network interface from discovery, with a bounded 15-second
@@ -85,9 +93,11 @@ that retains or proxies the service; the sleeping companion cannot execute an
 unlock command itself. Enable **Wake for network access** on the Mac. A closed
 laptop lid, shutdown, unsupported network wake and FileVault preboot remain
 outside the supported wake path. Network wake is not evidence of OS unlock.
-If sleep resumes to an unselected-user screen, this version reports the native
-password control unavailable. Automatic selection of the already logged-in user
-is still under investigation; network reconnection alone does not complete unlock.
+The current-user selector is based on read-only inspection of this host's native
+loginwindow collection. Other system versions or account layouts may refuse
+selection. Full-system sleep followed by automatic selection and unlock still
+requires separate hardware acceptance; network reconnection alone does not
+complete unlock.
 
 The companion never reads the field value or supplies a password. When the OS
 omits character-count metadata, it sets only an empty string through the native

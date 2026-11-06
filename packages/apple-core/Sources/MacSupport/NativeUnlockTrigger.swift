@@ -32,8 +32,10 @@ public enum NativeUnlockTrigger {
         else { throw UnlockFailure.passwordControlUnavailable }
         let identifier = application.processIdentifier
         let expectedSession = fingerprint(state)
+        let currentNames = [NSFullUserName(), NSUserName()]
         let operation = Task.detached(priority: .userInitiated) {
-            try await prepare(process: identifier, expectedSession: expectedSession)
+            try await prepare(
+                process: identifier, expectedSession: expectedSession, currentNames: currentNames)
         }
         try await withTaskCancellationHandler {
             try Task.checkCancellation()
@@ -43,7 +45,9 @@ public enum NativeUnlockTrigger {
         }
     }
 
-    private static func prepare(process: pid_t, expectedSession: Data) async throws {
+    private static func prepare(
+        process: pid_t, expectedSession: Data, currentNames: [String]
+    ) async throws {
         try await NativeUnlockPreparation.run(
             .init(
                 now: { SRContinuousTime() },
@@ -63,48 +67,25 @@ public enum NativeUnlockTrigger {
                     return { _ = IOPMAssertionRelease(assertion) }
                 },
                 find: { deadline in
-                    try findControl(process: process, deadline: deadline)
+                    try NativeUnlockDiscovery.find(
+                        process: process, currentNames: currentNames, deadline: deadline)
+                },
+                selectUser: { control, deadline in
+                    try NativeUnlockDiscovery.selectUser(
+                        control, process: process, currentNames: currentNames,
+                        validateContext: {
+                            try validateConsole(
+                                expectedSession: expectedSession, deadline: deadline)
+                        })
                 },
                 submit: { control, deadline in
                     let root = AXUIElementCreateApplication(process)
                     AXUIElementSetMessagingTimeout(root, 0.05)
                     try activateControl(
-                        control, root: root, process: process,
+                        control.element, root: root, process: process,
                         expectedSession: expectedSession, deadline: deadline)
                 },
                 pause: { try await Task.sleep(for: .milliseconds(100)) }))
-    }
-
-    private static func findControl(process: pid_t, deadline: TimeInterval) throws -> AXUIElement? {
-        let root = AXUIElementCreateApplication(process)
-        var queue = [root]
-        var visited = 0
-        while !queue.isEmpty, visited < 128, SRContinuousTime() < deadline {
-            try Task.checkCancellation()
-            let element = queue.removeFirst()
-            AXUIElementSetMessagingTimeout(element, 0.05)
-            visited += 1
-            var identifier: CFTypeRef?
-            if AXUIElementCopyAttributeValue(
-                element, kAXIdentifierAttribute as CFString, &identifier) == .success,
-                identifier as? String == "UserPasswordTextField"
-            {
-                if booleanAttribute(element, kAXEnabledAttribute as CFString),
-                    booleanAttribute(element, kAXFocusedAttribute as CFString),
-                    matchesFocus(element, root: root, process: process)
-                {
-                    return element
-                }
-            }
-            var children: CFTypeRef?
-            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children)
-                == .success,
-                let elements = children as? [AXUIElement]
-            {
-                queue.append(contentsOf: elements.prefix(max(0, 128 - visited - queue.count)))
-            }
-        }
-        return nil
     }
 
     private static func activateControl(
