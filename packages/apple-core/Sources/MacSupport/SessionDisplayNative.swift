@@ -36,11 +36,20 @@ enum SessionDisplayNative {
                         "/usr/bin/pmset", arguments: ["displaysleepnow"], seconds: 2,
                         maximumBytes: 4096)
                 }
-                let result = try await withTaskCancellationHandler {
-                    try Task.checkCancellation()
-                    return try await operation.value
-                } onCancel: {
-                    operation.cancel()
+                let result: UnlockCommandResult
+                do {
+                    result = try await withTaskCancellationHandler {
+                        try Task.checkCancellation()
+                        return try await operation.value
+                    } onCancel: {
+                        operation.cancel()
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // The shared fixed-command runner also serves unlock setup.
+                    // Its unlock-specific diagnostics do not describe display failures.
+                    throw SessionDisplayFailure.displayUnconfirmed
                 }
                 guard result.status == 0 else { throw SessionDisplayFailure.displayUnconfirmed }
             },
