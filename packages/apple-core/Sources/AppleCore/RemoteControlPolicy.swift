@@ -14,7 +14,11 @@ public struct PendingCommandMetadata: Sendable, Equatable {
         self.requestID = requestID
         self.sequence = sequence
         requiresSessionTeardownOnFailure = command.name == .pointerButtonUp
-        timeoutSeconds = command.name == .sessionUnlock ? 12 : 3
+        switch command.name {
+        case .sessionUnlock: timeoutSeconds = 12
+        case .sessionLock, .displayOff, .displayWake, .sessionLockAndDisplayOff: timeoutSeconds = 10
+        default: timeoutSeconds = 3
+        }
     }
 
     public func matchesResult(_ message: WireMessage) -> Bool {

@@ -28,9 +28,10 @@ final class LiveUnlockUITests: XCTestCase {
             return
         }
         menu.tap()
-        XCTAssertTrue(unlock.waitForExistence(timeout: 3))
-        XCTAssertEqual(unlock.label, "Mac unlocked")
-        XCTAssertFalse(unlock.isEnabled)
+        let lock = element("remote.lock", in: app)
+        XCTAssertTrue(lock.waitForExistence(timeout: 3))
+        XCTAssertTrue(lock.isEnabled)
+        XCTAssertFalse(unlock.exists)
     }
 
     @MainActor
@@ -77,6 +78,102 @@ extension SofaRemoteiOSUITests {
         XCTAssertTrue(element("remote.menu").waitForExistence(timeout: 5))
         element("remote.menu").tap()
         XCTAssertFalse(element("remote.unlock").exists)
+        XCTAssertFalse(element("remote.lock").exists)
+        XCTAssertFalse(element("remote.displayOff").exists)
+        XCTAssertFalse(element("remote.lockDisplayOff").exists)
         XCTAssertEqual(try commands().count, 0)
+    }
+
+    @MainActor
+    func testLockAndUnlockAreMutuallyExclusiveAndSendOnlyExplicitCommands() throws {
+        launchApp(scenario: "session-controls")
+        defer { terminateApp() }
+        XCTAssertTrue(element("remote.menu").waitForExistence(timeout: 5))
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.lock").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("remote.lock").isEnabled)
+        XCTAssertFalse(element("remote.unlock").exists)
+        element("remote.lock").tap()
+        _ = try waitForCommands(count: 1)
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.unlock").waitForExistence(timeout: 3))
+        XCTAssertFalse(element("remote.lock").exists)
+        XCTAssertTrue(element("remote.unlock").isEnabled)
+        element("remote.unlock").tap()
+        let sent = try waitForCommands(count: 2)
+        XCTAssertEqual(
+            sent.compactMap { $0["name"] as? String }, ["session.lock", "session.unlock"])
+        XCTAssertTrue(sent.allSatisfy { Set($0.keys) == ["name"] })
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.lock").isEnabled)
+        XCTAssertFalse(element("remote.unlock").exists)
+    }
+
+    @MainActor
+    func testDisplayOffAndWakeAreMutuallyExclusiveWithoutUnlocking() throws {
+        launchApp(scenario: "session-controls-locked")
+        defer { terminateApp() }
+        XCTAssertTrue(element("remote.menu").waitForExistence(timeout: 5))
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.displayOff").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("remote.displayOff").isEnabled)
+        XCTAssertFalse(element("remote.displayWake").exists)
+        element("remote.displayOff").tap()
+        _ = try waitForCommands(count: 1)
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.displayWake").waitForExistence(timeout: 3))
+        XCTAssertFalse(element("remote.displayOff").exists)
+        XCTAssertTrue(element("remote.displayWake").isEnabled)
+        XCTAssertTrue(element("remote.unlock").isEnabled)
+        element("remote.displayWake").tap()
+        let sent = try waitForCommands(count: 2)
+        XCTAssertEqual(sent.compactMap { $0["name"] as? String }, ["display.off", "display.wake"])
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.unlock").isEnabled)
+        XCTAssertFalse(element("remote.lock").exists)
+    }
+
+    @MainActor
+    func testLockAndDisplayOffUsesOneCommandAndUpdatesBothStates() throws {
+        launchApp(scenario: "session-controls")
+        defer { terminateApp() }
+        XCTAssertTrue(element("remote.menu").waitForExistence(timeout: 5))
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.lockDisplayOff").waitForExistence(timeout: 3))
+        element("remote.lockDisplayOff").tap()
+        let sent = try waitForCommands(count: 1)
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertEqual(sent[0]["name"] as? String, "session.lock-display-off")
+        XCTAssertEqual(Set(sent[0].keys), ["name"])
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.unlock").isEnabled)
+        XCTAssertTrue(element("remote.displayWake").isEnabled)
+        XCTAssertFalse(element("remote.lockDisplayOff").isEnabled)
+    }
+
+    @MainActor
+    func testUnknownSessionAndDisplayStatesDisableControls() throws {
+        launchApp(scenario: "session-controls-unknown")
+        defer { terminateApp() }
+        XCTAssertTrue(element("remote.menu").waitForExistence(timeout: 5))
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.lock").waitForExistence(timeout: 3))
+        for identifier in ["remote.lock", "remote.displayOff", "remote.lockDisplayOff"] {
+            XCTAssertTrue(element(identifier).exists)
+            XCTAssertFalse(element(identifier).isEnabled)
+        }
+        XCTAssertEqual(try commands().count, 0)
+    }
+
+    @MainActor
+    func testNativeLockDoesNotRequireAccessibility() throws {
+        launchApp(scenario: "session-controls-no-accessibility")
+        defer { terminateApp() }
+        XCTAssertTrue(element("remote.menu").waitForExistence(timeout: 5))
+        element("remote.menu").tap()
+        XCTAssertTrue(element("remote.lock").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("remote.lock").isEnabled)
+        element("remote.lock").tap()
+        XCTAssertEqual(try waitForCommands(count: 1)[0]["name"] as? String, "session.lock")
     }
 }

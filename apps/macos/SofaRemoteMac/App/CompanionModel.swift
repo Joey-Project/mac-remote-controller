@@ -21,6 +21,7 @@ final class ClientConnection {
     var receivedCount = 0
     var pendingMediaTasks: [String: Task<Void, Never>] = [:]
     var pendingUnlockTask: Task<Void, Never>?
+    var pendingSessionControlTask: Task<Void, Never>?
 
     init(peer: RemotePeer) { self.peer = peer }
 }
@@ -41,6 +42,8 @@ final class CompanionModel {
     let desktop = DesktopController()
     let mediaAdapters = MediaAdapterController()
     let unlockController = UnlockController()
+    let sessionDisplay = SessionDisplayController()
+    var pendingSessionControlID: UUID?
     let phoneRecovery = PhoneRecoveryController()
 
     private var listener: NWListener?
@@ -122,6 +125,7 @@ final class CompanionModel {
             return false
         }
         heldPointerOwner = nil
+        sessionDisplay.endRemoteControl()
         timer?.invalidate()
         timer = nil
         listener?.cancel()
@@ -268,6 +272,10 @@ extension CompanionModel {
                 startUnlockCommand(accepted, session: session, client: client, id: id)
                 return
             }
+            if SessionControlPolicy.isControl(accepted.command.name) {
+                startSessionControl(accepted, session: session, client: client, id: id)
+                return
+            }
             let failure = execute(accepted.command, for: client, id: id)
             client.peer.send(session.makeResult(for: accepted, error: failure))
             if accepted.command.name == .systemVolumeSet { refreshStateAndBroadcast() }
@@ -336,18 +344,6 @@ extension CompanionModel {
         }
     }
 
-    private func refreshDesktopState() {
-        remoteState = desktop.state
-        remoteState.mediaTargets = mediaAdapters.mediaTargets
-    }
-
-    private func refreshStateAndBroadcast() {
-        refreshDesktopState()
-        for client in clients.values where client.session != nil {
-            sendState(remoteState, to: client)
-        }
-    }
-
     private func tick() {
         mediaAdapters.expireStaleTargets()
         unlockController.refreshIfDue()
@@ -382,6 +378,7 @@ extension CompanionModel {
         }
         for task in client.pendingMediaTasks.values { task.cancel() }
         client.pendingUnlockTask?.cancel()
+        client.pendingSessionControlTask?.cancel()
         unlockController.cancel(connection: id)
         client.pendingMediaTasks.removeAll()
         desktop.release(&client.inputState.heldInput)
@@ -393,6 +390,7 @@ extension CompanionModel {
         }
         _ = admission.remove(id)
         refreshConnectedCount()
+        if connectedCount == 0 { sessionDisplay.endRemoteControl() }
         if closePeer { client.peer.close() }
     }
 
