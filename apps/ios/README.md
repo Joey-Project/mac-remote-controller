@@ -147,7 +147,7 @@ collection because it stalled for ten minutes; test assertions, attachments,
 and result bundles remain available. Each test has a 240-second execution
 allowance, including app launch. Cold Simulator startup, package compilation,
 and test execution are repeated for both destinations. The UI test step has a
-40-minute limit within the Apple job's 50-minute limit, leaving time for the
+40-minute limit within the Apple job's 60-minute limit, leaving time for the
 always-run artifact upload. CI retains result bundles for seven days.
 On failure, the runner reports up to ten escaped XCTest failure messages as
 GitHub annotations while preserving the original `xcodebuild` exit status.

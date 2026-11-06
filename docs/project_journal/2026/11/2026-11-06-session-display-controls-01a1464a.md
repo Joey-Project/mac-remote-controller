@@ -49,6 +49,9 @@ layout unchanged. Broader menu UI/UX work belongs in a later PR.
   use the existing in-process fixture and never affect a physical Mac.
 - Physical lock/display acceptance remains separate from automated logic/UI
   coverage, especially for private native lock compatibility and display hardware.
+- Allow 60 minutes for the complete Apple CI job, retaining the 40-minute UI
+  suite limit, 240-second per-test limits and every existing validation step.
+  This leaves room for canary/probe setup, both device suites and final builds.
 
 ## Follow-up
 
