@@ -85,6 +85,24 @@ and [designated requirements](https://developer.apple.com/documentation/technote
 
 ## Remote control
 
+Paired phones can lock the current login session, turn displays off, wake displays,
+or lock and then turn displays off. These controls run in the ordinary companion
+process and do not require the unlock helper or Accessibility permission. The
+native lock entry point is private and checked at runtime; unsupported systems
+do not advertise lock support. Requests are issued once and checked against the
+same user/session/boot and actual lock/display state before reporting success.
+The combined action never turns displays off before lock confirmation.
+
+Display-off holds a public IOKit assertion that prevents idle system sleep while
+an authenticated remote remains connected. The assertion permits display sleep
+and is released after display wake, the last remote disconnect, or companion
+shutdown. It does not change persistent energy settings or override explicit
+sleep, lid closure, or emergency sleep. The existing password-after-display-sleep
+policy still applies. Display wake requests use IOKit without attempting unlock.
+State refresh reuses the existing one-second timer; power commands never add
+work to the pointer movement path. Concurrent lock, unlock and display requests
+are rejected rather than interleaved or replayed.
+
 System volume targets the current default audio output. Fixed-volume outputs
 such as some HDMI or digital devices report that volume control is unavailable.
 The app does not silently substitute another volume target. Stereo channel

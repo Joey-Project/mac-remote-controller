@@ -59,7 +59,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
             try requireOnly(["value"])
         case .mediaControl:
             try validateMediaControl()
-        case .sessionUnlock:
+        case .sessionUnlock, .sessionLock, .displayOff, .displayWake, .sessionLockAndDisplayOff:
             try requireOnly([])
         }
     }

@@ -106,19 +106,23 @@ has `code` and `message`. Malformed or incompatible wire envelopes close the
 connection. A result means the Mac submitted the input to its OS API; it does
 not prove that the foreground app accepted the input or completed an action.
 
-| Command               | Fields                            | Bounds                                                                          |
-| --------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
-| `pointer.move`        | `x`, `y`                          | Relative finite deltas, each within ±500                                        |
-| `pointer.click`       | `button`, optional `tapTimestamp` | `left` or `right`; client monotonic uptime in `0...1,000,000,000` seconds       |
-| `pointer.scroll`      | `x`, `y`                          | Pixel deltas, each within ±100                                                  |
-| `pointer.button.down` | `button`                          | Hold `left` or `right`; requires advertised gesture support                     |
-| `pointer.button.up`   | `button`                          | Release a held button in the same connection                                    |
-| `system.shortcut`     | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`              |
-| `keyboard.text`       | `text`                            | 1–4096 UTF-8 bytes of committed text                                            |
-| `keyboard.key`        | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`         |
-| `system.volume.set`   | `value`                           | Finite scalar in 0...1                                                          |
-| `media.control`       | `mediaRequest`                    | Exact target ID, typed action, and optional finite value; see below             |
-| `session.unlock`      | None                              | Explicit one-shot unlock; requires `sessionUnlock.v1` and per-device permission |
+| Command                    | Fields                            | Bounds                                                                                                     |
+| -------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `pointer.move`             | `x`, `y`                          | Relative finite deltas, each within ±500                                                                   |
+| `pointer.click`            | `button`, optional `tapTimestamp` | `left` or `right`; client monotonic uptime in `0...1,000,000,000` seconds                                  |
+| `pointer.scroll`           | `x`, `y`                          | Pixel deltas, each within ±100                                                                             |
+| `pointer.button.down`      | `button`                          | Hold `left` or `right`; requires advertised gesture support                                                |
+| `pointer.button.up`        | `button`                          | Release a held button in the same connection                                                               |
+| `system.shortcut`          | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`                                         |
+| `keyboard.text`            | `text`                            | 1–4096 UTF-8 bytes of committed text                                                                       |
+| `keyboard.key`             | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`                                    |
+| `system.volume.set`        | `value`                           | Finite scalar in 0...1                                                                                     |
+| `media.control`            | `mediaRequest`                    | Exact target ID, typed action, and optional finite value; see below                                        |
+| `session.unlock`           | None                              | Explicit one-shot unlock; requires `sessionUnlock.v1` and per-device permission                            |
+| `session.lock`             | None                              | Lock the current session; requires `sessionLock.v1`                                                        |
+| `display.off`              | None                              | Turn displays off and prevent idle system sleep while a remote stays connected; requires `displayPower.v1` |
+| `display.wake`             | None                              | Wake displays without requesting unlock; requires `displayPower.v1`                                        |
+| `session.lock-display-off` | None                              | Confirm session lock, then turn displays off; requires both capabilities                                   |
 
 New iOS clients send `tapTimestamp` from `UITouch.timestamp`. The Mac compares
 successive client timestamps only within that client's authenticated session,
@@ -169,6 +173,33 @@ The helper's one-use grant lasts at most five seconds and the companion attempts
 only native Accessibility confirmation of an empty password field. Refer to
 [the runtime guide](../../apps/macos/UnlockRuntime/README.md) for the session-wide
 authorization window, native-trigger limitations and physical acceptance gates.
+
+### Session lock and display power
+
+`sessionLock.v1` and `displayPower.v1` are independent optional capabilities.
+`displayAsleep` is an optional boolean: true means all online displays are asleep,
+false means at least one is awake, and omission means unknown. The menu presents
+mutually exclusive lock/unlock and display-off/wake actions from observed state,
+with a separate combined lock/display-off action. Unknown state disables the
+affected action. Clients without these controls ignore the additional fields.
+
+These payload-free commands use the same authenticated, sequenced connection on
+Wi-Fi and BLE. They require the current logged-in companion owner's console
+session, but not Accessibility or the remote-unlock helper. Lock support is
+advertised only when the native entry point is available. Requests are serialized
+against other session controls and unlock. They have ten-second client deadlines;
+input deadlines remain unchanged. Each native action is issued once, with bounded
+polling to confirm its effect in the same user/session/boot. Failure, cancellation,
+or transport loss does not replay it. The combined action confirms lock before
+requesting display sleep; a later display failure does not undo the lock. State
+is broadcast after completion or failure and on the existing one-second refresh.
+
+Display-off acquires one reusable idle-system-sleep assertion, which permits the
+display to sleep. Wake confirmation, observed local display wake, last authenticated
+disconnect, companion shutdown, or failed display-off confirmation releases it.
+No persistent power setting is changed. Explicit system sleep, lid closure and
+emergency power behavior are not overridden. Display-only commands keep macOS's
+existing password-after-display-sleep policy; waking does not authorize unlock.
 
 ### Bluetooth LE transport
 

@@ -46,7 +46,7 @@ jobs:
   apple:
     name: Swift and Apple apps
     runs-on: xcode-27
-    timeout-minutes: 50
+    timeout-minutes: 60
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:

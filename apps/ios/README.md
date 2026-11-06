@@ -53,6 +53,22 @@ volume toggle and disconnect action. The keyboard includes the arrow keys,
 Return, Escape, Delete, and Space. Compose text locally, then tap Send to submit
 committed Unicode text; intermediate input-method composition is not streamed.
 
+The same menu offers **Lock Mac** or **Unlock Mac** according to the observed
+session state, and **Turn Display Off** or **Wake Display** according to the
+observed display state. **Lock & Turn Display Off** is a separate action that
+confirms the lock before switching off the displays. Unknown states disable the
+corresponding action; older companions hide unsupported controls. Unlock still
+requires the installed helper and per-device permission. Lock and display power
+do not require that helper or Accessibility permission.
+
+Turning displays off keeps the Mac from automatically sleeping while at least
+one authenticated remote connection remains. Waking a display, detecting a local
+display wake, disconnecting the last remote, or quitting the companion releases
+that keep-awake request. Explicit sleep, lid closure and system power emergencies
+remain governed by macOS. Display-only commands preserve the system's existing
+password-after-display-sleep policy; use the combined action to request a lock
+explicitly. Wake Display does not unlock the Mac.
+
 Pointer and scroll updates are combined for up to one display interval before
 they are sent. Adjacent deltas retain their sum; clicks and keyboard commands
 remain in order. If the bounded queue overloads, movement after the latest
@@ -131,7 +147,7 @@ collection because it stalled for ten minutes; test assertions, attachments,
 and result bundles remain available. Each test has a 240-second execution
 allowance, including app launch. Cold Simulator startup, package compilation,
 and test execution are repeated for both destinations. The UI test step has a
-40-minute limit within the Apple job's 50-minute limit, leaving time for the
+40-minute limit within the Apple job's 60-minute limit, leaving time for the
 always-run artifact upload. CI retains result bundles for seven days.
 On failure, the runner reports up to ten escaped XCTest failure messages as
 GitHub annotations while preserving the original `xcodebuild` exit status.

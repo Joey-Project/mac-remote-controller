@@ -11,11 +11,15 @@ public struct RemoteState: Codable, Sendable, Equatable {
     public var mediaTargets: [MediaTarget]?
     public var sessionLocked: Bool?
     public var unlockAvailable: Bool?
+    /// True only when every online display is asleep; nil means unknown.
+    public var displayAsleep: Bool?
 
     public init(
         accessibilityGranted: Bool, systemVolume: Double?, systemVolumeReason: String? = nil,
         deviceName: String, supportsGestures: Bool? = nil, capabilities: [String]? = nil,
-        mediaTargets: [MediaTarget]? = nil, sessionLocked: Bool? = nil, unlockAvailable: Bool? = nil
+        mediaTargets: [MediaTarget]? = nil, sessionLocked: Bool? = nil,
+        unlockAvailable: Bool? = nil,
+        displayAsleep: Bool? = nil
     ) {
         self.accessibilityGranted = accessibilityGranted
         self.supportsGestures = supportsGestures
@@ -26,6 +30,7 @@ public struct RemoteState: Codable, Sendable, Equatable {
         self.mediaTargets = mediaTargets
         self.sessionLocked = sessionLocked
         self.unlockAvailable = unlockAvailable
+        self.displayAsleep = displayAsleep
     }
 
     public func validate() throws {

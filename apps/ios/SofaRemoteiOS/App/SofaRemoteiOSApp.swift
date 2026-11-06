@@ -75,17 +75,33 @@ struct SofaRemoteiOSApp: App {
 
         var initialState: RemoteState? {
             guard isActive else { return nil }
+            let controls = scenario?.supportsSessionControls == true
+            let known = scenario != .sessionControlsUnknown
+            let locked: Bool? =
+                controls
+                ? (known
+                    ? scenario == .sessionControlsLocked || scenario == .sessionControlsOff : nil)
+                : (scenario == .unlockReady || scenario == .unlockDenied ? true : nil)
             return RemoteState(
-                accessibilityGranted: scenario != .permissionDenied,
+                accessibilityGranted: scenario != .permissionDenied
+                    && scenario != .sessionControlsNoAccessibility,
                 systemVolume: scenario == .unsupportedVolume ? nil : 0,
                 systemVolumeReason: scenario == .unsupportedVolume
                     ? "System volume control is unavailable on this Mac." : nil,
                 deviceName: "UI Test Mac",
                 supportsGestures: scenario == .legacyCompanion ? nil : true,
-                capabilities: scenario == .unlockReady || scenario == .unlockDenied
-                    ? [WireCapabilities.remoteUnlock] : nil,
-                sessionLocked: scenario == .unlockReady || scenario == .unlockDenied ? true : nil,
-                unlockAvailable: scenario == .unlockReady ? true : nil)
+                capabilities: controls
+                    ? [
+                        WireCapabilities.remoteUnlock, WireCapabilities.remoteLock,
+                        WireCapabilities.displayPower
+                    ]
+                    : (scenario == .unlockReady || scenario == .unlockDenied
+                        ? [WireCapabilities.remoteUnlock] : nil),
+                sessionLocked: locked,
+                unlockAvailable: controls
+                    ? scenario != .sessionControlsNoAccessibility
+                    : (scenario == .unlockReady ? true : nil),
+                displayAsleep: controls && known ? scenario == .sessionControlsOff : nil)
         }
 
         func send(
@@ -100,10 +116,17 @@ struct SofaRemoteiOSApp: App {
                 state.systemVolume = value
                 remoteState = state
             }
-            if command.name == .sessionUnlock {
-                state.sessionLocked = false
-                remoteState = state
+            switch command.name {
+            case .sessionUnlock: state.sessionLocked = false
+            case .sessionLock: state.sessionLocked = true
+            case .displayOff: state.displayAsleep = true
+            case .displayWake: state.displayAsleep = false
+            case .sessionLockAndDisplayOff:
+                state.sessionLocked = true
+                state.displayAsleep = true
+            default: break
             }
+            remoteState = state
             return true
         }
 
@@ -116,8 +139,8 @@ struct SofaRemoteiOSApp: App {
 
         private func isSupported(_ command: RemoteCommand, state: RemoteState) -> Bool {
             if command.name == .systemVolumeSet { return state.systemVolume != nil }
-            if command.name == .sessionUnlock {
-                return state.unlockAvailable == true && state.sessionLocked == true
+            if command.name == .sessionUnlock || SessionControlPolicy.isControl(command.name) {
+                return SessionControlPolicy.allows(command.name, state: state)
             }
             return state.accessibilityGranted
         }
@@ -128,22 +151,30 @@ struct SofaRemoteiOSApp: App {
                     $0.hasPrefix("--ui-testing-scenario=")
                 })
             else { return nil }
-            switch argument.dropFirst("--ui-testing-scenario=".count) {
-            case "unsupported-volume": return .unsupportedVolume
-            case "permission-denied": return .permissionDenied
-            case "legacy-companion": return .legacyCompanion
-            case "unlock-ready": return .unlockReady
-            case "unlock-denied": return .unlockDenied
-            default: return nil
-            }
+            return UITestScenario(
+                rawValue: String(argument.dropFirst("--ui-testing-scenario=".count)))
         }
     }
 
-    private enum UITestScenario: Equatable {
-        case unsupportedVolume
-        case permissionDenied
-        case legacyCompanion
-        case unlockReady
-        case unlockDenied
+    private enum UITestScenario: String, Equatable {
+        case unsupportedVolume = "unsupported-volume"
+        case permissionDenied = "permission-denied"
+        case legacyCompanion = "legacy-companion"
+        case unlockReady = "unlock-ready"
+        case unlockDenied = "unlock-denied"
+        case sessionControls = "session-controls"
+        case sessionControlsLocked = "session-controls-locked"
+        case sessionControlsOff = "session-controls-off"
+        case sessionControlsUnknown = "session-controls-unknown"
+        case sessionControlsNoAccessibility = "session-controls-no-accessibility"
+
+        var supportsSessionControls: Bool {
+            switch self {
+            case .sessionControls, .sessionControlsLocked, .sessionControlsOff,
+                .sessionControlsUnknown, .sessionControlsNoAccessibility:
+                true
+            default: false
+            }
+        }
     }
 #endif
