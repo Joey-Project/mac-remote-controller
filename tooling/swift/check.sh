@@ -74,7 +74,7 @@ for build_pass in 1 2; do
         -destination 'generic/platform=macOS' \
         -derivedDataPath "$tool_root/DerivedData/macOS" \
         -clonedSourcePackagesDirPath "$tool_root/SourcePackages" \
-        build CODE_SIGNING_ALLOWED=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=-
+        build CODE_SIGNING_ALLOWED=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
     codesign --verify --deep --strict "$mac_app_bundle"
 done
 

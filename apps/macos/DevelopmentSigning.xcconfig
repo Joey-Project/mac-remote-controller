@@ -1,0 +1,4 @@
+// Local installations require a persistent certificate identity. CI overrides
+// this explicitly with ad-hoc signing and must not be used for installation.
+CODE_SIGN_IDENTITY = Apple Development
+#include? "DevelopmentSigning.local.xcconfig"
