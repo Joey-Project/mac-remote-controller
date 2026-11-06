@@ -1,4 +1,6 @@
 // Local installations require a persistent certificate identity. CI overrides
 // this explicitly with ad-hoc signing and must not be used for installation.
-CODE_SIGN_IDENTITY = Apple Development
+// An intentionally unavailable identity makes unconfigured Xcode builds fail.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = SOFA_REMOTE_CONFIGURE_DEVELOPMENT_SIGNING_FIRST
 #include? "DevelopmentSigning.local.xcconfig"

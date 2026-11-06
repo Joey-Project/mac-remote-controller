@@ -38,11 +38,15 @@ storage and the unlock helper's exact-code-hash trust unchanged.
 
 ## Validation
 
-- Nine signing tests pass locally, including real Apple Development signatures
+- Ten signing tests pass locally, including real Apple Development signatures
   on two different executable fixtures with equal designated requirements and
   different code hashes. Fixtures are never launched or installed.
 - Negative native cases reject ad-hoc code, another certificate pin and debug
   entitlements. Missing and unavailable pins stop before a build can begin.
+- Direct Xcode configuration has no generic certificate fallback. A fresh
+  configuration without its local pin is rejected by Xcode, while the live
+  pin remains intact. Build/admission failures still unregister temporary
+  products; regression cases cover both exception paths.
 - CI runs offline cases without credentials; real certificate cases explicitly
   skip on unconfigured machines.
 - The complete certificate-signed companion passes strict nested validation.

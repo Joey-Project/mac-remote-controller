@@ -122,21 +122,23 @@ def verify(app, values):
 
 def build(configuration):
     values = read_config()
-    subprocess.run([
-        "xcodebuild", "-quiet", "-project", str(ROOT / "apps/macos/SofaRemoteMac.xcodeproj"),
-        "-scheme", "SofaRemoteMac", "-configuration", configuration,
-        "-destination", "generic/platform=macOS", "-derivedDataPath", str(BUILD / "DerivedData"),
-        "-clonedSourcePackagesDirPath", str(ROOT / ".codex-tmp/apple-tools/SourcePackages"),
-        "build", "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO",
-        "ENABLE_HARDENED_RUNTIME=YES", *(f"{key}={value}" for key, value in values.items()),
-    ], check=True, timeout=1800)
     app = BUILD / f"DerivedData/Build/Products/{configuration}/SofaRemoteMac.app"
-    result = verify(app, values)
-    # Xcode registers build products even when they have never been installed.
-    # Remove only this verified temporary product from application discovery.
-    output(["/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
-            "-u", str(app)])
-    return result
+    try:
+        subprocess.run([
+            "xcodebuild", "-quiet", "-project", str(ROOT / "apps/macos/SofaRemoteMac.xcodeproj"),
+            "-scheme", "SofaRemoteMac", "-configuration", configuration,
+            "-destination", "generic/platform=macOS", "-derivedDataPath", str(BUILD / "DerivedData"),
+            "-clonedSourcePackagesDirPath", str(ROOT / ".codex-tmp/apple-tools/SourcePackages"),
+            "build", "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO",
+            "ENABLE_HARDENED_RUNTIME=YES", *(f"{key}={value}" for key, value in values.items()),
+        ], check=True, timeout=1800)
+        return verify(app, values)
+    finally:
+        # A rejected or partially rebuilt product can already be registered.
+        # Remove only our temporary product, including on build/admission failure.
+        if app.exists():
+            output(["/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+                    "-u", str(app)])
 
 
 def main():

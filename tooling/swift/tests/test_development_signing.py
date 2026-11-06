@@ -56,6 +56,27 @@ class PinTests(unittest.TestCase):
                     signing.build("Debug")
                 command.assert_not_called()
 
+    def test_rejected_or_failed_build_still_unregisters_temporary_app(self):
+        for failure in ("verification", "build"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                app = Path(directory) / "DerivedData/Build/Products/Debug/SofaRemoteMac.app"
+                app.mkdir(parents=True)
+                with patch.object(signing, "BUILD", Path(directory)), \
+                        patch.object(signing, "read_config", return_value=signing.parse_config(CONFIG)), \
+                        patch.object(signing.subprocess, "run") as command, \
+                        patch.object(signing, "verify") as verify, \
+                        patch.object(signing, "output") as cleanup:
+                    if failure == "verification":
+                        verify.side_effect = ValueError("Rejected product")
+                        exception = ValueError
+                    else:
+                        command.side_effect = subprocess.CalledProcessError(1, "xcodebuild")
+                        exception = subprocess.CalledProcessError
+                    with self.assertRaises(exception):
+                        signing.build("Debug")
+                    cleanup.assert_called_once()
+                    self.assertEqual(cleanup.call_args.args[0][-2:], ["-u", str(app)])
+
 
 @unittest.skipUnless(sys.platform == "darwin" and signing.CONFIG.is_file(),
                      "Real Apple Development signing requires an explicitly configured Mac")

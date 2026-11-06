@@ -66,6 +66,13 @@ swift test \
 
 printf '\n==> macOS app builds and incremental signing\n'
 mac_app_bundle="$tool_root/DerivedData/macOS/Build/Products/Debug/SofaRemoteMac.app"
+unregister_ci_product() {
+    if [[ -d "$mac_app_bundle" ]]; then
+        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+            -u "$mac_app_bundle"
+    fi
+}
+trap unregister_ci_product EXIT
 for build_pass in 1 2; do
     printf 'macOS signed build %s/2\n' "$build_pass"
     xcodebuild -quiet \
@@ -79,8 +86,8 @@ for build_pass in 1 2; do
 done
 
 # This CI product is not an installation. Keep it out of app/permission pickers.
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
-    -u "$mac_app_bundle"
+trap - EXIT
+unregister_ci_product
 
 printf '\n==> iOS app build (generic Simulator)\n'
 xcodebuild -quiet \

@@ -42,6 +42,8 @@ account credentials. Both Xcode configurations load the same pin. A missing or
 unavailable identity stops the development build instead of choosing ad-hoc signing
 or silently rotating certificates. Explicit certificate rotation can require new
 system permissions.
+Direct Xcode builds also fail without the local pin; the shared configuration
+uses an intentionally unavailable identity until configuration is complete.
 
 The verified development app is built separately at
 `.codex-tmp/development-macos/DerivedData/Build/Products/Debug/SofaRemoteMac.app`.
@@ -58,6 +60,7 @@ It rejects a designated requirement tied to a changing code hash. The separate
 `tooling/swift/check.sh` output is an ad-hoc CI artifact, unsuitable for installation.
 Both build commands unregister their temporary app product from Launch Services,
 preserving its files and the installed app's registration at the fixed path.
+Cleanup also runs when the build or signature admission fails.
 Changing from the old ad-hoc app to this certificate may require one initial
 Accessibility/Keychain authorization. Later builds retain the same privacy identity.
 If the old entry is hidden or the new app cannot be added, quit System Settings
