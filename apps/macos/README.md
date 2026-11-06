@@ -56,8 +56,16 @@ The verifier requires the selected Apple certificate, expected Team and bundle I
 Hardened Runtime, strict nested signatures and no debug/injection entitlements.
 It rejects a designated requirement tied to a changing code hash. The separate
 `tooling/swift/check.sh` output is an ad-hoc CI artifact, unsuitable for installation.
+Both build commands unregister their temporary app product from Launch Services,
+preserving its files and the installed app's registration at the fixed path.
 Changing from the old ad-hoc app to this certificate may require one initial
 Accessibility/Keychain authorization. Later builds retain the same privacy identity.
+If the old entry is hidden or the new app cannot be added, quit System Settings
+and reset only this app's stale Accessibility approval with
+`tccutil reset Accessibility com.joeyteng.sofaremote.mac`. Reopen the installed
+companion and choose **Allow Accessibility…** to grant its new certificate
+identity normally. This is an explicit migration repair, never part of a build
+or a routine update.
 The unlock helper still pins the exact companion code hash: helper updates continue
 to require the existing administrator-authorized setup. This does not broaden its
 trusted clients or modify lock-screen authentication policy.

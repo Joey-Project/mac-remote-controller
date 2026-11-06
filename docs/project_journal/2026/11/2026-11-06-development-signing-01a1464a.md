@@ -1,7 +1,7 @@
 ---
 id: 20261106-development-signing-01a1464a
 title: Stable Mac Development Signing
-status: active
+status: completed
 created: 2026-11-06
 updated: 2026-11-06
 branch: codex/stable-development-signing
@@ -30,6 +30,9 @@ storage and the unlock helper's exact-code-hash trust unchanged.
   entitlements. Full nested signature verification remains mandatory.
 - Keep installable development output separate from the ad-hoc CI artifact.
   CI explicitly clears the local Team setting and tests offline admission.
+- After validation, unregister only the temporary build product from Launch
+  Services so it cannot replace the installed companion in permission pickers.
+  App files and the fixed-path installation remain intact.
 - Preserve the helper's per-version trust. This changes the companion's TCC
   identity continuity, not its privileged authorization policy.
 
@@ -49,13 +52,31 @@ storage and the unlock helper's exact-code-hash trust unchanged.
   two ad-hoc universal macOS builds and generic iOS Simulator compilation.
 - The first certificate-signed preview is installed at the fixed path with a
   verified rollback backup. Its old ad-hoc Accessibility grant no longer matches;
-  the initial normal system authorization is pending. No TCC reset, helper
-  modification, pairing reset or lock-policy change was performed.
+  system logs confirmed the requirement mismatch and the entry could not be
+  added through Settings. A one-time, explicit `tccutil` reset of only this app's
+  Accessibility approval removed the stale record. The user then granted normal
+  system authorization and refreshed Unlock Helper through its existing setup;
+  builds and routine updates never reset permissions.
+  No helper implementation, pairing-format or lock-policy logic changes were
+  introduced.
 
-## Next Steps
+## Permission Acceptance
 
-- Complete the initial transition from ad-hoc signing. An existing Accessibility
-  or Keychain authorization can require one normal system grant.
-- Confirm a subsequent certificate-signed update retains Accessibility access.
-  Updating Unlock Helper still requires the existing administrator-authorized
-  setup because it pins the exact companion version.
+- The live Accessibility record is allowed and now binds the installed
+  companion's Apple Development requirement, replacing the old ad-hoc hashes.
+- The user reconnected the paired phone and confirmed normal pointer movement
+  and clicking from the certificate-signed installation.
+- The same saved live requirement accepts the installed app, a different Debug
+  build and Release: all three have different main code hashes. The permission
+  record was unchanged during the probe. No second app replacement or launch was
+  needed for this check; this is requirement matching, not a second update trial.
+- Development and CI build completion leave the fixed installation as the only
+  registered Sofa Remote application. Build and rollback copies remain on disk.
+
+## Operational Notes
+
+- Keep the ignored certificate pin and fixed installation path on this Mac.
+  Certificate rotation is explicit and can require fresh system authorization.
+- Continue observing normal future updates. Updating Unlock Helper still
+  requires administrator-authorized setup because it pins the exact companion
+  version; this work does not change that trust policy.

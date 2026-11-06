@@ -78,6 +78,10 @@ for build_pass in 1 2; do
     codesign --verify --deep --strict "$mac_app_bundle"
 done
 
+# This CI product is not an installation. Keep it out of app/permission pickers.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+    -u "$mac_app_bundle"
+
 printf '\n==> iOS app build (generic Simulator)\n'
 xcodebuild -quiet \
     -project "$repo_root/apps/ios/SofaRemoteiOS.xcodeproj" \
