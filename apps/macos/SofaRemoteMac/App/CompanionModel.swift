@@ -4,28 +4,6 @@ import MacSupport
 import Network
 import Observation
 
-struct PairedDevice: Codable, Identifiable {
-    let id: String
-    let name: String
-    let token: String
-}
-
-@MainActor
-final class ClientConnection {
-    let peer: RemotePeer
-    var session: ServerSession?
-    var inputState = DesktopInputState()
-    var deviceID: String?
-    let connectedAtUptime = ProcessInfo.processInfo.systemUptime
-    var rateWindowUptime = ProcessInfo.processInfo.systemUptime
-    var receivedCount = 0
-    var pendingMediaTasks: [String: Task<Void, Never>] = [:]
-    var pendingUnlockTask: Task<Void, Never>?
-    var pendingSessionControlTask: Task<Void, Never>?
-
-    init(peer: RemotePeer) { self.peer = peer }
-}
-
 @MainActor
 @Observable
 final class CompanionModel {
@@ -45,18 +23,21 @@ final class CompanionModel {
     let sessionDisplay = SessionDisplayController()
     var pendingSessionControlID: UUID?
     let phoneRecovery = PhoneRecoveryController()
+    @ObservationIgnored var numericPairing: NumericPairingCoordinator?
+    @ObservationIgnored let numericPairingWindow = NumericPairingWindowController()
 
     private var listener: NWListener?
     @ObservationIgnored private var blePeripheral: MacBLEPeripheral?
     private var listenerReady = false
-    private var identity: LocalIdentity?
+    private(set) var identity: LocalIdentity?
     var clients: [UUID: ClientConnection] = [:]
     var pendingHeldInputReleases: [UUID: HeldInputState] = [:]
     var pendingGestureReleases: [UUID: SimulatedGestureState] = [:]
     var heldPointerOwner: UUID?
-    private var admission = ConnectionAdmission<UUID>()
-    private var pairing: PairingInvitation?
+    var admission = ConnectionAdmission<UUID>()
+    var pairing: PairingInvitation?
     private var timer: Timer?
+    var canOpenPairing: Bool { listenerReady && listener != nil }
 
     init() {
         remoteState = desktop.state
@@ -65,6 +46,7 @@ final class CompanionModel {
                 try SecureStore.load([PairedDevice].self, account: "paired-devices") ?? []
             let loadedIdentity = try ServerIdentity.loadOrCreate()
             identity = loadedIdentity
+            configureNumericPairing(identity: loadedIdentity)
             mediaAdapters.onTargetsChanged = { [weak self] targets in
                 self?.remoteState.mediaTargets = targets
             }
@@ -96,24 +78,6 @@ final class CompanionModel {
         }
     }
 
-    func openPairing() {
-        guard listenerReady, listener != nil, let identity else { return }
-        do {
-            guard pairedDevices.count < 8 else {
-                errorMessage = "Remove a paired device before adding another (maximum 8)."
-                return
-            }
-            let invitation = PairingInvitation(
-                serviceName: identity.serviceName,
-                certificateSHA256: PairingSecurity.fingerprint(identity.certificateDER),
-                token: try PairingSecurity.randomToken(), expiresAt: Date().addingTimeInterval(120))
-            self.invitation = try invitation.url()
-            invitationExpiresAt = invitation.expiresAt
-            pairing = invitation
-            errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
-    }
-
     func prepareForTermination() -> Bool {
         guard cancelGesturesForTermination() else { return false }
         var active = clients.mapValues { $0.inputState.heldInput }
@@ -126,6 +90,7 @@ final class CompanionModel {
                 "The pointer could not be released. Restore Accessibility access and quit again."
             return false
         }
+        numericPairing?.cancel()
         heldPointerOwner = nil
         sessionDisplay.endRemoteControl()
         timer?.invalidate()
@@ -134,12 +99,6 @@ final class CompanionModel {
         listener = nil
         for id in Array(clients.keys) { removeClient(id, closePeer: true) }
         return true
-    }
-
-    func closePairing() {
-        pairing = nil
-        invitation = nil
-        invitationExpiresAt = nil
     }
 
     func setMediaBridgeEnabled(_ enabled: Bool) {
@@ -228,7 +187,15 @@ extension CompanionModel {
         guard let client = clients[id] else { return }
         guard allowIncomingMessage(from: client) else { return }
         guard let session = client.session else {
-            authenticate(message, client: client, id: id)
+            if message.type == .pairing, let packet = message.pairing,
+                client.peer is WebSocketPeer, let numericPairing
+            {
+                numericPairing.receive(packet, from: id)
+            } else if numericPairing?.ownsConnection(id) == true {
+                client.peer.close()
+            } else {
+                authenticate(message, client: client, id: id)
+            }
             return
         }
 
@@ -296,76 +263,29 @@ extension CompanionModel {
         }
     }
 
-    private func authenticate(_ message: WireMessage, client: ClientConnection, id: UUID) {
-        guard message.type == .authenticate, let token = message.authToken,
-            let name = message.deviceName
-        else {
-            client.peer.close()
-            return
-        }
-        do {
-            let device: PairedDevice
-            var issuedToken: String?
-            let knownDevice = pairedDevices.first { PairingSecurity.matches($0.token, token) }
-            if let paired = knownDevice {
-                device = paired
-            } else if let pairing, pairing.expiresAt > Date(),
-                PairingSecurity.matches(pairing.token, token), pairedDevices.count < 8
-            {
-                device = PairedDevice(
-                    id: UUID().uuidString, name: name, token: try PairingSecurity.randomToken())
-                let updated = pairedDevices + [device]
-                try SecureStore.save(updated, account: "paired-devices")
-                pairedDevices = updated
-                issuedToken = device.token
-                closePairing()
-            } else {
-                client.peer.close()
-                return
-            }
-            let previousIDs = clients.compactMap { id, other in
-                other !== client && other.deviceID == device.id ? id : nil
-            }
-            for previousID in previousIDs { removeClient(previousID, closePeer: true) }
-            guard admission.authenticate(id) else {
-                client.peer.close()
-                return
-            }
-            client.deviceID = device.id
-            let session = ServerSession(connectionID: UUID().uuidString)
-            client.session = session
-            client.peer.send(
-                WireMessage(
-                    type: .welcome, authToken: issuedToken,
-                    connectionID: session.connectionID,
-                    state: stateForClient(remoteState, client: client)))
-            refreshConnectedCount()
-        } catch {
-            errorMessage = error.localizedDescription
-            client.peer.close()
-        }
-    }
-
     private func tick() {
         mediaAdapters.expireStaleTargets()
         unlockController.refreshIfDue()
         refreshStateAndBroadcast()
         if let pairing, pairing.expiresAt <= Date() { closePairing() }
         let now = ProcessInfo.processInfo.systemUptime
-        let expired = clients.values.filter {
-            $0.session == nil && now - $0.connectedAtUptime > 10
-        }
+        let expired = clients.filter { id, client in
+            client.session == nil && numericPairing?.ownsConnection(id) != true
+                && now - client.connectedAtUptime > 10
+        }.map { $0.value }
         for client in expired { client.peer.close() }
+        numericPairing?.tick()
         releaseExpiredInput(at: now)
         retryPendingHeldInputReleases()
     }
 
-    private func refreshConnectedCount() {
+    func refreshConnectedCount() {
         connectedCount = admission.authenticatedCount
     }
 
-    private func removeClient(_ id: UUID, closePeer: Bool = false) {
+    func removeClient(_ id: UUID, closePeer: Bool = false) {
         guard let client = clients.removeValue(forKey: id) else { return }
+        numericPairing?.disconnected(id)
         if let session = client.session {
             mediaAdapters.router.cancel(sessionID: session.connectionID)
         }

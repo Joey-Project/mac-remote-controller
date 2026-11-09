@@ -8,7 +8,6 @@ final class SofaRemoteiOSUITests: XCTestCase {
     func testTouchpadUsesDragAndTwoFingerTapCommands() throws {
         launchApp()
         defer { terminateApp() }
-
         let pad = element("touchpad.surface")
         XCTAssertTrue(pad.waitForExistence(timeout: 5))
         XCTAssertTrue(pad.isHittable)
@@ -16,7 +15,6 @@ final class SofaRemoteiOSUITests: XCTestCase {
             pad.frame.height, app.windows.firstMatch.frame.height * 0.6,
             "The default touchpad should occupy most of the portrait display.")
         XCTAssertEqual(app.scrollViews.count, 0, "The default touchpad should fill the screen.")
-
         let start = pad.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.55))
         let end = pad.coordinate(withNormalizedOffset: CGVector(dx: 0.68, dy: 0.40))
         start.press(forDuration: 0.1, thenDragTo: end)
@@ -197,6 +195,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
         XCTAssertTrue(element("connection.done").waitForExistence(timeout: 3))
         element("remote.disconnect").tap()
         XCTAssertTrue(app.staticTexts["Connect to your Mac"].waitForExistence(timeout: 3))
+        element("pairing.alternatives").tap()
         XCTAssertTrue(app.buttons["Scan pairing QR code"].exists)
         XCTAssertFalse(element("touchpad.surface").exists)
     }
@@ -300,13 +299,14 @@ extension SofaRemoteiOSUITests {
     }
 
     @MainActor
-    func launchApp(scenario: String? = nil) {
+    func launchApp(scenario: String? = nil, arguments: [String] = []) {
         XCTContext.runActivity(named: "Launch UI test app") { _ in
             continueAfterFailure = false
             XCUIDevice.shared.orientation = .portrait
             app = XCUIApplication()
             app.launchArguments = ["--ui-testing"]
             if let scenario { app.launchArguments.append("--ui-testing-scenario=\(scenario)") }
+            app.launchArguments += arguments
             app.launch()
         }
     }

@@ -17,25 +17,32 @@ public final class WebSocketPeer: RemotePeer {
 
     public static func parameters(
         identity: SecIdentity? = nil, pin: String? = nil,
-        onTrustFailure: (@MainActor @Sendable () -> Void)? = nil
+        onTrustFailure: (@MainActor @Sendable () -> Void)? = nil,
+        onPairingCertificate: (@MainActor @Sendable (String) -> Void)? = nil
     ) -> NWParameters {
         let tls = NWProtocolTLS.Options()
-        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
+        let provisional = identity == nil && pin == nil && onPairingCertificate != nil
+        sec_protocol_options_set_min_tls_protocol_version(
+            tls.securityProtocolOptions, provisional ? .TLSv13 : .TLSv12)
         if let identity, let protocolIdentity = sec_identity_create(identity) {
             sec_protocol_options_set_local_identity(tls.securityProtocolOptions, protocolIdentity)
         }
-        if let pin {
+        if pin != nil || provisional {
             sec_protocol_options_set_verify_block(
                 tls.securityProtocolOptions,
                 { _, trust, complete in
                     let securityTrust = sec_trust_copy_ref(trust).takeRetainedValue()
                     let chain = SecTrustCopyCertificateChain(securityTrust) as? [SecCertificate]
+                    let fingerprint = chain?.first.map {
+                        PairingSecurity.fingerprint(SecCertificateCopyData($0) as Data)
+                    }
                     let matches =
-                        chain?.first.map {
-                            PairingSecurity.matches(
-                                PairingSecurity.fingerprint(SecCertificateCopyData($0) as Data), pin
-                            )
+                        fingerprint.map { fingerprint in
+                            pin.map { PairingSecurity.matches(fingerprint, $0) } ?? provisional
                         } ?? false
+                    if provisional, matches, let fingerprint {
+                        MainActor.assumeIsolated { onPairingCertificate?(fingerprint) }
+                    }
                     complete(matches)
                     if !matches { MainActor.assumeIsolated { onTrustFailure?() } }
                 }, .main)

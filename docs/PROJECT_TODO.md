@@ -15,8 +15,11 @@
   with the approved iOS payload and anti-downgrade checks. Complete expired-probe
   recovery and reboot/network/missed-run coverage. Preserve historical outcomes
   and keep app updates separate from observation-day counts.
-- [pending] Phone-initiated pairing with Mac approval and numeric comparison;
-  resolve authenticated connection binding before replacing the existing QR flow.
+- [in_progress] Four-digit pairing physical acceptance: implementation, isolated
+  SRP/TLS tests and iPhone/iPad Simulator flows are covered. Verify the actual
+  Mac code window, Bonjour enrollment and Keychain persistence on real devices;
+  preserve existing pairing records during acceptance.
+  [Pairing workstream](project_journal/2026/11/2026-11-09-numeric-pairing-01a1464a.md).
 - [pending] iOS Control Centre and widget entry points.
 - [pending] Further UX: configurable seek duration in Settings, reconnect and
   permission guidance, Dynamic Type and VoiceOver acceptance, and physical iPad

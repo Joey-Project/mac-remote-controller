@@ -55,6 +55,7 @@ public final class SessionDisplayController {
     }
 
     public var displayAsleep: Bool? { operations.snapshot().displayAsleep }
+    public var sessionLocked: Bool? { operations.snapshot().locked }
 
     /// Called by the companion's existing one-second state refresh, not an input timer.
     @discardableResult

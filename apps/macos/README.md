@@ -9,9 +9,18 @@ Allow Bluetooth access when macOS requests it. The companion advertises a
 per-Mac Bluetooth LE service UUID only as a scan hint; it accepts a control
 session only after the paired-device handshake authenticates the iPhone or iPad.
 
-Choose **Pair iPhone or iPad**, then scan the invitation in the mobile app. The
-invitation expires after two minutes and can be redeemed only once. Closing
-pairing invalidates it immediately. The companion supports up to eight paired
+Select this Mac from **Nearby Macs** on the phone. While the Mac is unlocked,
+Sofa Remote opens a window with a four-digit code to enter on the phone. The
+code expires after two minutes, three incorrect attempts, cancellation,
+disconnection or Mac locking. Request and failure limits survive replacement
+codes and reconnects. SRP-6a binds mutual authentication to this Mac's TLS
+certificate before enrollment; the PIN is not transmitted. New devices do not
+automatically receive remote-unlock permission.
+
+For QR fallback, choose **Use QR pairing instead…** and scan the invitation from
+the phone's **Other pairing methods**. The invitation expires after two minutes
+and can be redeemed only once. Closing pairing invalidates it immediately.
+The companion supports up to eight paired
 devices, with one active connection per device. **Remove** revokes a device's
 credential and closes its current connection.
 

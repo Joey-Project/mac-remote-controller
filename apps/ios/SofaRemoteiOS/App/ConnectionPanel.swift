@@ -116,6 +116,9 @@ extension RemoteModel {
 
     func receive(_ message: WireMessage) {
         switch message.type {
+        case .pairing:
+            guard !isConnected, let packet = message.pairing else { peer?.close(); return }
+            receiveNumericPairing(packet)
         case .welcome: acceptWelcome(message)
         case .state: acceptState(message)
         case .result: acceptResult(message)
@@ -132,6 +135,13 @@ extension RemoteModel {
     }
 
     private func acceptWelcome(_ message: WireMessage) {
+        if let numericPairing {
+            guard numericPairing.phase == .welcome,
+                let token = message.authToken, Data(base64Encoded: token)?.count == 32
+            else {
+                failNumericPairing(.invalidHandshake); return
+            }
+        }
         guard !isConnected, let id = message.connectionID, let state = message.state,
             let candidate
         else { peer?.close(); return }
@@ -142,8 +152,13 @@ extension RemoteModel {
                 token: message.authToken ?? candidate.token)
             var updated = pairedMacs.filter { $0.serviceName != saved.serviceName }
             updated.append(saved)
-            try SecureStore.save(updated, account: "paired-macs")
+            #if DEBUG && targetEnvironment(simulator)
+                if !isUITesting { try SecureStore.save(updated, account: "paired-macs") }
+            #else
+                try SecureStore.save(updated, account: "paired-macs")
+            #endif
             pairedMacs = updated
+            clearNumericPairing()
             connectionID = id
             sequence = 0
             remoteState = state

@@ -20,6 +20,8 @@
 		D51000000000000000000001 /* UnlockSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51000000000000000000002; };
 		D52000000000000000000001 /* PhoneRecoveryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D52000000000000000000002; };
 		D53000000000000000000001 /* CompanionModel+Unlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = D53000000000000000000002; };
+		A72000000000000000000001 /* CompanionModel+Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72000000000000000000002 /* CompanionModel+Pairing.swift */; };
+		A72100000000000000000001 /* NumericPairingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72100000000000000000002 /* NumericPairingWindowController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +39,8 @@
 		D51000000000000000000002 /* UnlockSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockSetupView.swift; sourceTree = "<group>"; };
 		D52000000000000000000002 /* PhoneRecoveryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneRecoveryController.swift; sourceTree = "<group>"; };
 		D53000000000000000000002 /* CompanionModel+Unlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Unlock.swift"; sourceTree = "<group>"; };
+		A72000000000000000000002 /* CompanionModel+Pairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Pairing.swift"; sourceTree = "<group>"; };
+		A72100000000000000000002 /* NumericPairingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NumericPairingWindowController.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +70,8 @@
 			children = (
 				000000000000000000000010 /* SofaRemoteMacApp.swift */,
 				000000000000000000000025 /* CompanionModel.swift */,
+				A72100000000000000000002 /* NumericPairingWindowController.swift */,
+				A72000000000000000000002 /* CompanionModel+Pairing.swift */,
 				000000000000000000000027 /* DesktopController.swift */,
 				C40000000000000000000002 /* MediaBridgeView.swift */,
 				C41000000000000000000002 /* MediaAdapterController.swift */,
@@ -203,6 +209,8 @@
 			files = (
 				000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */,
 				000000000000000000000024 /* CompanionModel.swift in Sources */,
+				A72100000000000000000001 /* NumericPairingWindowController.swift in Sources */,
+				A72000000000000000000001 /* CompanionModel+Pairing.swift in Sources */,
 				000000000000000000000026 /* DesktopController.swift in Sources */,
 				C40000000000000000000001 /* MediaBridgeView.swift in Sources */,
 				C41000000000000000000001 /* MediaAdapterController.swift in Sources */,
