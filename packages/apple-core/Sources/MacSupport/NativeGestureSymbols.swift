@@ -83,13 +83,13 @@
             }
             // IOHIDEventFieldBase(type) is type << 16. DockPrimary flavor is 3.
             let dockBase: UInt32 = 23 << 16
-            setInteger(hid, dockBase | 1, 1)
+            setInteger(hid, dockBase | 1, CFIndex(frame.motion))
             setInteger(hid, dockBase | 5, 3)
             setDouble(hid, dockBase | 2, frame.progress)
-            if frame.phase == 4 {
+            if frame.phase == 4 || frame.phase == 8 {
                 guard let velocity = create(nil, 9, 0, 0)?.takeRetainedValue() else { return false }
                 setDouble(velocity, 9 << 16, frame.velocity)
-                setDouble(velocity, (9 << 16) | 1, 0)
+                setDouble(velocity, (9 << 16) | 1, frame.velocity)
                 setDouble(velocity, (9 << 16) | 2, 0)
                 append(hid, velocity, 0)
             }

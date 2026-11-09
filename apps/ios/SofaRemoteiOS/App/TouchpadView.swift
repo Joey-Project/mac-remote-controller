@@ -8,6 +8,7 @@ struct TouchpadCard: View {
     let shortcutsEnabled: Bool
     let forceClickEnabled: Bool
     let hapticsEnabled: Bool
+    let simulatedGesturesEnabled: Bool
     let rejectedDragID: UUID?
     let onMove: (Double, Double) -> Void
     let onScroll: (Double, Double) -> Void
@@ -17,6 +18,7 @@ struct TouchpadCard: View {
     let onDragMove: (UUID, Double, Double) -> Void
     let onDragEnd: () -> Void
     let onShortcut: (SystemShortcut) -> Void
+    let onGesture: (RemoteGestureFrame) -> Bool
 
     private var gestureInstructions: TouchGestureInstructions {
         TouchGesturePolicy.instructions(
@@ -41,10 +43,11 @@ struct TouchpadCard: View {
                     enabled: isEnabled, dragEnabled: dragEnabled,
                     shortcutsEnabled: shortcutsEnabled, forceClickEnabled: forceClickEnabled,
                     hapticsEnabled: hapticsEnabled,
+                    simulatedGesturesEnabled: simulatedGesturesEnabled,
                     rejectedDragID: rejectedDragID,
                     onMove: onMove, onScroll: onScroll, onTap: onTap,
                     onRightClick: onRightClick, onDragBegin: onDragBegin, onDragMove: onDragMove,
-                    onDragEnd: onDragEnd, onShortcut: onShortcut
+                    onDragEnd: onDragEnd, onShortcut: onShortcut, onGesture: onGesture
                 ).clipShape(RoundedRectangle(cornerRadius: 16))
                 if !isEnabled {
                     Image(systemName: "hand.tap").font(.system(size: 34))
@@ -77,6 +80,7 @@ private struct TrackpadSurface: UIViewRepresentable {
     let shortcutsEnabled: Bool
     let forceClickEnabled: Bool
     let hapticsEnabled: Bool
+    let simulatedGesturesEnabled: Bool
     let rejectedDragID: UUID?
     let onMove: (Double, Double) -> Void
     let onScroll: (Double, Double) -> Void
@@ -86,6 +90,7 @@ private struct TrackpadSurface: UIViewRepresentable {
     let onDragMove: (UUID, Double, Double) -> Void
     let onDragEnd: () -> Void
     let onShortcut: (SystemShortcut) -> Void
+    let onGesture: (RemoteGestureFrame) -> Bool
 
     func makeUIView(context: Context) -> TrackpadView {
         let view = TrackpadView(); update(view); return view
@@ -96,6 +101,8 @@ private struct TrackpadSurface: UIViewRepresentable {
         view.enabled = enabled; view.dragEnabled = dragEnabled
         view.shortcutsEnabled = shortcutsEnabled; view.forceClickEnabled = forceClickEnabled
         view.hapticsEnabled = hapticsEnabled
+        view.simulatedGesturesEnabled = simulatedGesturesEnabled
+        view.onGesture = onGesture
         view.onMove = onMove; view.onScroll = onScroll; view.onTap = onTap
         view.onRightClick = onRightClick; view.onDragBegin = onDragBegin
         view.onDragMove = onDragMove

@@ -13,6 +13,14 @@
         let phase: UInt32
         let progress: Double
         let velocity: Double
+        let motion: UInt32
+
+        init(phase: UInt32, progress: Double, velocity: Double, motion: UInt32 = 1) {
+            self.phase = phase
+            self.progress = progress
+            self.velocity = velocity
+            self.motion = motion
+        }
     }
 
     enum DockSwipeEvents {
@@ -26,25 +34,37 @@
             if modern && attachHID == nil { return nil }
             var events: [CGEvent] = []
             for frame in frames(direction: direction) {
-                guard let dock = create(), let type = CGEventType(rawValue: 30) else { return nil }
-                dock.type = type
-                dock.flags = []
-                if modern {
-                    guard attachHID?(dock, frame) == true else { return nil }
-                } else {
-                    configureLegacy(dock, frame: frame, direction: direction)
-                }
-                events.append(dock)
-                if !modern {
-                    guard let marker = create(), let type = CGEventType(rawValue: 29) else {
-                        return nil
-                    }
-                    marker.type = type
-                    marker.flags = []
-                    events.append(marker)
-                }
+                guard
+                    let next = makeFrame(
+                        frame, modern: modern, create: create, attachHID: attachHID)
+                else { return nil }
+                events += next
             }
             return events
+        }
+
+        static func makeFrame(
+            _ frame: DockSwipeFrame, modern: Bool, location: CGPoint = .zero,
+            create: () -> CGEvent? = { CGEvent(source: nil) },
+            attachHID: ((CGEvent, DockSwipeFrame) -> Bool)? = nil
+        ) -> [CGEvent]? {
+            guard let dock = create(), let type = CGEventType(rawValue: 30) else { return nil }
+            dock.type = type
+            dock.flags = []
+            dock.location = location
+            if modern {
+                guard attachHID?(dock, frame) == true else { return nil }
+                return [dock]
+            }
+            configureLegacy(dock, frame: frame)
+            guard let marker = create(), let markerType = CGEventType(rawValue: 29),
+                let sourceField = CGEventField(rawValue: 41)
+            else { return nil }
+            marker.type = markerType
+            marker.flags = []
+            marker.location = location
+            marker.setDoubleValueField(sourceField, value: 33231)
+            return [dock, marker]
         }
 
         private static func frames(direction: DockSwipeDirection) -> [DockSwipeFrame] {
@@ -57,17 +77,21 @@
         }
 
         private static func configureLegacy(
-            _ event: CGEvent, frame: DockSwipeFrame, direction: DockSwipeDirection
+            _ event: CGEvent, frame: DockSwipeFrame
         ) {
             let integers: [(UInt32, Int64)] = [
                 (110, 23),  // IOHIDEventTypeDockSwipe
-                (123, 1),  // Horizontal motion
+                (123, Int64(frame.motion)),
+                (165, Int64(frame.motion)),
                 (132, Int64(frame.phase)),
-                (135, direction == .next ? 1 : 0)
+                (134, Int64(frame.phase)),
+                (135, Int64(Float(frame.progress).bitPattern)),
+                (136, 0)
             ]
             let doubles: [(UInt32, Double)] = [
-                (119, 0), (124, frame.progress), (129, frame.velocity), (130, 0),
-                (139, Double(Float.leastNonzeroMagnitude))
+                (41, 33231), (119, Double(Float(bitPattern: frame.motion))),
+                (139, Double(Float(bitPattern: frame.motion))), (124, frame.progress),
+                (129, frame.velocity), (130, frame.velocity)
             ]
             for (rawField, value) in integers {
                 if let field = CGEventField(rawValue: rawField) {

@@ -11,6 +11,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     public var shortcut: SystemShortcut?
     public var mediaRequest: MediaRequest?
     public var tapTimestamp: TimeInterval?
+    public var gesture: RemoteGestureFrame?
 
     public init(
         name: CommandName,
@@ -22,7 +23,8 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         button: PointerButton? = nil,
         shortcut: SystemShortcut? = nil,
         mediaRequest: MediaRequest? = nil,
-        tapTimestamp: TimeInterval? = nil
+        tapTimestamp: TimeInterval? = nil,
+        gesture: RemoteGestureFrame? = nil
     ) {
         self.name = name
         self.x = x
@@ -34,10 +36,13 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         self.shortcut = shortcut
         self.mediaRequest = mediaRequest
         self.tapTimestamp = tapTimestamp
+        self.gesture = gesture
     }
 
     public func validate() throws {
         switch name {
+        case .gesture:
+            try validateGesture()
         case .pointerMove, .pointerScroll:
             try requireCoordinates(limit: name == .pointerMove ? 500 : 100)
             try requireOnly(["x", "y"])
@@ -62,6 +67,14 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         case .sessionUnlock, .sessionLock, .displayOff, .displayWake, .sessionLockAndDisplayOff:
             try requireOnly([])
         }
+    }
+
+    private func validateGesture() throws {
+        guard let gesture else {
+            throw WireProtocolError.invalidCommand("gesture.frame requires a gesture")
+        }
+        try gesture.validate()
+        try requireOnly(["gesture"])
     }
 
     private func validatePointerButton() throws {
@@ -116,6 +129,9 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     }
 
     private func requireOnly(_ allowed: Set<String>) throws {
+        if gesture != nil, !allowed.contains("gesture") {
+            throw WireProtocolError.invalidCommand("unexpected gesture for \(name.rawValue)")
+        }
         if x != nil, !allowed.contains("x") {
             throw WireProtocolError.invalidCommand("unexpected x for \(name.rawValue)")
         }
@@ -152,7 +168,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         let keys = Set(container.allKeys.map(\.stringValue))
         let allowed: Set<String> = [
             "name", "x", "y", "value", "text", "key", "button", "shortcut", "mediaRequest",
-            "tapTimestamp"
+            "tapTimestamp", "gesture"
         ]
         guard keys.isSubset(of: allowed) else {
             throw DecodingError.dataCorrupted(
@@ -180,5 +196,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
             MediaRequest.self, forKey: MediaDynamicCodingKey("mediaRequest"))
         tapTimestamp = try container.decodeIfPresent(
             TimeInterval.self, forKey: MediaDynamicCodingKey("tapTimestamp"))
+        gesture = try container.decodeIfPresent(
+            RemoteGestureFrame.self, forKey: MediaDynamicCodingKey("gesture"))
     }
 }

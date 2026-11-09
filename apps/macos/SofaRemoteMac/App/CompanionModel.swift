@@ -52,6 +52,7 @@ final class CompanionModel {
     private var identity: LocalIdentity?
     var clients: [UUID: ClientConnection] = [:]
     var pendingHeldInputReleases: [UUID: HeldInputState] = [:]
+    var pendingGestureReleases: [UUID: SimulatedGestureState] = [:]
     var heldPointerOwner: UUID?
     private var admission = ConnectionAdmission<UUID>()
     private var pairing: PairingInvitation?
@@ -114,6 +115,7 @@ final class CompanionModel {
     }
 
     func prepareForTermination() -> Bool {
+        guard cancelGesturesForTermination() else { return false }
         var active = clients.mapValues { $0.inputState.heldInput }
         let released = HeldInputTermination.prepare(
             active: &active, pending: &pendingHeldInputReleases,
@@ -354,16 +356,7 @@ extension CompanionModel {
             $0.session == nil && now - $0.connectedAtUptime > 10
         }
         for client in expired { client.peer.close() }
-        for (id, client) in clients {
-            let expiredButtons = client.inputState.heldInput.expiredButtons(
-                ifOlderThan: 8, now: now)
-            if !expiredButtons.isEmpty {
-                desktop.release(expiredButtons, from: &client.inputState.heldInput)
-                if client.inputState.heldInput.buttons.isEmpty, heldPointerOwner == id {
-                    heldPointerOwner = nil
-                }
-            }
-        }
+        releaseExpiredInput(at: now)
         retryPendingHeldInputReleases()
     }
 
@@ -381,10 +374,14 @@ extension CompanionModel {
         client.pendingSessionControlTask?.cancel()
         unlockController.cancel(connection: id)
         client.pendingMediaTasks.removeAll()
+        desktop.cancelGesture(&client.inputState.gesture)
+        if client.inputState.gesture.isActive {
+            pendingGestureReleases[id] = client.inputState.gesture
+        }
         desktop.release(&client.inputState.heldInput)
-        if client.inputState.heldInput.buttons.isEmpty {
+        if !client.inputState.hasHeldInput {
             if heldPointerOwner == id { heldPointerOwner = nil }
-        } else {
+        } else if !client.inputState.heldInput.buttons.isEmpty {
             pendingHeldInputReleases[id] = client.inputState.heldInput
             heldPointerOwner = id
         }

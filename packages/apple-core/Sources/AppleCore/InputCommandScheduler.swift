@@ -16,12 +16,25 @@ public struct InputCommandScheduler: Sendable {
         command.name == .pointerMove || command.name == .pointerScroll
     }
 
+    public static func isGestureUpdate(_ command: RemoteCommand) -> Bool {
+        command.name == .gesture && command.gesture?.phase == .changed
+    }
+
     /// Enqueues a validated command. On overflow, only motion after the last
     /// discrete barrier may be discarded; accepted barriers and their preceding
     /// motion remain in order.
     @discardableResult
     public mutating func enqueue(_ command: RemoteCommand, preservingMotion: Bool = false) -> Bool {
         guard (try? command.validate()) != nil else { return false }
+
+        if Self.isGestureUpdate(command), let frame = command.gesture,
+            let last = queuedCommands.last, Self.isGestureUpdate(last),
+            last.gesture?.id == frame.id, last.gesture?.kind == frame.kind,
+            let previousTime = last.gesture?.timestamp, frame.timestamp >= previousTime
+        {
+            queuedCommands[queuedCommands.count - 1] = command
+            return true
+        }
 
         if command.name == .systemVolumeSet,
             let index = queuedCommands.lastIndex(where: { $0.name == .systemVolumeSet }),
@@ -31,7 +44,8 @@ public struct InputCommandScheduler: Sendable {
             return true
         }
 
-        if isMotion(command), let last = queuedCommands.last, last.name == command.name,
+        if Self.isBestEffortPointerDelta(command), let last = queuedCommands.last,
+            last.name == command.name,
             let combined = combinedMotion(last, command)
         {
             queuedCommands[queuedCommands.count - 1] = combined
@@ -65,7 +79,7 @@ public struct InputCommandScheduler: Sendable {
     }
 
     private func isMotion(_ command: RemoteCommand) -> Bool {
-        Self.isBestEffortPointerDelta(command)
+        Self.isBestEffortPointerDelta(command) || Self.isGestureUpdate(command)
     }
 
     private func isBarrier(_ command: RemoteCommand) -> Bool {
