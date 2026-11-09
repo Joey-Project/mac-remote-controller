@@ -39,8 +39,12 @@ interface reports an error rather than falling back to a keyboard shortcut.
 This does not create a virtual trackpad device or require a driver. On macOS 27,
 the Space swipe carries an HID payload; earlier systems use Dock gesture fields.
 
-The remote menu lets you turn three-finger drag, four-finger shortcuts, pressure
-click, and optional haptic feedback on or off. Pressure click works only where
+The Settings page lets you turn three-finger drag, four-finger shortcuts, pressure
+click, and optional haptic feedback on or off. Preferences apply immediately and
+are saved on this device using the existing preference keys. Open Settings from
+the remote's more menu or from the setup screen without connecting a Mac.
+Unsupported controls explain the missing hardware or companion support.
+Pressure click works only where
 iOS reports force-capable touch input; ordinary tap remains available on every
 device. Haptics default off. Gesture controls stay disabled when paired to an
 older companion that does not advertise support. If a touch sequence changes
@@ -48,12 +52,16 @@ finger count or is cancelled, it cannot turn into a click; an active drag sends
 button-up on cancellation and is also released by the Mac after disconnect or an
 eight-second lost-release timeout.
 
-The top menu switches between touchpad and keyboard modes and includes the
-volume toggle and disconnect action. The keyboard includes the arrow keys,
+The leading toolbar button switches directly between the separate touchpad and
+keyboard pages. Its icon and accessibility label describe the destination mode.
+Tap the connected Mac's name to open connection details, including its name,
+status, current transport, transport switching, benchmark and disconnect.
+Switching transport retains the existing disconnect-and-reconnect behavior;
+choose the paired Mac again to reconnect. The keyboard includes the arrow keys,
 Return, Escape, Delete, and Space. Compose text locally, then tap Send to submit
 committed Unicode text; intermediate input-method composition is not streamed.
 
-The same menu offers **Lock Mac** or **Unlock Mac** according to the observed
+The more menu offers Settings and **Lock Mac** or **Unlock Mac** according to the observed
 session state, and **Turn Display Off** or **Wake Display** according to the
 observed display state. **Lock & Turn Display Off** is a separate action that
 confirms the lock before switching off the displays. Unknown states disable the
@@ -76,10 +84,13 @@ click or keyboard command may be cleared and replaced with the newest movement.
 Movement that positions an accepted click stays ahead of that click.
 
 The volume control uses a fixed position at the top of the screen. It starts
-hidden in touchpad mode; use the top menu to change the touchpad's volume-pin
-preference, which persists across mode changes. Keyboard mode always shows the
+hidden in touchpad mode; use the toolbar's speaker button to show or hide the
+volume/playback overlay. Its visibility persists across mode changes. Keyboard mode always shows the
 control at that same top and horizontal position. Changing modes or volume
 visibility does not send text or adjust volume.
+Opening and returning from Settings or connection details preserves the selected
+mode, keyboard draft, player selection and overlay visibility. Presenting these
+screens ends an active pointer drag and dismisses text focus without sending text.
 System volume is continuous and reports outputs that do not support software
 volume control.
 
@@ -147,7 +158,7 @@ collection because it stalled for ten minutes; test assertions, attachments,
 and result bundles remain available. Each test has a 240-second execution
 allowance, including app launch. Cold Simulator startup, package compilation,
 and test execution are repeated for both destinations. The UI test step has a
-40-minute limit within the Apple job's 60-minute limit, leaving time for the
+50-minute limit within the Apple job's 75-minute limit, leaving time for the
 always-run artifact upload. CI retains result bundles for seven days.
 On failure, the runner reports up to ten escaped XCTest failure messages as
 GitHub annotations while preserving the original `xcodebuild` exit status.

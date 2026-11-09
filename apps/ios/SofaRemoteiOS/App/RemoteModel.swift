@@ -109,10 +109,10 @@ final class RemoteModel {
 
     init() {
         #if DEBUG && targetEnvironment(simulator)
-            if let fixtureState = uiTestFixture.initialState {
-                connectionSummary = "Connected to UI Test Mac"
-                isConnected = true
-                remoteState = fixtureState
+            if isUITesting {
+                remoteState = uiTestFixture.initialState
+                isConnected = remoteState != nil
+                connectionSummary = isConnected ? "Connected to UI Test Mac" : "Choose your Mac"
                 return
             }
         #endif
