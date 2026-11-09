@@ -77,6 +77,9 @@ struct SofaRemoteiOSApp: App {
             guard isActive, scenario != .disconnected else { return nil }
             let controls = scenario?.supportsSessionControls == true
             let known = scenario != .sessionControlsUnknown
+            let gestureCapabilities =
+                scenario == .legacyCompanion
+                ? [] : [WireCapabilities.simulatedGestures]
             let locked: Bool? =
                 controls
                 ? (known
@@ -91,13 +94,14 @@ struct SofaRemoteiOSApp: App {
                 deviceName: scenario == .longName
                     ? "Living Room MacBook Pro with an external display" : "UI Test Mac",
                 supportsGestures: scenario == .legacyCompanion ? nil : true,
-                capabilities: controls
-                    ? [
-                        WireCapabilities.remoteUnlock, WireCapabilities.remoteLock,
-                        WireCapabilities.displayPower
-                    ]
-                    : (scenario == .unlockReady || scenario == .unlockDenied
-                        ? [WireCapabilities.remoteUnlock] : nil),
+                capabilities: gestureCapabilities
+                    + (controls
+                        ? [
+                            WireCapabilities.remoteUnlock, WireCapabilities.remoteLock,
+                            WireCapabilities.displayPower
+                        ]
+                        : (scenario == .unlockReady || scenario == .unlockDenied
+                            ? [WireCapabilities.remoteUnlock] : [])),
                 sessionLocked: locked,
                 unlockAvailable: controls
                     ? scenario != .sessionControlsNoAccessibility

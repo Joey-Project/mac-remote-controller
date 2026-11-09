@@ -13,7 +13,8 @@ public struct PendingCommandMetadata: Sendable, Equatable {
         self.connectionID = connectionID
         self.requestID = requestID
         self.sequence = sequence
-        requiresSessionTeardownOnFailure = command.name == .pointerButtonUp
+        requiresSessionTeardownOnFailure =
+            command.name == .pointerButtonUp || command.name == .gesture
         switch command.name {
         case .sessionUnlock: timeoutSeconds = 12
         case .sessionLock, .displayOff, .displayWake, .sessionLockAndDisplayOff: timeoutSeconds = 10
@@ -37,7 +38,8 @@ public enum PointerOwnershipPolicy {
     ) -> Bool {
         guard let pointerOwner, pointerOwner != requester else { return false }
         switch command.name {
-        case .pointerMove, .pointerClick, .pointerScroll, .pointerButtonDown, .pointerButtonUp:
+        case .pointerMove, .pointerClick, .pointerScroll, .pointerButtonDown, .pointerButtonUp,
+            .gesture:
             return true
         default: return false
         }

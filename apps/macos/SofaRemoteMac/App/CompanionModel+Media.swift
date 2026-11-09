@@ -28,6 +28,9 @@ extension CompanionModel {
     func stateForClient(_ state: RemoteState, client: ClientConnection) -> RemoteState {
         var state = state
         state.capabilities = [WireCapabilities.roundTripProbe, WireCapabilities.remoteUnlock]
+        if desktop.supportsSimulatedGestures {
+            state.capabilities?.append(WireCapabilities.simulatedGestures)
+        }
         if sessionDisplay.supportsLock { state.capabilities?.append(WireCapabilities.remoteLock) }
         state.capabilities?.append(WireCapabilities.displayPower)
         state.unlockAvailable =

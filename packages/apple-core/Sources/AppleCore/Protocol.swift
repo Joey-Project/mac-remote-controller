@@ -18,6 +18,7 @@ public enum CommandName: String, Codable, Sendable, Equatable {
     case pointerButtonDown = "pointer.button.down"
     case pointerButtonUp = "pointer.button.up"
     case systemShortcut = "system.shortcut"
+    case gesture = "gesture.frame"
     case keyboardText = "keyboard.text"
     case keyboardKey = "keyboard.key"
     case systemVolumeSet = "system.volume.set"
@@ -54,6 +55,7 @@ public enum SystemShortcut: String, Codable, Sendable, Equatable {
 }
 
 public enum WireCapabilities {
+    public static let simulatedGestures = "simulatedGestures.v1"
     public static let roundTripProbe = "roundTripProbe.v1"
     public static let remoteUnlock = "sessionUnlock.v1"
     public static let remoteLock = "sessionLock.v1"

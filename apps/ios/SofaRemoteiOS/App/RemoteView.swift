@@ -230,6 +230,8 @@ private extension RemoteView {
             shortcutsEnabled: gesturesSupported && fourFingerShortcutsEnabled,
             forceClickEnabled: gesturesSupported && forceClickEnabled,
             hapticsEnabled: gesturesSupported && hapticsEnabled,
+            simulatedGesturesEnabled: model.remoteState?.capabilities?.contains(
+                WireCapabilities.simulatedGestures) == true,
             rejectedDragID: model.rejectedLocalDragID,
             onMove: { x, y in model.send(RemoteCommand(name: .pointerMove, x: x, y: y)) },
             onScroll: { x, y in model.send(RemoteCommand(name: .pointerScroll, x: x, y: y)) },
@@ -256,6 +258,13 @@ private extension RemoteView {
             onShortcut: { action in
                 guard gesturesSupported && fourFingerShortcutsEnabled else { return }
                 model.send(RemoteCommand(name: .systemShortcut, shortcut: action))
+            },
+            onGesture: { frame in
+                guard
+                    model.remoteState?.capabilities?.contains(WireCapabilities.simulatedGestures)
+                        == true
+                else { return false }
+                return model.send(RemoteCommand(name: .gesture, gesture: frame))
             }
         )
     }

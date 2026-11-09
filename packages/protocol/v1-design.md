@@ -114,6 +114,7 @@ not prove that the foreground app accepted the input or completed an action.
 | `pointer.button.down`      | `button`                          | Hold `left` or `right`; requires advertised gesture support                                                |
 | `pointer.button.up`        | `button`                          | Release a held button in the same connection                                                               |
 | `system.shortcut`          | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`                                         |
+| `gesture.frame`            | `gesture`                         | Capability-gated phased magnification or horizontal/vertical Dock swipe; see below                         |
 | `keyboard.text`            | `text`                            | 1–4096 UTF-8 bytes of committed text                                                                       |
 | `keyboard.key`             | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`                                    |
 | `system.volume.set`        | `value`                           | Finite scalar in 0...1                                                                                     |
@@ -144,7 +145,7 @@ Clients acknowledge commands using `result` and consume state as independent
 snapshots, without waiting for one snapshot per command.
 The client bounds outstanding commands and its unsent queue to eight each.
 Adjacent relative deltas are combined within the wire bounds. All other input
-commands except coalesced system-volume updates are ordering barriers, including
+commands except coalesced system-volume and same-gesture progress updates are ordering barriers, including
 button holds, releases, and system shortcuts. Under overload, only trailing
 motion after the latest barrier may be replaced; accepted motion before a
 barrier is retained, and a new discrete action is rejected if the queue is full.
@@ -154,6 +155,43 @@ be discarded. A release rejected by the Mac closes the session.
 Adjacent unsent absolute-volume updates retain the latest value. Disconnect
 discards pending and unsent input. Missing command results time out after three
 seconds and close the connection without replaying commands.
+
+### Phased touch gestures
+
+`simulatedGestures.v1` advertises `gesture.frame`. New clients send this command
+only after the companion advertises it. Older companions retain pixel scrolling
+and the fixed `system.shortcut` actions; new companions still accept older clients.
+
+The nested `gesture` has exactly `id` (UUID), `kind` (`magnify`, `horizontalSwipe`,
+or `verticalSwipe`), `phase` (`began`, `changed`, `ended`, or `cancelled`), `value`,
+and `timestamp` (finite client uptime in `0...1,000,000,000` seconds). `began`
+requires zero value. Magnification value is cumulative `log(scale)` bounded to
+±4; swipe value is cumulative normalized travel bounded to ±1. A live sequence
+must retain the same ID and kind and nondecreasing timestamps. No arbitrary
+HID types, event fields, key codes or executable actions are accepted.
+
+Adjacent unsent `changed` frames for the same gesture replace each other with
+the newest cumulative value; start and terminal frames remain ordering barriers.
+The terminal value includes any coalesced movement. Updates use the existing
+continuous-input pacing; start/end/cancel flush immediately when credits permit.
+An unqueueable phase or rejected gesture command closes the session for cleanup.
+
+The Mac computes relative magnification from cumulative scale changes and posts
+native magnification events at the pointer position captured when the gesture
+began. It sends no keyboard or scroll-wheel zoom fallback. AppKit's responder
+chain decides whether a view or an ancestor handles the gesture; if no responder
+handles it, it is discarded. There is no universal preflight query for whether
+an arbitrary application will zoom its content. See
+[Apple's trackpad event guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/EventOverview/HandlingTouchEvents/HandlingTouchEvents.html).
+
+Four-finger gestures retain their initial axis while progress can reverse.
+Short travel or reverse release cancels the Dock gesture. Native cancellation
+events are allocated before each start/update is posted. The companion uses
+the retained events on cancellation, disconnect, revocation, eight seconds of
+gesture inactivity, or ordinary termination. Missing Accessibility permission
+retains pending cancellation and pointer ownership for retry, and blocks quit.
+Gesture ownership also blocks conflicting pointer input from another remote.
+Event submission does not prove the application zoomed or Dock animated.
 
 ### Existing-session unlock
 
@@ -285,7 +323,7 @@ Held pointer ownership is limited to one remote session. Conflicting pointer
 commands from another session fail explicitly. A client must release held input
 when a gesture is cancelled or its surface is removed; the server also releases
 on disconnect, revocation, or eight seconds without valid client activity.
-Four-finger actions request fixed native Dock actions: Mission Control, App
+Legacy four-finger actions request fixed native Dock actions: Mission Control, App
 Exposé, and previous/next Space. The historical `system.shortcut` command name
 remains for wire compatibility; these actions emit no keyboard or modifier
 events and do not depend on local keyboard shortcut assignments. The companion

@@ -125,7 +125,7 @@ extension RemoteModel {
 extension RemoteModel {
     func handleQueueRejection(_ command: RemoteCommand, orderedDragInput: Bool) -> Bool {
         if orderedDragInput { return false }
-        if command.name == .pointerButtonUp {
+        if command.name == .pointerButtonUp || command.name == .gesture {
             let unknownOutcome = !pending.isEmpty
             disconnect()
             errorMessage =

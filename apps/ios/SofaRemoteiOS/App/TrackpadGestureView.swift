@@ -8,6 +8,7 @@ final class TrackpadView: UIView {
     var shortcutsEnabled = true
     var forceClickEnabled = true
     var hapticsEnabled = false
+    var simulatedGesturesEnabled = false
     var onMove: ((Double, Double) -> Void)?
     var onScroll: ((Double, Double) -> Void)?
     var onTap: ((TimeInterval) -> Void)?
@@ -16,8 +17,9 @@ final class TrackpadView: UIView {
     var onDragMove: ((UUID, Double, Double) -> Void)?
     var onDragEnd: (() -> Void)?
     var onShortcut: ((SystemShortcut) -> Void)?
+    var onGesture: ((RemoteGestureFrame) -> Bool)?
 
-    private enum Mode { case idle, pending, move, scroll, drag, swipe, blocked }
+    private enum Mode { case idle, pending, move, scroll, magnify, drag, swipe, blocked }
     private var mode: Mode = .idle
     private var sequence = TouchSequencePolicy()
     private var touchCount = 0
@@ -25,6 +27,10 @@ final class TrackpadView: UIView {
     private var previous = CGPoint.zero
     private var didForceClick = false
     private var fingerMovement = TouchFingerMovementTracker<ObjectIdentifier>()
+    private var twoFinger = TwoFingerGesturePolicy()
+    private var nativeGestureID: UUID?
+    private var nativeGestureKind: RemoteGestureKind?
+    private var nativeGestureValue = 0.0
     private var dragHeld = false
     private var activeDragID: UUID?
     private var dragSequence = PointerDragSequencePolicy()
@@ -49,6 +55,7 @@ final class TrackpadView: UIView {
             previous = start; didForceClick = false
             fingerMovement.reset()
             rememberTouchOrigins(touches)
+            twoFinger.begin(span: span(event))
             if hapticsEnabled { tapFeedback.prepare(); pressureFeedback.prepare() }
         } else {
             guard mode != .blocked else { return }
@@ -58,6 +65,7 @@ final class TrackpadView: UIView {
             switch outcome {
             case .joined, .promotedToShortcut:
                 if outcome == .promotedToShortcut {
+                    endNativeGesture(cancelled: true)
                     if dragHeld { dragHeld = false; onDragEnd?() }
                     activeDragID = nil
                     dragSequence.finish()
@@ -67,6 +75,7 @@ final class TrackpadView: UIView {
                 start = point; previous = point
                 rememberTouchOrigins(touches)
                 updateTwoFingerTapSlop(event, including: touches)
+                twoFinger.begin(span: span(event))
             case .cancelled:
                 cancelSequence(blockUntilLift: true)
             default: break
@@ -89,6 +98,18 @@ final class TrackpadView: UIView {
         let point = centroid(event) ?? touches.first?.location(in: self) ?? previous
         var delta = CGPoint(x: point.x - previous.x, y: point.y - previous.y)
         let total = hypot(point.x - start.x, point.y - start.y)
+        let currentSpan = simulatedGesturesEnabled && sequence.initialCount == 2 ? span(event) : 0
+        if simulatedGesturesEnabled, sequence.initialCount == 2, mode == .pending {
+            let kind = twoFinger.update(
+                span: currentSpan, translationX: Double(point.x - start.x),
+                translationY: Double(point.y - start.y))
+            if kind == .pending { return }
+            if kind == .magnify {
+                mode = .magnify
+                sequence.activate()
+                guard beginNativeGesture(.magnify) else { mode = .blocked; return }
+            }
+        }
         if mode == .pending,
             TouchGesturePolicy.shouldBeginMovement(
                 distance: Double(total), threshold: Double(threshold))
@@ -96,24 +117,19 @@ final class TrackpadView: UIView {
             activateGesture()
             delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
         }
-        emitMovement(delta, total: CGPoint(x: point.x - start.x, y: point.y - start.y))
+        emitMovement(
+            delta, total: CGPoint(x: point.x - start.x, y: point.y - start.y), span: currentSpan)
         previous = point
         checkForceClick(touches)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         updateTwoFingerTapSlop(event, including: touches)
-        let wasSwipe = mode == .swipe
+        endNativeGesture(cancelled: false)
         let completedCount = sequence.initialCount
         let endOutcome = sequence.end(
             removing: touches.count, dragEnabled: dragEnabled,
             shortcutsEnabled: shortcutsEnabled, at: monotonicTime)
-        if wasSwipe, endOutcome == .cancelled,
-            let action = shortcut(from: CGPoint(x: previous.x - start.x, y: previous.y - start.y))
-        {
-            onShortcut?(action)
-            emitHaptic()
-        }
         touchCount = max(0, touchCount - touches.count)
         if endOutcome == .partialPendingLift { return }
         if endOutcome == .cancelled {
@@ -190,6 +206,7 @@ final class TrackpadView: UIView {
     }
 
     private func cancelSequence(blockUntilLift: Bool = false) {
+        endNativeGesture(cancelled: true)
         if dragHeld {
             dragHeld = false
             onDragEnd?()
@@ -257,7 +274,7 @@ extension TrackpadView {
         sequence.activate()
     }
 
-    private func emitMovement(_ delta: CGPoint, total: CGPoint) {
+    private func emitMovement(_ delta: CGPoint, total: CGPoint, span: Double) {
         switch mode {
         case .move:
             onMove?(
@@ -265,6 +282,8 @@ extension TrackpadView {
         case .scroll:
             onScroll?(
                 Double(delta.x.clamped(to: -100...100)), Double(delta.y.clamped(to: -100...100)))
+        case .magnify:
+            updateNativeGesture(twoFinger.magnification(span: span))
         case .drag:
             guard let activeDragID,
                 dragSequence.canSendMovement(gestureID: activeDragID.uuidString)
@@ -274,6 +293,7 @@ extension TrackpadView {
                 Double(delta.x.clamped(to: -500...500)),
                 Double(delta.y.clamped(to: -500...500)))
         case .swipe:
+            if simulatedGesturesEnabled { emitNativeSwipe(total); return }
             if let action = shortcut(from: total) {
                 onShortcut?(action)
                 emitHaptic()
@@ -299,6 +319,59 @@ extension TrackpadView {
     private func emitHaptic(pressure: Bool = false) {
         guard hapticsEnabled else { return }
         (pressure ? pressureFeedback : tapFeedback).impactOccurred()
+    }
+}
+
+extension TrackpadView {
+    private func emitNativeSwipe(_ total: CGPoint) {
+        let kind =
+            nativeGestureKind
+            ?? FourFingerGesturePolicy.kind(x: Double(total.x), y: Double(total.y))
+        if nativeGestureID == nil {
+            guard beginNativeGesture(kind) else { mode = .blocked; return }
+            emitHaptic()
+        }
+        updateNativeGesture(
+            FourFingerGesturePolicy.progress(kind: kind, x: Double(total.x), y: Double(total.y)))
+    }
+
+    private func span(_ event: UIEvent?) -> Double {
+        let points =
+            event?.allTouches?.filter { $0.view === self }.map { $0.location(in: self) } ?? []
+        guard points.count == 2 else { return 0 }
+        return Double(hypot(points[0].x - points[1].x, points[0].y - points[1].y))
+    }
+
+    private func beginNativeGesture(_ kind: RemoteGestureKind) -> Bool {
+        let id = UUID()
+        let frame = RemoteGestureFrame(
+            id: id, kind: kind, phase: .began, value: 0, timestamp: monotonicTime)
+        guard onGesture?(frame) == true else { return false }
+        nativeGestureID = id
+        nativeGestureKind = kind
+        nativeGestureValue = 0
+        return true
+    }
+
+    private func updateNativeGesture(_ value: Double) {
+        guard let id = nativeGestureID, let kind = nativeGestureKind,
+            value != nativeGestureValue
+        else { return }
+        let frame = RemoteGestureFrame(
+            id: id, kind: kind, phase: .changed, value: value, timestamp: monotonicTime)
+        guard onGesture?(frame) == true else { cancelSequence(blockUntilLift: true); return }
+        nativeGestureValue = value
+    }
+
+    private func endNativeGesture(cancelled: Bool) {
+        guard let id = nativeGestureID, let kind = nativeGestureKind else { return }
+        nativeGestureID = nil
+        nativeGestureKind = nil
+        _ = onGesture?(
+            RemoteGestureFrame(
+                id: id, kind: kind, phase: cancelled ? .cancelled : .ended,
+                value: nativeGestureValue, timestamp: monotonicTime))
+        nativeGestureValue = 0
     }
 }
 

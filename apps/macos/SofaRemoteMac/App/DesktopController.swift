@@ -8,12 +8,16 @@ struct DesktopInputState {
     var scrollAccumulator = PixelScrollAccumulator()
     var heldInput = HeldInputState()
     var clickTracker = PointerClickTracker()
+    var gesture = SimulatedGestureState()
+    var hasHeldInput: Bool { !heldInput.buttons.isEmpty || gesture.isActive }
 }
 
 @MainActor
 final class DesktopController {
     private let volumeController = SystemVolumeController()
     private let systemGestures = SystemGestureController()
+    private let simulatedGestures = SimulatedGestureController()
+    var supportsSimulatedGestures: Bool { simulatedGestures.isAvailable }
 
     var state: RemoteState {
         let volume = volumeController.read()
@@ -39,6 +43,15 @@ final class DesktopController {
             return
         }
         guard AXIsProcessTrusted() else { throw ControlError.accessibilityDenied }
+        if command.name == .gesture {
+            guard input.heldInput.buttons.isEmpty, let location = CGEvent(source: nil)?.location
+            else {
+                throw ControlError.eventUnavailable
+            }
+            try simulatedGestures.perform(
+                require(command.gesture), location: location, state: &input.gesture)
+            return
+        }
         if command.name == .systemShortcut {
             try systemGestures.perform(require(command.shortcut))
             return
@@ -53,7 +66,7 @@ final class DesktopController {
                 input: &input)
         case .keyboardText, .keyboardKey:
             try executeKeyboard(command, source: source)
-        case .systemShortcut, .systemVolumeSet:
+        case .systemShortcut, .systemVolumeSet, .gesture:
             break
         case .mediaControl, .sessionUnlock, .sessionLock, .displayOff, .displayWake,
             .sessionLockAndDisplayOff:
@@ -115,6 +128,11 @@ final class DesktopController {
 
     func release(_ held: inout HeldInputState) {
         release(held.buttons.sorted { $0.rawValue < $1.rawValue }, from: &held)
+    }
+
+    func cancelGesture(_ state: inout SimulatedGestureState) {
+        guard AXIsProcessTrusted() else { return }
+        simulatedGestures.cancel(&state)
     }
 
     func release(_ buttons: [PointerButton], from held: inout HeldInputState) {

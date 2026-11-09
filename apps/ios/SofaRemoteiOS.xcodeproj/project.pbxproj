@@ -14,6 +14,7 @@
 		E60000000000000000000003 /* RemoteSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000004 /* RemoteSettingsView.swift */; };
 		E60000000000000000000005 /* ConnectionDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000006 /* ConnectionDetailsView.swift */; };
 		E60000000000000000000007 /* SettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000008 /* SettingsUITests.swift */; };
+		F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71000000000000000000002 /* TouchpadGestureUITests.swift */; };
 		D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55000000000000000000002 /* UnlockMenuUITests.swift */; };
 		C46000000000000000000001 /* PairingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46000000000000000000002 /* PairingPanel.swift */; };
 		C45000000000000000000001 /* LiveMediaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C45000000000000000000002 /* LiveMediaUITests.swift */; };
@@ -42,6 +43,7 @@
 		E60000000000000000000004 /* RemoteSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSettingsView.swift; sourceTree = "<group>"; };
 		E60000000000000000000006 /* ConnectionDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionDetailsView.swift; sourceTree = "<group>"; };
 		E60000000000000000000008 /* SettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
+		F71000000000000000000002 /* TouchpadGestureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchpadGestureUITests.swift; sourceTree = "<group>"; };
 		D55000000000000000000002 /* UnlockMenuUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockMenuUITests.swift; sourceTree = "<group>"; };
 		C46000000000000000000002 /* PairingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPanel.swift; sourceTree = "<group>"; };
 		C45000000000000000000002 /* LiveMediaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveMediaUITests.swift; sourceTree = "<group>"; };
@@ -119,6 +121,7 @@
 				100000000000000000000036 /* SofaRemoteiOSUITests.swift */,
 				D55000000000000000000002 /* UnlockMenuUITests.swift */,
 				E60000000000000000000008 /* SettingsUITests.swift */,
+				F71000000000000000000002 /* TouchpadGestureUITests.swift */,
 				C45000000000000000000002 /* LiveMediaUITests.swift */,
 			);
 			path = SofaRemoteiOSUITests;
@@ -243,7 +246,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */, F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

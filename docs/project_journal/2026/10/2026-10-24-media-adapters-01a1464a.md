@@ -3,7 +3,7 @@ id: 20261024-media-01a1464a
 title: Native Media Adapters for IINA and Chrome
 status: active
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-11-09
 branch: codex/ready-media-ui-tests
 pr:
 supersedes: []
@@ -94,6 +94,12 @@ superseded_by:
 
 ## Next Steps
 
+- The user reports renewed Chrome extension unavailability. This is a fresh,
+  untriaged report; do not infer that the earlier delivery-acknowledgement defect
+  has returned. Diagnose the installed extension, Native Messaging connection,
+  local bridge, supported tab and correlated command results after the current
+  touchpad priority. Do not replace or reload the user's installation as part
+  of merely recording this report.
 - The user reported an intermittent IINA disconnect after successful setup and
   explicitly deferred it while Wi-Fi pointer smoothness takes priority. Keep the
   current media UI and volume behavior unchanged during input performance repairs.

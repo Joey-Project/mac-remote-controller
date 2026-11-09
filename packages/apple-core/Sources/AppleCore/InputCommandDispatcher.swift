@@ -47,6 +47,7 @@ public struct InputCommandDispatcher: Sendable {
     }
 
     private static func isContinuous(_ command: RemoteCommand) -> Bool {
-        InputCommandScheduler.isBestEffortPointerDelta(command) || command.name == .systemVolumeSet
+        InputCommandScheduler.isBestEffortPointerDelta(command)
+            || InputCommandScheduler.isGestureUpdate(command) || command.name == .systemVolumeSet
     }
 }
