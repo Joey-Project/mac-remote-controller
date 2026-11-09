@@ -160,5 +160,38 @@
                 XCTAssertFalse(state.isActive)
             }
         }
+
+        func testFinalTouchMotionCompletesSwipeWithoutAnotherClientUpdate() throws {
+            var posted: [CGEvent] = []
+            let controller = SimulatedGestureController(
+                make: { _, phase, progress, velocity, location in
+                    DockSwipeEvents.makeFrame(
+                        DockSwipeFrame(
+                            phase: phase.hidPhase, progress: progress, velocity: velocity,
+                            motion: 1), modern: false, location: location)
+                }, post: { posted.append($0) })
+            var state = SimulatedGestureState()
+            try controller.perform(
+                frame(.began, 0, kind: .horizontalSwipe), location: .zero, state: &state)
+            try controller.perform(
+                frame(.changed, 0.19, time: 10.1, kind: .horizontalSwipe), location: .zero,
+                state: &state)
+            let finalValue = try XCTUnwrap(
+                RemoteGestureReleasePolicy.value(
+                    kind: .horizontalSwipe,
+                    positions: [SIMD2(35, 0), SIMD2(45, 0), SIMD2(55, 0), SIMD2(65, 0)],
+                    start: .zero, pinch: TwoFingerGesturePolicy()))
+            try controller.perform(
+                frame(.ended, finalValue, time: 10.2, kind: .horizontalSwipe), location: .zero,
+                state: &state)
+            let phaseField = try XCTUnwrap(CGEventField(rawValue: 132))
+            let dockEvents = posted.filter { $0.type.rawValue == 30 }
+            XCTAssertEqual(dockEvents.map { $0.getIntegerValueField(phaseField) }, [1, 2, 2, 4])
+            let progressField = try XCTUnwrap(CGEventField(rawValue: 135))
+            XCTAssertEqual(
+                dockEvents.last?.getIntegerValueField(progressField),
+                Int64(Float(finalValue).bitPattern))
+            XCTAssertFalse(state.isActive)
+        }
     }
 #endif

@@ -172,7 +172,9 @@ HID types, event fields, key codes or executable actions are accepted.
 
 Adjacent unsent `changed` frames for the same gesture replace each other with
 the newest cumulative value; start and terminal frames remain ordering barriers.
-The terminal value includes any coalesced movement. Updates use the existing
+The terminal value includes any coalesced movement and the final touch positions
+reported on release, without requiring another client update frame. Incomplete
+or invalid release samples retain the last known value. Updates use the existing
 continuous-input pacing; start/end/cancel flush immediately when credits permit.
 An unqueueable phase or rejected gesture command closes the session for cleanup.
 

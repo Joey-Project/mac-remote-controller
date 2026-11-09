@@ -152,12 +152,17 @@ superseded_by:
   notification routing, both swipe directions, balanced phases, modifier-free
   events, and failure before emission. Live desktop action acceptance remains
   separate from these non-interactive checks.
-- Current local checks pass strict Swift format/SwiftLint, 315 AppleCore and
+- Current local checks pass strict Swift format/SwiftLint, 319 AppleCore and
   MacSupport tests, two incremental signed macOS builds and a generic iOS
   Simulator build. AppKit decodes real constructed events as magnification
   with native began/changed/ended/cancelled phases. New tests cover strict wire
   bounds, cumulative coalescing, lifecycle identity/time checks, allocation
   failure cleanup and Dock progress/axis encoding, without posting desktop input.
+- Native gesture release samples include the ending touches and the event's
+  remaining touches before sending the terminal cumulative value. No extra
+  client update is needed, and incomplete/invalid samples keep the last value.
+  Regression tests cover final pinch scale, the retained swipe axis and a swipe
+  that crosses the completion threshold only on release.
 - Targeted iPhone XCUITest passes actual pinch input, legacy-companion fallback,
   and existing movement/left-click/right-click. It exposed an initial-distance
   classification defect: XCUITest begins at about seven points of separation.

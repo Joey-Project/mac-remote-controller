@@ -139,4 +139,43 @@ final class RemoteGestureTests: XCTestCase {
         XCTAssertEqual(FourFingerGesturePolicy.progress(kind: kind, x: 0, y: -22), 0.1)
         XCTAssertEqual(FourFingerGesturePolicy.progress(kind: .horizontalSwipe, x: -500, y: 10), -1)
     }
+
+    func testPinchReleaseIncludesMotionAfterTheLastMovedSample() throws {
+        var pinch = TwoFingerGesturePolicy()
+        pinch.begin(span: 100)
+        XCTAssertEqual(pinch.update(span: 120, translationX: 0, translationY: 0), .magnify)
+        let release = try XCTUnwrap(
+            RemoteGestureReleasePolicy.value(
+                kind: .magnify, positions: [SIMD2(-75, 0), SIMD2(75, 0)], start: .zero,
+                pinch: pinch))
+        XCTAssertEqual(exp(release), 1.5, accuracy: 0.000001)
+        XCTAssertGreaterThan(release, pinch.magnification(span: 120))
+    }
+
+    func testSwipeReleaseUsesAllFinalFingersAndKeepsTheChosenAxis() throws {
+        let positions: [SIMD2<Double>] = [
+            SIMD2(135, 400), SIMD2(145, 400), SIMD2(155, 400), SIMD2(165, 400)
+        ]
+        let release = try XCTUnwrap(
+            RemoteGestureReleasePolicy.value(
+                kind: .horizontalSwipe, positions: positions, start: SIMD2(100, 100),
+                pinch: TwoFingerGesturePolicy()))
+        XCTAssertEqual(release, 50.0 / 220, accuracy: 0.000001)
+        XCTAssertGreaterThan(release, 0.2, "Final motion must cross the completion threshold.")
+    }
+
+    func testIncompleteOrInvalidReleasePositionsDoNotReplaceTheLastValue() {
+        let pinch = TwoFingerGesturePolicy()
+        let samples: [[SIMD2<Double>]] = [
+            [], [SIMD2(10, 10)], [SIMD2(.nan, 0), SIMD2(50, 0)]
+        ]
+        for positions in samples {
+            XCTAssertNil(
+                RemoteGestureReleasePolicy.value(
+                    kind: .magnify, positions: positions, start: .zero, pinch: pinch))
+        }
+        XCTAssertNil(
+            RemoteGestureReleasePolicy.value(
+                kind: .horizontalSwipe, positions: [SIMD2(50, 0)], start: .zero, pinch: pinch))
+    }
 }

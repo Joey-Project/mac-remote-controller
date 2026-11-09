@@ -104,3 +104,23 @@ public enum FourFingerGesturePolicy {
         return min(1, max(-1, distance / 220))
     }
 }
+
+/// Includes final touch locations in the terminal value without another update frame.
+public enum RemoteGestureReleasePolicy {
+    public static func value(
+        kind: RemoteGestureKind, positions: [SIMD2<Double>], start: SIMD2<Double>,
+        pinch: TwoFingerGesturePolicy
+    ) -> Double? {
+        guard positions.count == (kind == .magnify ? 2 : 4),
+            positions.allSatisfy({ $0.x.isFinite && $0.y.isFinite })
+        else { return nil }
+        if kind == .magnify {
+            let span = hypot(positions[1].x - positions[0].x, positions[1].y - positions[0].y)
+            guard span.isFinite else { return nil }
+            return pinch.magnification(span: span)
+        }
+        let displacement = positions.reduce(SIMD2<Double>.zero, +) / Double(positions.count) - start
+        guard displacement.x.isFinite, displacement.y.isFinite else { return nil }
+        return FourFingerGesturePolicy.progress(kind: kind, x: displacement.x, y: displacement.y)
+    }
+}

@@ -125,7 +125,7 @@ final class TrackpadView: UIView {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         updateTwoFingerTapSlop(event, including: touches)
-        endNativeGesture(cancelled: false)
+        endNativeGesture(cancelled: false, finalTouches: touches, event: event)
         let completedCount = sequence.initialCount
         let endOutcome = sequence.end(
             removing: touches.count, dragEnabled: dragEnabled,
@@ -363,8 +363,22 @@ extension TrackpadView {
         nativeGestureValue = value
     }
 
-    private func endNativeGesture(cancelled: Bool) {
+    private func endNativeGesture(
+        cancelled: Bool, finalTouches: Set<UITouch> = [], event: UIEvent? = nil
+    ) {
         guard let id = nativeGestureID, let kind = nativeGestureKind else { return }
+        if !cancelled {
+            let positions = finalTouches.union(event?.allTouches ?? [])
+                .filter { $0.view === self }.map { touch in
+                    let point = touch.location(in: self)
+                    return SIMD2(Double(point.x), Double(point.y))
+                }
+            nativeGestureValue =
+                RemoteGestureReleasePolicy.value(
+                    kind: kind, positions: positions,
+                    start: SIMD2(Double(start.x), Double(start.y)), pinch: twoFinger)
+                ?? nativeGestureValue
+        }
         nativeGestureID = nil
         nativeGestureKind = nil
         _ = onGesture?(
