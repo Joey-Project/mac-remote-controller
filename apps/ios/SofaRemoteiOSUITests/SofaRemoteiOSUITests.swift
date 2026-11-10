@@ -157,14 +157,12 @@ final class SofaRemoteiOSUITests: XCTestCase {
     func testDraftSurvivesModeChangesAndOnlySendCommitsText() throws {
         launchApp()
         defer { terminateApp() }
-
         chooseKeyboardMode()
         let textField = element("keyboard.text")
         XCTAssertTrue(textField.waitForExistence(timeout: 3))
         textField.tap()
         textField.typeText("Remote draft 42")
         XCTAssertEqual(try commands().count, 0)
-
         openSettings()
         app.navigationBars["Settings"].buttons.firstMatch.tap()
         XCTAssertTrue(textField.waitForExistence(timeout: 3))
@@ -327,7 +325,10 @@ extension SofaRemoteiOSUITests {
     @MainActor
     func openSettings() {
         element("remote.menu").tap()
-        element("remote.settings").tap()
+        let settings = app.buttons.matching(identifier: "remote.settings").firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 3), "The menu must expose Settings.")
+        XCTAssertTrue(settings.isHittable, "Settings must be ready for a real tap.")
+        settings.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
     }
 

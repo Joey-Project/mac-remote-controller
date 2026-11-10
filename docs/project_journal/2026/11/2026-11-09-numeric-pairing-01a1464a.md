@@ -64,6 +64,15 @@ superseded_by:
 - The two Settings UI cases passed three repetitions each on both local
   iPhone and iPad simulators after that change (12 executions total). Complete
   Swift checks, all 334 package tests and both app builds also passed again.
+- Menu-driven UI tests require the actual Settings button to exist and be
+  hittable before one tap. The original three-second destination check, draft
+  preservation and explicit-send assertions remain in place. This adds no tap
+  retry and changes no application UI or simulator startup behavior.
+- The complete local UI suite passed after this synchronization change:
+  iPhone 28 passed with three conditional skips, and iPad 29 passed with two
+  conditional skips. The original draft test also passed three local iPad
+  repetitions before the change. Local iOS 26.5 evidence remains separate from
+  the CI runner's iOS 27.2 acceptance.
 - The pending connection pool protects the active numeric-pairing connection
   during unrelated socket churn without authenticating it or increasing pool
   capacity. Ending the request releases protection automatically.
