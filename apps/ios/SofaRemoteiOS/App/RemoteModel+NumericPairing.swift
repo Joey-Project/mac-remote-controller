@@ -32,8 +32,8 @@ final class NumericPairingClientState: Identifiable {
 }
 
 extension RemoteModel {
-    func requestNumericPairing(to mac: DiscoveredMac) {
-        guard selectedTransport == .wifi, !mac.isPaired else { return }
+    func requestNumericPairing(to mac: DiscoveredMac, replacingExistingPairing: Bool = false) {
+        guard selectedTransport == .wifi, !mac.isPaired || replacingExistingPairing else { return }
         disconnect()
         candidate = nil
         errorMessage = nil

@@ -146,9 +146,7 @@ final class CompanionModel {
 
     private func accept(_ peer: RemotePeer) {
         let id = UUID()
-        if let evictedID = admission.admitPending(id) {
-            removeClient(evictedID, closePeer: true)
-        }
+        guard admitPending(peer, id: id) else { return }
         clients[id] = ClientConnection(peer: peer)
         peer.onMessage = { [weak self] message in self?.receive(message, from: id) }
         peer.onClose = { [weak self] _ in self?.removeClient(id) }
@@ -160,7 +158,7 @@ final class CompanionModel {
     ) {
         guard pairedDevices.contains(where: { $0.id == deviceID }) else { peer.close(); return }
         let id = UUID()
-        if let evictedID = admission.admitPending(id) { removeClient(evictedID, closePeer: true) }
+        guard admitPending(peer, id: id) else { return }
         let previousIDs = clients.compactMap { otherID, other in
             other.deviceID == deviceID ? otherID : nil
         }
@@ -179,6 +177,15 @@ final class CompanionModel {
                 type: .welcome, connectionID: session.connectionID,
                 state: stateForClient(remoteState, client: client)))
         refreshConnectedCount()
+    }
+
+    private func admitPending(_ peer: RemotePeer, id: UUID) -> Bool {
+        let owner = numericPairing?.activeConnectionID
+        if let evicted = admission.admitPending(id, protecting: owner) {
+            guard evicted != id else { peer.close(); return false }
+            removeClient(evicted, closePeer: true)
+        }
+        return true
     }
 }
 

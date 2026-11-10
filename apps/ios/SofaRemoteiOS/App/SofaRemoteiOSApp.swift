@@ -74,7 +74,8 @@ struct SofaRemoteiOSApp: App {
                     .map { String($0.dropFirst("--pairing-test-code=".count)) }
                 numericServer = NumericPairingFixtureServer(
                     state: state, code: code,
-                    expires: scenario == .numericPairingExpired)
+                    expires: scenario == .numericPairingExpired,
+                    revoked: scenario == .numericPairingRevoked)
             }
         }
 
@@ -175,6 +176,7 @@ struct SofaRemoteiOSApp: App {
     private enum UITestScenario: String, Equatable {
         case numericPairing = "numeric-pairing"
         case numericPairingExpired = "numeric-pairing-expired"
+        case numericPairingRevoked = "numeric-pairing-revoked"
         case disconnected
         case longName = "long-name"
         case unsupportedVolume = "unsupported-volume"
@@ -190,6 +192,7 @@ struct SofaRemoteiOSApp: App {
 
         var supportsNumericPairing: Bool {
             self == .numericPairing || self == .numericPairingExpired
+                || self == .numericPairingRevoked
         }
 
         var supportsSessionControls: Bool {

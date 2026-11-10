@@ -113,10 +113,11 @@ final class RemoteModel {
             if isUITesting {
                 remoteState = uiTestFixture.initialState
                 if let server = uiTestFixture.numericServer {
+                    if let saved = server.revokedPairing { pairedMacs = [saved] }
                     discoveredMacs = [
                         DiscoveredMac(
                             id: server.identity.serviceName,
-                            name: server.identity.name, isPaired: false)
+                            name: server.identity.name, isPaired: server.revokedPairing != nil)
                     ]
                 }
                 isConnected = remoteState != nil

@@ -78,7 +78,9 @@ public final class NumericPairingCoordinator {
         self.makeCode = makeCode
     }
 
-    public func ownsConnection(_ connection: UUID) -> Bool { pending?.connection == connection }
+    public var activeConnectionID: UUID? { pending?.connection }
+
+    public func ownsConnection(_ connection: UUID) -> Bool { activeConnectionID == connection }
 
     public func receive(_ packet: NumericPairingMessage, from connection: UUID) {
         do { try packet.validate() } catch { close(connection); return }
@@ -221,9 +223,16 @@ public final class NumericPairingCoordinator {
 
     private func incorrect(_ pending: Pending) {
         pending.task = nil
-        pending.budget.recordFailure(at: now())
-        limiter.recordFailure(at: now())
-        guard pending.budget.isActive(at: now()), limiter.mayAttempt(at: now()) else {
+        let timestamp = now()
+        guard pending.budget.isActive(at: timestamp) else {
+            reject(pending, failure: .expired); return
+        }
+        guard isUnlocked(), canPair() else {
+            reject(pending, failure: .unavailable); return
+        }
+        pending.budget.recordFailure(at: timestamp)
+        limiter.recordFailure(at: timestamp)
+        guard pending.budget.isActive(at: timestamp), limiter.mayAttempt(at: timestamp) else {
             reject(pending, failure: .tooManyAttempts); return
         }
         pending.stage = .hello

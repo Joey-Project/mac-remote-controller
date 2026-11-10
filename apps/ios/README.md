@@ -27,6 +27,11 @@ checks the saved certificate pin before sending its credential. A replacement
 Mac identity requires a new, explicit pairing. Remove a device from the Mac
 companion to revoke it. Pairing credentials stay in each platform's Keychain.
 
+To recover after revocation or replacing the Mac identity, long-press that Mac
+in the Wi-Fi **Nearby Macs** list and choose **Pair again…**. Enter the new code
+shown on the Mac. The saved pairing is replaced only after successful
+verification; cancelling leaves the old record in place.
+
 Bluetooth LE is available after Wi-Fi numeric or QR pairing. From the connected
 screen's menu, choose **Switch to Bluetooth LE** to reconnect using the paired
 credential. Enable Bluetooth and allow Bluetooth access in iOS Settings. The

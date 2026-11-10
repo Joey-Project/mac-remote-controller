@@ -137,4 +137,57 @@ extension SofaRemoteiOSUITests {
         XCTAssertTrue(
             XCUIApplication().buttons["Scan pairing QR code"].waitForExistence(timeout: 3))
     }
+
+    @MainActor
+    private func openSavedMacRepair() {
+        let mac = element("pairing.mac.00000000-0000-4000-8000-000000000042")
+        XCTAssertTrue(mac.waitForExistence(timeout: 5))
+        mac.press(forDuration: 1)
+        let repair = element("pairing.repair.00000000-0000-4000-8000-000000000042")
+        XCTAssertTrue(repair.waitForExistence(timeout: 3))
+        repair.tap()
+    }
+
+    @MainActor
+    private func assertRevokedCredentialCannotReconnect() {
+        element("pairing.mac.00000000-0000-4000-8000-000000000042").tap()
+        let alert = XCUIApplication().alerts["Connection problem"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 3))
+        XCTAssertFalse(element("touchpad.surface").exists)
+        alert.buttons["OK"].tap()
+    }
+
+    @MainActor
+    func testRevokedSavedPairingCanBeReplacedWithNumericCode() throws {
+        let code = String(format: "%04d", UInt32.random(in: 0..<10_000))
+        launchApp(
+            scenario: "numeric-pairing-revoked", arguments: ["--pairing-test-code=\(code)"])
+        defer { terminateApp() }
+        assertRevokedCredentialCannotReconnect()
+        openSavedMacRepair()
+        submitNumericCode(code)
+        XCTAssertTrue(element("touchpad.surface").waitForExistence(timeout: 8))
+        XCTAssertEqual(try commands().count, 0)
+        element("remote.connectionDetails").tap()
+        element("remote.disconnect").tap()
+        element("pairing.mac.00000000-0000-4000-8000-000000000042").tap()
+        XCTAssertTrue(element("touchpad.surface").waitForExistence(timeout: 5))
+        XCTAssertFalse(element("pairing.code").exists)
+    }
+
+    @MainActor
+    func testCancellingRepairKeepsPreviousSavedPairing() throws {
+        launchApp(
+            scenario: "numeric-pairing-revoked",
+            arguments: [
+                "--pairing-test-code=\(String(format: "%04d", UInt32.random(in: 0..<10_000)))"
+            ])
+        defer { terminateApp() }
+        openSavedMacRepair()
+        XCTAssertTrue(element("pairing.code").waitForExistence(timeout: 5))
+        element("pairing.cancel").tap()
+        XCTAssertTrue(XCUIApplication().staticTexts["Paired"].waitForExistence(timeout: 3))
+        assertRevokedCredentialCannotReconnect()
+        XCTAssertEqual(try commands().count, 0)
+    }
 }

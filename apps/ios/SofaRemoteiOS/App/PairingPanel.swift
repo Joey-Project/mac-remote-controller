@@ -90,7 +90,17 @@ struct PairingPanel: View {
                             .accessibilityHint(
                                 mac.isPaired
                                     ? "Reconnect to this Mac over \(model.selectedTransport.rawValue)"
-                                    : "Show a four-digit pairing code on this Mac")
+                                    : "Show a four-digit pairing code on this Mac"
+                            )
+                            .contextMenu {
+                                if mac.isPaired, model.selectedTransport == .wifi {
+                                    Button("Pair again…", systemImage: "link.badge.plus") {
+                                        model.requestNumericPairing(
+                                            to: mac, replacingExistingPairing: true)
+                                    }
+                                    .accessibilityIdentifier("pairing.repair.\(mac.id)")
+                                }
+                            }
 
                             if mac.id != candidates.last?.id {
                                 Divider()

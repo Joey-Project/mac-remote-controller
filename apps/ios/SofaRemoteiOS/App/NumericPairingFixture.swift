@@ -8,6 +8,7 @@
     @MainActor
     final class NumericPairingFixtureServer {
         let identity: NumericPairingMacIdentity
+        let revokedPairing: PairedMac?
         private let state: RemoteState
         private var coordinator: NumericPairingCoordinator!
         private var peers: [UUID: WeakPeer] = [:]
@@ -20,12 +21,20 @@
             init(_ value: NumericPairingFixturePeer) { self.value = value }
         }
 
-        init(state: RemoteState, code: String?, expires: Bool) {
+        init(state: RemoteState, code: String?, expires: Bool, revoked: Bool = false) {
             self.state = state
-            identity = NumericPairingMacIdentity(
+            let identity = NumericPairingMacIdentity(
                 serviceName: "00000000-0000-4000-8000-000000000042", name: state.deviceName,
                 certificateSHA256: PairingSecurity.fingerprint(
                     Data("numeric UI fixture certificate".utf8)))
+            self.identity = identity
+            if revoked, let token = try? PairingSecurity.randomToken() {
+                revokedPairing = PairedMac(
+                    serviceName: identity.serviceName, name: identity.name,
+                    certificateSHA256: identity.certificateSHA256, token: token)
+            } else {
+                revokedPairing = nil
+            }
             coordinator = NumericPairingCoordinator(
                 identity: identity, isUnlocked: { true },
                 canPair: { [weak self] in (self?.tokens.count ?? 8) < 8 },

@@ -53,10 +53,19 @@ final class NumericPairingCoordinatorTests: XCTestCase {
         }
 
         func attempt(code: String) async throws -> (NumericPairingClientCrypto, Int) {
+            let (client, proof) = try await prepareProof(code: code)
+            let count = sent.count
+            send(proof)
+            return (client, count)
+        }
+
+        func prepareProof(code: String) async throws
+            -> (NumericPairingClientCrypto, NumericPairingMessage)
+        {
             let client = NumericPairingClientCrypto(requestID: request)
             var hello = NumericPairingMessage(id: request, phase: .hello)
             hello.publicKey = try await client.begin(code: code)
-            var count = sent.count
+            let count = sent.count
             send(hello)
             let challenge = try await wait(for: .challenge, after: count)
             let attempt = try XCTUnwrap(challenge.attemptID)
@@ -72,9 +81,7 @@ final class NumericPairingCoordinatorTests: XCTestCase {
             proof.attemptID = attempt
             proof.proof = response.proof
             proof.binding = response.binding
-            count = sent.count
-            send(proof)
-            return (client, count)
+            return (client, proof)
         }
     }
 
@@ -157,5 +164,29 @@ final class NumericPairingCoordinatorTests: XCTestCase {
         XCTAssertNil(harness.snapshot)
         XCTAssertFalse(harness.coordinator.ownsConnection(harness.connection))
         XCTAssertTrue(harness.authorized.isEmpty)
+    }
+
+    func testProofExpiringDuringVerificationDoesNotConsumeGlobalFailureBudget() async throws {
+        let harness = Harness()
+        harness.start()
+        let code = try XCTUnwrap(harness.snapshot?.code)
+        let wrong = (code.first == "0" ? "1" : "0") + String(code.dropFirst())
+        harness.now = 119
+        for _ in 0..<2 {
+            let (_, count) = try await harness.attempt(code: wrong)
+            _ = try await harness.wait(for: .retry, after: count)
+        }
+        let (_, proof) = try await harness.prepareProof(code: wrong)
+        let count = harness.sent.count
+        harness.send(proof)
+        // The main actor cannot run the verification task until this test yields.
+        harness.now = 120
+        let rejected = try await harness.wait(for: .rejected, after: count)
+        XCTAssertEqual(rejected.failure, .expired)
+        XCTAssertNil(harness.coordinator.activeConnectionID)
+        XCTAssertTrue(harness.authorized.isEmpty)
+        harness.start(request: UUID(), connection: UUID())
+        XCTAssertNotNil(harness.snapshot, "Expiry must not charge a third global incorrect guess")
+        XCTAssertNotEqual(harness.snapshot?.code, code)
     }
 }

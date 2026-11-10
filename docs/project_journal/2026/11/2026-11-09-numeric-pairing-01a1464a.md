@@ -39,12 +39,12 @@ superseded_by:
   Input dispatch and existing paired transport paths do not run SRP.
 - Shared crypto/policy/coordinator tests exercise actual SRP, identity tampering,
   retries with fresh keys, finish replay, failure budgets, busy requests, expiry,
-  Mac locking and transport cancellation. All 334 package tests passed, including
-  15 numeric-pairing tests. Two use a real loopback TLS/WebSocket connection to
+  Mac locking and transport cancellation. All 338 package tests passed, including
+  16 numeric-pairing tests. Two use a real loopback TLS/WebSocket connection to
   verify certificate observation and rejection of a mismatched saved pin. Their
   generated identities are imported only into memory, never into a Keychain.
 - The Simulator fixture reuses the real crypto, wire codec and Mac coordinator
-  while keeping pairing credentials in memory. Full UI regression passed on
+  while keeping pairing credentials in memory. Initial full UI regression passed on
   iPhone 17 Pro (26 passed, three conditional skips) and iPad mini A17 Pro
   (27 passed, two conditional skips), including six new pairing cases on each.
   The skips cover opt-in physical integrations and an orientation test that
@@ -64,6 +64,23 @@ superseded_by:
 - The two Settings UI cases passed three repetitions each on both local
   iPhone and iPad simulators after that change (12 executions total). Complete
   Swift checks, all 334 package tests and both app builds also passed again.
+- The pending connection pool protects the active numeric-pairing connection
+  during unrelated socket churn without authenticating it or increasing pool
+  capacity. Ending the request releases protection automatically.
+- Incorrect-proof accounting checks the deadline and Mac availability before
+  charging either budget. Expiry during SRP verification returns `expired`
+  without consuming a global incorrect-code attempt.
+- A paired Nearby Mac offers **Pair again…** through its context menu. This is
+  explicit numeric re-enrollment, including after Mac-side revocation; existing
+  credentials remain until a verified welcome is saved, and cancellation keeps
+  the old record. Saved reconnects never silently switch trust paths.
+- All eight numeric-pairing UI cases passed on both iPhone and iPad after the
+  recovery changes, including revoked-credential rejection, successful numeric
+  replacement, reconnect with the new credential and cancel without forgetting.
+- CI allows 70 minutes for the two sequential cold Simulator runs and 90
+  minutes for the whole Apple job. The individual XCTest allowance stays at
+  240 seconds; both devices and every assertion remain required. This covers
+  the observed 50-minute step timeout while the second Simulator was still running.
 
 ## Remaining Acceptance
 
