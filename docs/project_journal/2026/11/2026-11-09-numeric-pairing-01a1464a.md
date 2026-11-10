@@ -3,9 +3,9 @@ id: 20261109-numeric-pairing-01a1464a
 title: Phone-Initiated Four-Digit Mac Pairing
 status: active
 created: 2026-11-09
-updated: 2026-11-09
+updated: 2026-11-10
 branch: codex/numeric-confirmation-pairing
-pr:
+pr: https://github.com/Joey-Project/mac-remote-controller/pull/29
 supersedes: []
 superseded_by:
 ---
@@ -56,6 +56,14 @@ superseded_by:
 - Strict Swift formatting/lint, two signed macOS builds and the generic iOS
   Simulator build passed. The upstream SRP dependency currently constrains
   transitive Swift Crypto to 4.5.2 rather than version 5.
+- Offline Settings coverage reads the actual accessibility switch value before
+  asynchronously polling, with the original three-second deadline. This avoids
+  a predicate-wait timeout observed on CI even though its screenshot and
+  hierarchy already showed the expected value. Relaunch persistence, restoration
+  of the original value and zero-input assertions remain required.
+- The two Settings UI cases passed three repetitions each on both local
+  iPhone and iPad simulators after that change (12 executions total). Complete
+  Swift checks, all 334 package tests and both app builds also passed again.
 
 ## Remaining Acceptance
 
