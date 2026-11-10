@@ -66,4 +66,35 @@ final class ConnectionAdmissionTests: XCTestCase {
         XCTAssertEqual(admission.pendingCount, 4)
         XCTAssertEqual(admission.authenticatedCount, 0)
     }
+
+    func testPairingOwnerSurvivesPendingConnectionChurnWithoutAuthentication() {
+        var admission = ConnectionAdmission<Int>(maximumPending: 4)
+        XCTAssertNil(admission.admitPending(0))
+        for id in 1...100 {
+            let evicted = admission.admitPending(id, protecting: 0)
+            XCTAssertNotEqual(evicted, 0)
+            XCTAssertLessThanOrEqual(admission.pendingCount, 4)
+            XCTAssertEqual(admission.authenticatedCount, 0)
+        }
+        XCTAssertTrue(admission.authenticate(0), "Only explicit authentication promotes the owner")
+        XCTAssertEqual(admission.pendingCount, 3)
+    }
+
+    func testFullyProtectedPendingPoolRejectsNewcomerWithoutStoringIt() {
+        var admission = ConnectionAdmission<Int>(maximumPending: 1)
+        XCTAssertNil(admission.admitPending(1))
+        XCTAssertEqual(admission.admitPending(2, protecting: 1), 2)
+        XCTAssertFalse(admission.remove(2))
+        XCTAssertEqual(admission.pendingCount, 1)
+        XCTAssertTrue(admission.authenticate(1))
+    }
+
+    func testEndingPairingProtectionRestoresOldestPendingEviction() {
+        var admission = ConnectionAdmission<Int>(maximumPending: 2)
+        XCTAssertNil(admission.admitPending(1))
+        XCTAssertNil(admission.admitPending(2, protecting: 1))
+        XCTAssertEqual(admission.admitPending(3, protecting: 1), 2)
+        XCTAssertEqual(admission.admitPending(4), 1)
+        XCTAssertFalse(admission.authenticate(1))
+    }
 }

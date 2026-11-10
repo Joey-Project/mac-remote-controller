@@ -2,7 +2,7 @@ import XCTest
 
 final class SettingsUITests: XCTestCase {
     @MainActor
-    func testOfflineSettingsSaveImmediatelyAcrossLaunches() throws {
+    func testOfflineSettingsSaveImmediatelyAcrossLaunches() async throws {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--ui-testing-scenario=disconnected"]
@@ -15,11 +15,11 @@ final class SettingsUITests: XCTestCase {
         let drag = app.switches.matching(identifier: "gesture.drag").firstMatch
         XCTAssertTrue(drag.waitForExistence(timeout: 3))
         XCTAssertTrue(drag.isEnabled, "Preferences must be editable without a Mac connection.")
-        let original = try XCTUnwrap(drag.value as? String)
+        let original = try XCTUnwrap(switchValue(drag))
         drag.switches.firstMatch.tap()
         recordScreen("Offline Settings after changing drag", in: app)
         let changed = original == "1" ? "0" : "1"
-        waitForValue(changed, of: drag)
+        try await waitForValue(changed, of: drag)
         XCTAssertEqual(try commandCount(in: app), 0)
 
         app.terminate()
@@ -27,9 +27,9 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
         XCTAssertTrue(drag.waitForExistence(timeout: 3))
-        XCTAssertEqual(drag.value as? String, changed)
+        XCTAssertEqual(switchValue(drag), changed)
         drag.switches.firstMatch.tap()
-        waitForValue(original, of: drag)
+        try await waitForValue(original, of: drag)
         app.navigationBars["Settings"].buttons.firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Connect to your Mac"].waitForExistence(timeout: 3))
         XCTAssertEqual(try commandCount(in: app), 0)
@@ -65,10 +65,22 @@ final class SettingsUITests: XCTestCase {
     }
 
     @MainActor
-    private func waitForValue(_ value: String, of control: XCUIElement) {
-        let expectation = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "value == %@", value), object: control)
-        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 3), .completed)
+    private func switchValue(_ control: XCUIElement) -> String? {
+        let value = control.value
+        return value as? String ?? (value as? NSNumber)?.stringValue
+    }
+
+    @MainActor
+    private func waitForValue(_ value: String, of control: XCUIElement) async throws {
+        let deadline = ContinuousClock.now + .seconds(3)
+        // Sample immediately: a slow remote AX query can exhaust the predicate
+        // waiter's timeout even when the switch already has the expected value.
+        var actual = switchValue(control)
+        while actual != value, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(100))
+            actual = switchValue(control)
+        }
+        XCTAssertEqual(actual, value, "The switch must change before relaunching the app.")
     }
 
     @MainActor

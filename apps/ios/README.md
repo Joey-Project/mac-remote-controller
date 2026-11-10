@@ -5,17 +5,34 @@ and run `SofaRemoteiOS` on an iPhone or iPad with iOS/iPadOS 17 or newer. Both u
 the same target, with a responsive layout and iPad multitasking enabled.
 
 1. Run the Mac companion on the same local network.
-2. On Mac, choose **Pair iPhone or iPad** from the Sofa Remote menu bar item.
-3. On iPhone/iPad, allow Local Network access, choose **Scan pairing QR code**,
-   allow Camera access, and scan the Mac's invitation within two minutes.
+2. Unlock the Mac. On iPhone/iPad, allow Local Network access and tap the
+   unpaired Mac under **Nearby Macs**.
+3. The Mac opens a pairing window. Enter its four-digit code on the phone.
 4. Allow Accessibility for Sofa Remote on Mac when using pointer/keyboard input.
+
+The code expires after two minutes or three incorrect attempts. Cancellation,
+disconnection and Mac locking also invalidate it. Request and failed-attempt
+limits apply across replacement codes; after too many failures, wait a minute
+before requesting another code. Pairing does not automatically allow remote unlock.
+The PIN is never sent over the network: SRP-6a authenticates the exchange and
+binds it to the Mac's actual TLS identity before either side saves credentials.
+
+For an older companion or a camera-based alternative, expand **Other pairing
+methods**. On Mac choose **Use QR pairing instead…**, then scan its invitation
+or paste it on the phone within two minutes. Camera permission is needed only
+when scanning.
 
 Already paired Macs appear in the nearby list and reconnect when tapped. The app
 checks the saved certificate pin before sending its credential. A replacement
-Mac identity requires a new, explicit QR pairing. Remove a device from the Mac
+Mac identity requires a new, explicit pairing. Remove a device from the Mac
 companion to revoke it. Pairing credentials stay in each platform's Keychain.
 
-Bluetooth LE is available after the same Wi-Fi QR pairing. From the connected
+To recover after revocation or replacing the Mac identity, long-press that Mac
+in the Wi-Fi **Nearby Macs** list and choose **Pair again…**. Enter the new code
+shown on the Mac. The saved pairing is replaced only after successful
+verification; cancelling leaves the old record in place.
+
+Bluetooth LE is available after Wi-Fi numeric or QR pairing. From the connected
 screen's menu, choose **Switch to Bluetooth LE** to reconnect using the paired
 credential. Enable Bluetooth and allow Bluetooth access in iOS Settings. The
 advertised service UUID is only a discovery hint; the app authenticates the Mac

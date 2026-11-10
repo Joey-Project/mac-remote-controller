@@ -57,6 +57,7 @@ struct SofaRemoteiOSApp: App {
     @MainActor
     final class UITestFixture {
         private let scenario: UITestScenario?
+        private(set) var numericServer: NumericPairingFixtureServer?
         let isActive: Bool
         private(set) var commandLog: [RemoteCommand] = []
         private let commandLimit = 128
@@ -66,6 +67,16 @@ struct SofaRemoteiOSApp: App {
             scenario = Self.scenario(in: arguments)
             // Functional UI tests must not depend on Simulator animation completion.
             if isActive { UIView.setAnimationsEnabled(false) }
+            if isActive, scenario?.supportsNumericPairing == true,
+                let state = UITestFixture(arguments: ["--ui-testing"]).initialState
+            {
+                let code = arguments.first(where: { $0.hasPrefix("--pairing-test-code=") })
+                    .map { String($0.dropFirst("--pairing-test-code=".count)) }
+                numericServer = NumericPairingFixtureServer(
+                    state: state, code: code,
+                    expires: scenario == .numericPairingExpired,
+                    revoked: scenario == .numericPairingRevoked)
+            }
         }
 
         var commandLogJSON: String {
@@ -74,7 +85,8 @@ struct SofaRemoteiOSApp: App {
         }
 
         var initialState: RemoteState? {
-            guard isActive, scenario != .disconnected else { return nil }
+            guard isActive, scenario != .disconnected, scenario?.supportsNumericPairing != true
+            else { return nil }
             let controls = scenario?.supportsSessionControls == true
             let known = scenario != .sessionControlsUnknown
             let gestureCapabilities =
@@ -162,6 +174,9 @@ struct SofaRemoteiOSApp: App {
     }
 
     private enum UITestScenario: String, Equatable {
+        case numericPairing = "numeric-pairing"
+        case numericPairingExpired = "numeric-pairing-expired"
+        case numericPairingRevoked = "numeric-pairing-revoked"
         case disconnected
         case longName = "long-name"
         case unsupportedVolume = "unsupported-volume"
@@ -174,6 +189,11 @@ struct SofaRemoteiOSApp: App {
         case sessionControlsOff = "session-controls-off"
         case sessionControlsUnknown = "session-controls-unknown"
         case sessionControlsNoAccessibility = "session-controls-no-accessibility"
+
+        var supportsNumericPairing: Bool {
+            self == .numericPairing || self == .numericPairingExpired
+                || self == .numericPairingRevoked
+        }
 
         var supportsSessionControls: Bool {
             switch self {

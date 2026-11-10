@@ -79,7 +79,11 @@ private struct CompanionView: View {
                             forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
                     }
                 } else {
-                    Button("Pair iPhone or iPad") { model.openPairing() }
+                    Text(
+                        "Choose this Mac in Sofa Remote on your iPhone or iPad to show a four-digit pairing code."
+                    )
+                    .font(.callout)
+                    Button("Use QR pairing instead…") { model.openPairing() }
                     Text(
                         "Pair over Wi-Fi first. Paired devices can then connect over Bluetooth LE."
                     )

@@ -20,8 +20,8 @@ explicit selected-source identity independent of desktop focus.
 - Use a LAN protocol that both Apple and Android clients can implement. Use
   Bonjour/DNS-SD for discovery and TLS WebSocket for mobile-to-Mac messages.
 - Discovery is a hint, not authorization. Advertisements contain no pairing
-  secret. The Mac exposes a short-lived pairing invitation only when pairing is
-  explicitly enabled.
+  secret. Phone-initiated pairing displays a short-lived code on an unlocked
+  Mac. QR invitations remain explicitly enabled through the Mac UI.
 - A QR invitation carries the expected server identity and a one-time random
   pairing token. Verify that server identity before sending credentials.
   Previously paired devices use revocable credentials stored by the platform's
@@ -33,7 +33,9 @@ explicit selected-source identity independent of desktop focus.
 
 The Apple transport uses Network.framework and TLS 1.2 or newer. A persistent
 P-256 private key and ten-year self-signed certificate identify the Mac. The
-client verifies the leaf certificate's SHA-256 fingerprint before authentication.
+client verifies the leaf certificate's SHA-256 fingerprint before sending a saved
+or QR credential. Initial numeric enrollment uses a provisional TLS 1.3 channel
+and mutually authenticates its observed leaf through SRP before trusting it.
 Discovery uses an opaque UUID as the `_sofaremote._tcp` service name.
 Resolve that service to its hostname and port, then use a complete
 `wss://hostname:port/` endpoint. A Bonjour or raw host/port endpoint alone does
@@ -54,7 +56,64 @@ Existing devices reuse their stored credential; it is not reissued on reconnect.
 The mobile client must persist a new credential before enabling controls. A lost
 first welcome may leave an unused device entry; remove it on Mac and pair again.
 Revocation closes current connections. Authentication failure closes the socket
-without allowing input. Unauthenticated connections expire after ten seconds.
+without allowing input. Ordinary unauthenticated connections expire after ten
+seconds; the one active numeric enrollment has a fixed 120-second deadline.
+
+### Phone-initiated four-digit enrollment
+
+The phone may select an unpaired Bonjour service without a QR invitation.
+Only an eligible, unlocked Mac starts enrollment, with one global pending
+request and at most three new requests per rolling minute. It shows the phone
+name and a cryptographically random four-digit code in a dedicated window.
+The phone enters the code; no Mac approval click is required. Pairing does not
+implicitly grant session-unlock privileges.
+
+Enrollment-only `type: pairing` envelopes contain a typed `pairing` payload;
+all normal authentication, state and command fields are forbidden. The payload
+rejects unknown fields and phase-inappropriate values. Its `id` is a fresh
+request UUID, and every proof attempt has a fresh `attemptID` UUID:
+
+| Phase       | Additional fields                                                   |
+| ----------- | ------------------------------------------------------------------- |
+| `request`   | `serviceName`, bounded phone `name`                                 |
+| `ready`     | `serviceName`, bounded Mac `name`, `expiresIn`, `remainingAttempts` |
+| `hello`     | `publicKey` (384-byte client A)                                     |
+| `challenge` | `attemptID`, `salt` (32 bytes), `publicKey` (384-byte server B)     |
+| `proof`     | `attemptID`, `proof` (32-byte M1), `binding` (32 bytes)             |
+| `accepted`  | `attemptID`, `proof` (32-byte M2), `binding` (32 bytes)             |
+| `finish`    | `attemptID`, `binding` (32 bytes)                                   |
+| `retry`     | `expiresIn`, `remainingAttempts`                                    |
+| `rejected`  | fixed `failure` enum                                                |
+| `cancel`    | none                                                                |
+
+Binary fields are JSON Base64. SRP-6a uses a fixed RFC 5054 3072-bit group and
+SHA-256, via the pinned `swift-srp` library. Client/server ephemeral secrets are
+fresh per attempt. The PIN and verifier never appear in messages. Standard M1
+and M2 proofs also carry role-separated HMAC-SHA256 channel bindings, whose key
+is HKDF-SHA256 over the padded SRP shared secret. The authenticated transcript
+hash covers length-prefixed protocol labels, request/attempt UUIDs, selected
+service UUID, the actually observed TLS certificate SHA-256, both device names,
+salt and both public keys. A relay between different certificate identities
+cannot produce the matching binding. The client verifies M2 and the server
+binding before returning a distinct finish binding.
+
+Only a verified finish on the same live connection, before expiry and while the
+Mac remains unlocked, may create a paired-device record and send the normal
+`welcome` with a fresh random 32-byte token. The phone persists the verified
+certificate pin and token before exposing controls. No other pre-authentication
+packet executes input. A finish is single-use, and only the requesting connection
+may advance or cancel the request.
+
+Three incorrect proofs invalidate the current code. Failed attempts are also
+limited globally to three per rolling minute across replacement requests.
+Cancellation, connection loss, expiry, Mac locking and termination clear the
+pending state and ephemeral keys. Deadlines use a monotonic clock that includes
+system sleep. A new request uses a different code; no prior failed operation is
+replayed. SRP work runs off the input actor and existing paired Wi-Fi/BLE paths
+keep their normal pin/token authentication.
+
+References: [SRP-6a implementation](https://github.com/adam-fowler/swift-srp),
+[RFC 5054](https://www.rfc-editor.org/info/rfc5054/).
 
 ## Message identity
 

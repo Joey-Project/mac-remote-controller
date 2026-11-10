@@ -8,7 +8,6 @@ final class SofaRemoteiOSUITests: XCTestCase {
     func testTouchpadUsesDragAndTwoFingerTapCommands() throws {
         launchApp()
         defer { terminateApp() }
-
         let pad = element("touchpad.surface")
         XCTAssertTrue(pad.waitForExistence(timeout: 5))
         XCTAssertTrue(pad.isHittable)
@@ -16,7 +15,6 @@ final class SofaRemoteiOSUITests: XCTestCase {
             pad.frame.height, app.windows.firstMatch.frame.height * 0.6,
             "The default touchpad should occupy most of the portrait display.")
         XCTAssertEqual(app.scrollViews.count, 0, "The default touchpad should fill the screen.")
-
         let start = pad.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.55))
         let end = pad.coordinate(withNormalizedOffset: CGVector(dx: 0.68, dy: 0.40))
         start.press(forDuration: 0.1, thenDragTo: end)
@@ -159,14 +157,12 @@ final class SofaRemoteiOSUITests: XCTestCase {
     func testDraftSurvivesModeChangesAndOnlySendCommitsText() throws {
         launchApp()
         defer { terminateApp() }
-
         chooseKeyboardMode()
         let textField = element("keyboard.text")
         XCTAssertTrue(textField.waitForExistence(timeout: 3))
         textField.tap()
         textField.typeText("Remote draft 42")
         XCTAssertEqual(try commands().count, 0)
-
         openSettings()
         app.navigationBars["Settings"].buttons.firstMatch.tap()
         XCTAssertTrue(textField.waitForExistence(timeout: 3))
@@ -197,6 +193,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
         XCTAssertTrue(element("connection.done").waitForExistence(timeout: 3))
         element("remote.disconnect").tap()
         XCTAssertTrue(app.staticTexts["Connect to your Mac"].waitForExistence(timeout: 3))
+        element("pairing.alternatives").tap()
         XCTAssertTrue(app.buttons["Scan pairing QR code"].exists)
         XCTAssertFalse(element("touchpad.surface").exists)
     }
@@ -300,13 +297,14 @@ extension SofaRemoteiOSUITests {
     }
 
     @MainActor
-    func launchApp(scenario: String? = nil) {
+    func launchApp(scenario: String? = nil, arguments: [String] = []) {
         XCTContext.runActivity(named: "Launch UI test app") { _ in
             continueAfterFailure = false
             XCUIDevice.shared.orientation = .portrait
             app = XCUIApplication()
             app.launchArguments = ["--ui-testing"]
             if let scenario { app.launchArguments.append("--ui-testing-scenario=\(scenario)") }
+            app.launchArguments += arguments
             app.launch()
         }
     }
@@ -327,7 +325,10 @@ extension SofaRemoteiOSUITests {
     @MainActor
     func openSettings() {
         element("remote.menu").tap()
-        element("remote.settings").tap()
+        let settings = app.buttons.matching(identifier: "remote.settings").firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 3), "The menu must expose Settings.")
+        XCTAssertTrue(settings.isHittable, "Settings must be ready for a real tap.")
+        settings.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
     }
 

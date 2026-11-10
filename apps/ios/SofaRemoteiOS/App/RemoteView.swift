@@ -139,7 +139,9 @@ private extension RemoteView {
         GeometryReader { geometry in
             ScrollView {
                 VStack(spacing: 20) {
-                    ConnectionStatusCard(model: model)
+                    if model.numericPairing == nil {
+                        ConnectionStatusCard(model: model)
+                    }
                     PairingPanel(model: model) {
                         showingScanner = true
                     }

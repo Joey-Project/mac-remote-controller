@@ -35,6 +35,11 @@
 		B20000000000000000000001 /* RemoteActionsMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* RemoteActionsMenu.swift */; };
 		B20000000000000000000003 /* ConnectionBenchmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ConnectionBenchmarkView.swift */; };
 		A31000000000000000000001 /* LocalPointerDragCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31000000000000000000002 /* LocalPointerDragCoordinator.swift */; };
+		A72200000000000000000001 /* RemoteModel+Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72200000000000000000002 /* RemoteModel+Connection.swift */; };
+		A72300000000000000000001 /* RemoteModel+NumericPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72300000000000000000002 /* RemoteModel+NumericPairing.swift */; };
+		A72400000000000000000001 /* NumericPairingInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72400000000000000000002 /* NumericPairingInput.swift */; };
+		A72500000000000000000001 /* NumericPairingFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72500000000000000000002 /* NumericPairingFixture.swift */; };
+		A72600000000000000000001 /* NumericPairingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72600000000000000000002 /* NumericPairingUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -65,6 +70,11 @@
 		B20000000000000000000002 /* RemoteActionsMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteActionsMenu.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* ConnectionBenchmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBenchmarkView.swift; sourceTree = "<group>"; };
 		A31000000000000000000002 /* LocalPointerDragCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPointerDragCoordinator.swift; sourceTree = "<group>"; };
+		A72200000000000000000002 /* RemoteModel+Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RemoteModel+Connection.swift"; sourceTree = "<group>"; };
+		A72300000000000000000002 /* RemoteModel+NumericPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RemoteModel+NumericPairing.swift"; sourceTree = "<group>"; };
+		A72400000000000000000002 /* NumericPairingInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NumericPairingInput.swift"; sourceTree = "<group>"; };
+		A72500000000000000000002 /* NumericPairingFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NumericPairingFixture.swift"; sourceTree = "<group>"; };
+		A72600000000000000000002 /* NumericPairingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NumericPairingUITests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,6 +108,10 @@
 				A30000000000000000000002 /* SystemVolumeCard.swift */,
 				100000000000000000000026 /* PairingScanner.swift */,
 				100000000000000000000028 /* RemoteModel.swift */,
+				A72500000000000000000002 /* NumericPairingFixture.swift */,
+				A72400000000000000000002 /* NumericPairingInput.swift */,
+				A72300000000000000000002 /* RemoteModel+NumericPairing.swift */,
+				A72200000000000000000002 /* RemoteModel+Connection.swift */,
 				A31000000000000000000002 /* LocalPointerDragCoordinator.swift */,
 				100000000000000000000052 /* IOSBLEPeer.swift */,
 				100000000000000000000032 /* ConnectionPanel.swift */,
@@ -119,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000036 /* SofaRemoteiOSUITests.swift */,
+				A72600000000000000000002 /* NumericPairingUITests.swift */,
 				D55000000000000000000002 /* UnlockMenuUITests.swift */,
 				E60000000000000000000008 /* SettingsUITests.swift */,
 				F71000000000000000000002 /* TouchpadGestureUITests.swift */,
@@ -230,6 +245,10 @@
 				A30000000000000000000001 /* SystemVolumeCard.swift in Sources */,
 				100000000000000000000027 /* PairingScanner.swift in Sources */,
 				100000000000000000000029 /* RemoteModel.swift in Sources */,
+				A72500000000000000000001 /* NumericPairingFixture.swift in Sources */,
+				A72400000000000000000001 /* NumericPairingInput.swift in Sources */,
+				A72300000000000000000001 /* RemoteModel+NumericPairing.swift in Sources */,
+				A72200000000000000000001 /* RemoteModel+Connection.swift in Sources */,
 				A31000000000000000000001 /* LocalPointerDragCoordinator.swift in Sources */,
 				100000000000000000000051 /* IOSBLEPeer.swift in Sources */,
 				100000000000000000000030 /* ConnectionPanel.swift in Sources */,
@@ -246,7 +265,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */, F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, A72600000000000000000001 /* NumericPairingUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */, F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

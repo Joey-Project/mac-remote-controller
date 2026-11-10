@@ -66,7 +66,7 @@ final class RemoteModel {
     #endif
 
     #if DEBUG && targetEnvironment(simulator)
-        @ObservationIgnored private let uiTestFixture = UITestFixture()
+        @ObservationIgnored let uiTestFixture = UITestFixture()
         private var uiTestLogRevision = 0
 
         var isUITesting: Bool { uiTestFixture.isActive }
@@ -77,10 +77,11 @@ final class RemoteModel {
     #endif
 
     private var browser: NWBrowser?
-    private var resolver: BonjourResolver?
+    var resolver: BonjourResolver?
     var attemptID: UUID?
     var peer: RemotePeer?
     var pairedMacs: [PairedMac] = []
+    var numericPairing: NumericPairingClientState?
     var candidate: PairedMac?
     var benchmarkTargetID: String?
     var connectionID: String?
@@ -111,6 +112,14 @@ final class RemoteModel {
         #if DEBUG && targetEnvironment(simulator)
             if isUITesting {
                 remoteState = uiTestFixture.initialState
+                if let server = uiTestFixture.numericServer {
+                    if let saved = server.revokedPairing { pairedMacs = [saved] }
+                    discoveredMacs = [
+                        DiscoveredMac(
+                            id: server.identity.serviceName,
+                            name: server.identity.name, isPaired: server.revokedPairing != nil)
+                    ]
+                }
                 isConnected = remoteState != nil
                 connectionSummary = isConnected ? "Connected to UI Test Mac" : "Choose your Mac"
                 return
@@ -155,42 +164,12 @@ final class RemoteModel {
         browser.start(queue: .main)
     }
 
-    func connectSaved(to mac: DiscoveredMac) {
-        #if DEBUG && targetEnvironment(simulator)
-            guard !isUITesting else { return }
-        #endif
-        guard let saved = pairedMacs.first(where: { $0.serviceName == mac.id }) else {
-            errorMessage = "Open pairing on this Mac and scan its invitation."
-            return
-        }
-        benchmarkTargetID = saved.serviceName
-        connect(saved, interfaceIndex: mac.interfaceIndex ?? 0)
-    }
-
     func selectTransport(_ transport: RemoteTransportKind) {
         guard selectedTransport != transport else { return }
         cancelBenchmark()
         disconnect()
         selectedTransport = transport
         if transport == .wifi { startDiscovery() } else { browser?.cancel(); browser = nil }
-    }
-
-    func pair(invitation: String) {
-        #if DEBUG && targetEnvironment(simulator)
-            guard !isUITesting else { return }
-        #endif
-        guard selectedTransport == .wifi else {
-            errorMessage = "Pair this Mac over Wi-Fi first, then select Bluetooth LE to reconnect."
-            return
-        }
-        do {
-            let invitation = try PairingInvitation.parse(
-                invitation.trimmingCharacters(in: .whitespacesAndNewlines))
-            connect(
-                PairedMac(
-                    serviceName: invitation.serviceName, name: "Mac",
-                    certificateSHA256: invitation.certificateSHA256, token: invitation.token))
-        } catch { errorMessage = error.localizedDescription }
     }
 
     func suspend() {
@@ -203,70 +182,25 @@ final class RemoteModel {
         discoveredMacs = []
     }
 
-    private func connect(_ mac: PairedMac, interfaceIndex: UInt32 = 0) {
-        #if DEBUG && targetEnvironment(simulator)
-            guard !isUITesting else { return }
-        #endif
-        disconnect()
-        errorMessage = nil
-        connectionSummary = "Resolving Mac…"
-        candidate = mac
-        benchmarkTargetID = mac.serviceName
-        let attempt = UUID()
-        attemptID = attempt
-        if selectedTransport == .bluetooth {
-            startBluetoothConnection(to: mac, attempt: attempt)
-            return
-        }
-        let resolver = BonjourResolver()
-        self.resolver = resolver
-        resolver.resolve(
-            serviceName: mac.serviceName, wakeOnResolve: true, interfaceIndex: interfaceIndex
-        ) { [weak self] result in
-            guard let self, self.attemptID == attempt else { return }
-            self.resolver = nil
-            switch result {
-            case .success(let url): self.startConnection(to: url, mac: mac, attempt: attempt)
-            case .failure: self.handleClose("The Mac could not be found on this network.")
-            }
-        }
-    }
-
-    private func startConnection(to url: URL, mac: PairedMac, attempt: UUID) {
-        connectionSummary = "Connecting securely…"
-        let parameters = WebSocketPeer.parameters(pin: mac.certificateSHA256) { [weak self] in
-            guard let self, self.attemptID == attempt else { return }
-            self.peer?.close()
-            self.errorMessage =
-                "The Mac identity does not match. Open pairing on the Mac and scan a new invitation."
-        }
-        let peer = WebSocketPeer(
-            connection: NWConnection(to: .url(url), using: parameters))
-        self.peer = peer
-        peer.onReady = { [weak self] in
-            let name = DeviceName.bounded(UIDevice.current.name)
-            self?.peer?.send(
-                WireMessage(type: .authenticate, authToken: mac.token, deviceName: name))
-        }
-        peer.onMessage = { [weak self] message in self?.receive(message) }
-        peer.onClose = { [weak self] reason in self?.handleClose(reason) }
-        monitorConnection()
-        peer.start()
-    }
-
     func monitorConnection() {
         let started = ContinuousClock.now
         deadline = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 let now = ContinuousClock.now
+                let pairingDeadline = self.numericPairing?.expiresAt
                 let timedOut =
                     self.isConnected
                     ? self.pending.values.contains {
                         now - $0.sent > .seconds($0.metadata.timeoutSeconds)
                     }
-                    : now - started > .seconds(12)
+                    : pairingDeadline.map { now >= $0 }
+                        ?? (now - started > .seconds(12))
                 if timedOut {
+                    if self.numericPairing != nil {
+                        self.failNumericPairing(pairingDeadline == nil ? .unavailable : .expired)
+                        return
+                    }
                     self.peer?.close()
                     if !self.isConnected, self.errorMessage == "Disconnected" {
                         self.errorMessage =
@@ -278,6 +212,7 @@ final class RemoteModel {
     }
 
     func handleClose(_ reason: String) {
+        clearNumericPairing()
         let unknown = !pending.isEmpty
         if benchmarkRunning { cancelBenchmark() }
         benchmarkRequestTracker.reset()
@@ -307,8 +242,12 @@ final class RemoteModel {
 
 extension RemoteModel {
     func disconnect() {
+        clearNumericPairing()
         #if DEBUG && targetEnvironment(simulator)
             if isUITesting {
+                peer?.onClose = nil
+                peer?.close()
+                peer = nil
                 isConnected = false
                 connectionID = nil
                 remoteState = nil

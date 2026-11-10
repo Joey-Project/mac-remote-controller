@@ -1,5 +1,5 @@
 /// Tracks authenticated and unauthenticated connections for bounded server admission.
-/// When the pending pool is full, a new connection replaces its oldest pending entry.
+/// A full pool replaces its oldest unprotected pending entry, preserving active enrollment.
 public struct ConnectionAdmission<ID: Hashable> {
     public let maximumAuthenticated: Int
     public let maximumPending: Int
@@ -18,11 +18,18 @@ public struct ConnectionAdmission<ID: Hashable> {
     public var authenticatedCount: Int { authenticated.count }
     public var totalCount: Int { pendingCount + authenticatedCount }
 
-    /// Registers a pending connection and returns the oldest pending ID evicted, if any.
+    /// Returns the ID to close: the oldest unprotected pending entry, or the
+    /// newcomer itself if every slot is protected. Rejected IDs are not stored.
     @discardableResult
-    public mutating func admitPending(_ id: ID) -> ID? {
+    public mutating func admitPending(_ id: ID, protecting protectedID: ID? = nil) -> ID? {
         precondition(!contains(id), "A connection ID may only be admitted once")
-        let evicted = pendingOrder.count >= maximumPending ? pendingOrder.removeFirst() : nil
+        var evicted: ID?
+        if pendingOrder.count >= maximumPending {
+            guard let index = pendingOrder.firstIndex(where: { $0 != protectedID }) else {
+                return id
+            }
+            evicted = pendingOrder.remove(at: index)
+        }
         pendingOrder.append(id)
         return evicted
     }

@@ -1,6 +1,7 @@
 import Foundation
 
 public enum MessageType: String, Codable, Sendable, Equatable {
+    case pairing
     case authenticate
     case welcome
     case command
@@ -83,6 +84,7 @@ public struct WireMessage: Codable, Sendable, Equatable {
     public var command: RemoteCommand?
     public var state: RemoteState?
     public var error: RemoteError?
+    public var pairing: NumericPairingMessage?
 
     public init(
         protocolVersion: Int = 1,
@@ -94,7 +96,8 @@ public struct WireMessage: Codable, Sendable, Equatable {
         sequence: UInt64? = nil,
         command: RemoteCommand? = nil,
         state: RemoteState? = nil,
-        error: RemoteError? = nil
+        error: RemoteError? = nil,
+        pairing: NumericPairingMessage? = nil
     ) {
         self.protocolVersion = protocolVersion
         self.type = type
@@ -106,6 +109,7 @@ public struct WireMessage: Codable, Sendable, Equatable {
         self.command = command
         self.state = state
         self.error = error
+        self.pairing = pairing
     }
 
     enum CodingKeys: String, CodingKey {
@@ -119,6 +123,7 @@ public struct WireMessage: Codable, Sendable, Equatable {
         case command
         case state
         case error
+        case pairing
     }
 
     public func validate() throws {
@@ -133,7 +138,12 @@ public struct WireMessage: Codable, Sendable, Equatable {
         guard protocolVersion == WireLimits.protocolVersion else {
             throw WireProtocolError.unsupportedVersion(protocolVersion)
         }
+        guard type == .pairing || pairing == nil else {
+            throw WireProtocolError.invalidEnvelope("Pairing payload outside pairing exchange")
+        }
         switch type {
+        case .pairing:
+            try validateNumericPairing()
         case .authenticate:
             try validateAuthenticate()
         case .welcome:
@@ -149,6 +159,13 @@ public struct WireMessage: Codable, Sendable, Equatable {
         case .disconnect:
             try validateDisconnect()
         }
+    }
+
+    private func validateNumericPairing() throws {
+        guard let pairing, authToken == nil, deviceName == nil, connectionID == nil,
+            requestID == nil, sequence == nil, command == nil, state == nil, error == nil
+        else { throw WireProtocolError.invalidEnvelope("Invalid numeric pairing envelope") }
+        try pairing.validate()
     }
 
     private func validateAuthenticate() throws {

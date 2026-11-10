@@ -22,10 +22,11 @@ let package = Package(
         .executable(name: "SofaRemoteUnlockInstaller", targets: ["SofaRemoteUnlockInstaller"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-certificates.git", exact: "1.21.0")
+        .package(url: "https://github.com/apple/swift-certificates.git", exact: "1.21.0"),
+        .package(url: "https://github.com/adam-fowler/swift-srp.git", exact: "2.4.0")
     ],
     targets: [
-        .target(name: "AppleCore"),
+        .target(name: "AppleCore", dependencies: [.product(name: "SRP", package: "swift-srp")]),
         .target(
             name: "UnlockNative",
             linkerSettings: [
