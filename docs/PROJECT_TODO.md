@@ -5,9 +5,11 @@
   Virtual HID is deferred pending an Apple entitlement; retain pointer/drag efficiency and the
   accepted keyboard, toolbar and volume UI.
   [Gesture workstream](project_journal/2026/10/2026-10-24-multitouch-gestures-01a1464a.md).
-- [pending] Chrome extension availability: the user reports it is unavailable
-  again. Diagnose registration, Native Messaging, bridge and tab delivery from
-  fresh evidence after the touchpad priority; no cause is established yet.
+- [in_progress] Chrome extension availability: recover existing media tabs after
+  service-worker restart with fresh page snapshots. Continue live registration,
+  Native Messaging, bridge and tab-delivery acceptance; the reported live failure
+  is not yet tied to one observed cause.
+  [Chrome workstream](project_journal/2026/11/2026-11-11-chrome-availability-01a1464a.md).
 - [pending] IINA stability: investigate the previously deferred intermittent
   disconnect while preserving the existing five-button media row and percentages.
   [Media workstream](project_journal/2026/10/2026-10-24-media-adapters-01a1464a.md).
