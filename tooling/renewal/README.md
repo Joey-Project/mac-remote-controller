@@ -105,6 +105,36 @@ The reference iOS app must be a known accepted build with the original identity.
 An expired reference profile is supported. Candidate code, entitlements and
 Keychain groups are preserved; this tool does not compile a different iOS UI.
 
+### WidgetKit extension renewal
+
+The current runner also accepts the single bundled extension
+`PlugIns/SofaRemoteWidgets.appex`, with bundle identifier
+`com.joeyteng.sofaremote.ios.widgets`. First sign the app and extension together
+in Xcode with the same development team and certificate. That initial signing
+registers the extension's identifier; renewal reuses it and never creates an
+arbitrary extension identifier. App Groups and shared Keychain access are not
+required for the launch-only controls and widgets.
+
+Rebuild and package the probe from this revision before adopting an app with
+widgets. The updated probe adds the fixed `widget-profile` command. An older
+probe cannot renew that profile; the runner stops without installing a partial
+candidate. Apps without extensions retain the existing single-profile flow and
+do not invoke the new command.
+
+The main and extension profiles are issued into separate private paths. Each
+must independently extend its previous expiration and match its original
+identifier, the same team, device and certificate. The runner signs the
+extension before the app and verifies both signatures, original entitlements
+and executable instructions. Unknown, nested or substituted extension bundles,
+missing profiles and signing-identity mismatches stop the run. The sanitized
+receipt adds `extensionProfiles` and `extensionSignaturesVerified`; the main
+app's existing expiration fields keep their meaning.
+
+Update the approved iOS payload and renewal runtime only after device acceptance.
+Building this source does not change a running daily job, its configuration or
+its accepted app. Keep real profile issuance, device installation and subsequent
+daily observation separate from mocked renewal tests and Simulator validation.
+
 ## Explicit validation commands
 
 Lock the Mac before a run. For installation, also lock the already-initialized

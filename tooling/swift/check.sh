@@ -43,6 +43,8 @@ swift format lint \
     --recursive \
     "$repo_root/apps/macos/SofaRemoteMac" \
     "$repo_root/apps/ios/SofaRemoteiOS" \
+    "$repo_root/apps/ios/SharedEntryPoints" \
+    "$repo_root/apps/ios/SofaRemoteWidgets" \
     "$repo_root/apps/ios/SofaRemoteiOSUITests" \
     "$repo_root/packages/apple-core/Package.swift" \
     "$repo_root/packages/apple-core/Sources" \
@@ -103,6 +105,21 @@ if [[ ! -f "$ios_info_plist" ]]; then
     printf 'Generated iOS app Info.plist was not found: %s\n' "$ios_info_plist" >&2
     exit 1
 fi
+
+widget_info_plist="$tool_root/DerivedData/iOS/Build/Products/Debug-iphonesimulator/SofaRemoteiOS.app/PlugIns/SofaRemoteWidgets.appex/Info.plist"
+if [[ ! -f "$widget_info_plist" ]] || \
+    [[ "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$widget_info_plist")" != "com.apple.widgetkit-extension" ]]; then
+    printf 'Expected the embedded Sofa Remote WidgetKit extension.\n' >&2
+    exit 1
+fi
+for version_key in CFBundleVersion CFBundleShortVersionString; do
+    app_version="$(plutil -extract "$version_key" raw -o - "$ios_info_plist")"
+    widget_version="$(plutil -extract "$version_key" raw -o - "$widget_info_plist")"
+    if [[ -z "$app_version" || "$app_version" != "$widget_version" ]]; then
+        printf 'App and WidgetKit extension must share %s.\n' "$version_key" >&2
+        exit 1
+    fi
+done
 
 mac_info_plist="$tool_root/DerivedData/macOS/Build/Products/Debug/SofaRemoteMac.app/Contents/Info.plist"
 for app_info in "$ios_info_plist" "$mac_info_plist"; do

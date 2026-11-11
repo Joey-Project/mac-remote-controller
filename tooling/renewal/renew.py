@@ -20,6 +20,8 @@ import time
 import uuid
 
 IOS_ID = "com.joeyteng.sofaremote.ios"
+WIDGET_ID = IOS_ID + ".widgets"
+WIDGET_PATH = Path("PlugIns/SofaRemoteWidgets.appex")
 MAC_ID = "com.joeyteng.sofaremote.renewalprobe.mac"
 PROBE_ID = "com.joeyteng.sofaremote.renewalprobe"
 CONFIG_KEYS = {"probeApp", "iosApp", "deviceIdentifier", "deviceUDID", "runDirectory"}
@@ -97,6 +99,30 @@ def authorized_groups(entitlements, profile):
 def authorized_leaf(profile, leaf):
     require(leaf in profile["DeveloperCertificates"], "reference-certificate-mismatch")
     return leaf
+
+
+def ios_extensions(app):
+    """Admit only our fixed WidgetKit bundle and regular profile-write paths.
+
+    This protects the signing destination policy, not a timestamp-based claim
+    about source stability. Copy verification and instruction hashes separately
+    check the payload before any profile replacement.
+    """
+    extensions = list(app.rglob("*.appex"))
+    if not extensions:
+        require(not (app / "PlugIns").is_symlink(), "unsupported-ios-extensions")
+        return ()
+    extension = app / WIDGET_PATH
+    require(extensions == [extension] and not (app / "PlugIns").is_symlink()
+        and extension.is_dir() and not extension.is_symlink(), "unsupported-ios-extensions")
+    for relative in ("Info.plist", "embedded.mobileprovision", "SofaRemoteWidgets"):
+        require(stat.S_ISREG((extension / relative).lstat().st_mode), "invalid-widget-bundle-file")
+    info = plistlib.loads((extension / "Info.plist").read_bytes())
+    require(info.get("CFBundleIdentifier") == WIDGET_ID
+        and info.get("CFBundleExecutable") == "SofaRemoteWidgets"
+        and info.get("NSExtension", {}).get("NSExtensionPointIdentifier") == "com.apple.widgetkit-extension",
+        "unexpected-widget-identity")
+    return (WIDGET_PATH,)
 
 
 def atomic_exchange(first, second):
@@ -235,12 +261,16 @@ class Run(CommandLog):
         self.command("verify-signature", ["codesign", "--verify", "--deep", "--strict", str(app)])
 
     def issue(self, target, reference):
+        bundles = {"mac": MAC_ID, "ios": IOS_ID, "widget": WIDGET_ID}
+        require(target in bundles, "unsupported-profile-target")
         old = self.profile(reference / ("Contents/embedded.provisionprofile" if target == "mac" else "embedded.mobileprovision"))
         team, = old["TeamIdentifier"]
-        bundle = MAC_ID if target == "mac" else IOS_ID
+        bundle = bundles[target]
         require(identifier(old) == f"{team}.{bundle}", "reference-identity-mismatch")
         self.verify_signature(reference)
-        prefix = self.root / "reference-leaf-"
+        issuance_root = self.root / "widget-issuance" if target == "widget" else self.root
+        issuance_root.mkdir(mode=0o700, exist_ok=True)
+        prefix = issuance_root / "reference-leaf-"
         self.command("read-certificate", ["codesign", "-d", f"--extract-certificates={prefix}", str(reference)])
         certificate = authorized_leaf(old, Path(str(prefix) + "0").read_bytes())
         if target == "mac":
@@ -251,48 +281,75 @@ class Run(CommandLog):
         else:
             device = self.config["deviceUDID"]
             require(device in old["ProvisionedDevices"], "reference-device-mismatch")
-        cert = self.root / "certificate.der"
+        cert = issuance_root / "certificate.der"
         cert.write_bytes(certificate)
-        out = self.root / "issued"
-        config = self.root / "probe-configuration-private.json"
+        out = issuance_root / "issued"
+        config = issuance_root / "probe-configuration-private.json"
         config.write_text(json.dumps({"expectedTeamID": team, "targetUDID": device,
             "existingCertificatePath": str(cert), "probeBundleIdentifier": PROBE_ID, "outputDirectory": str(out)}))
         config.chmod(0o600)
         self.require_mac_lock()
         started = now()
-        self.command("issue-profile", [str(self.executable), "ds", "renewal-probe", "mac-profile" if target == "mac" else "app-profile"],
+        mode = {"mac": "mac-profile", "ios": "app-profile", "widget": "widget-profile"}[target]
+        self.command("issue-profile", [str(self.executable), "ds", "renewal-probe", mode],
             seconds=90, environment={"SOFA_RENEWAL_PROBE_CONFIG": str(config)})
         path = out / "probe.mobileprovision"
         profile = self.profile(path)
         validate_profile(profile, team, bundle, device, certificate, old, started)
         self.require_mac_lock()
-        self.summary.update(target=target, previousExpiration=utc(old["ExpirationDate"]).isoformat(),
+        receipt = dict(previousExpiration=utc(old["ExpirationDate"]).isoformat(),
             creation=utc(profile["CreationDate"]).isoformat(), expiration=utc(profile["ExpirationDate"]).isoformat(),
             profileSHA256=hashlib.sha256(path.read_bytes()).hexdigest(), profileIdentityVerified=True)
+        if target == "widget":
+            self.summary["extensionProfiles"] = [{"bundleIdentifier": bundle, **receipt}]
+        else:
+            self.summary.update(target=target, **receipt)
         return path, profile, certificate
 
-    def resign(self, source, profile_path, profile, certificate, mac=False):
-        self.verify_signature(source)
-        e = self.entitlements(source)
+    def sign_bundle(self, destination, profile_path, profile, certificate, executable, expected, label):
+        e, before = expected
+        require(self.entitlements(destination) == e
+            and instruction_hash(destination / executable) == before, "copied-payload-changed")
         require(identifier({"Entitlements": e}) == identifier(profile) and authorized_groups(e, profile), "entitlement-authorization-mismatch")
-        destination = self.root / source.name
-        shutil.copytree(source, destination, symlinks=True)
-        require(not list(destination.rglob("*.appex")), "nested-extensions-require-separate-signing")
-        executable_name = "SofaRenewalProbe" if mac else "SofaRemoteiOS"
-        executable = Path("Contents/MacOS") / executable_name if mac else Path(executable_name)
-        before = instruction_hash(source / executable)
-        embedded = "Contents/embedded.provisionprofile" if mac else "embedded.mobileprovision"
+        embedded = "Contents/embedded.provisionprofile" if executable.parts[0] == "Contents" else "embedded.mobileprovision"
         shutil.copyfile(profile_path, destination / embedded)
-        entitlements = self.root / "entitlements-private.plist"
+        entitlements = self.root / f"{label}-entitlements-private.plist"
         entitlements.write_bytes(plistlib.dumps(e))
-        self.command("resign", ["codesign", "--force", "--sign", hashlib.sha1(certificate).hexdigest().upper(),
+        self.command(label, ["codesign", "--force", "--sign", hashlib.sha1(certificate).hexdigest().upper(),
             "--timestamp=none", "--entitlements", str(entitlements), str(destination)], seconds=45)
         self.verify_signature(destination)
         require(self.entitlements(destination) == e and instruction_hash(destination / executable) == before, "signed-payload-changed")
-        prefix = self.root / "candidate-leaf-"
+        prefix = self.root / f"{label}-candidate-leaf-"
         self.command("candidate-certificate", ["codesign", "-d", f"--extract-certificates={prefix}", str(destination)])
         require(Path(str(prefix) + "0").read_bytes() == certificate, "candidate-certificate-mismatch")
+
+    def resign(self, source, profile_path, profile, certificate, mac=False, extension_profiles=None):
+        self.verify_signature(source)
+        extensions = ios_extensions(source) if not mac else ()
+        if mac:
+            require(not list(source.rglob("*.appex")), "nested-extensions-require-separate-signing")
+        extension_profiles = extension_profiles or {}
+        require(set(extension_profiles) == set(extensions), "extension-profile-set-mismatch")
+        executable = Path("Contents/MacOS/SofaRenewalProbe" if mac else "SofaRemoteiOS")
+        expected = self.entitlements(source), instruction_hash(source / executable)
+        widget_expected = {}
+        for relative in extensions:
+            _, child_profile, child_certificate = extension_profiles[relative]
+            require(child_profile["TeamIdentifier"] == profile["TeamIdentifier"]
+                and child_certificate == certificate, "extension-signing-identity-mismatch")
+            widget_expected[relative] = (self.entitlements(source / relative),
+                instruction_hash(source / relative / "SofaRemoteWidgets"))
+        destination = self.root / source.name
+        shutil.copytree(source, destination, symlinks=True)
+        self.verify_signature(destination)
+        require(mac or ios_extensions(destination) == extensions, "copied-extension-set-changed")
+        for relative in extensions:
+            path, child_profile, child_certificate = extension_profiles[relative]
+            self.sign_bundle(destination / relative, path, child_profile, child_certificate,
+                Path("SofaRemoteWidgets"), widget_expected[relative], "resign-widget")
+        self.sign_bundle(destination, profile_path, profile, certificate, executable, expected, "resign")
         self.summary.update(signatureVerified=True, entitlementsAndInstructionsPreserved=True,
+            extensionSignaturesVerified=len(extensions),
             candidateSHA256=hashlib.sha256((destination / executable).read_bytes()).hexdigest())
         return destination
 
@@ -337,8 +394,11 @@ class Run(CommandLog):
         require(utc(existing["ExpirationDate"]) > now(), "mac-probe-expired-bootstrap-required")
         mac = action in ("mac-candidate", "mac-adopt")
         reference = self.probe if mac else Path(self.config["iosApp"])
+        extensions = () if mac else ios_extensions(reference)
         profile_path, profile, certificate = self.issue("mac" if mac else "ios", reference)
-        candidate = self.resign(reference, profile_path, profile, certificate, mac=mac)
+        extension_profiles = {relative: self.issue("widget", reference / relative) for relative in extensions}
+        candidate = self.resign(reference, profile_path, profile, certificate,
+            mac=mac, extension_profiles=extension_profiles)
         if action == "ios-install":
             self.install(candidate)
         if action == "mac-adopt":

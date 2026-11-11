@@ -19,6 +19,8 @@ struct RemoteView: View {
     @State private var isTextInputFocused = false
     @State private var localDragID: UUID?
     @State private var selectedMode: RemoteMode = .touchpad
+    @State private var entryRouter = RemoteEntryRouter.shared
+    @State private var pendingEntryPoint: RemoteEntryPoint?
     @State private var isVolumePinned = false
     @AppStorage("gesture.threeFingerDrag") private var threeFingerDragEnabled = true
     @AppStorage("gesture.fourFingerShortcuts") private var fourFingerShortcutsEnabled = true
@@ -109,6 +111,20 @@ struct RemoteView: View {
                     showingConnectionDetails = false
                     resetInteractionState()
                 }
+                if let pendingEntryPoint {
+                    selectedMode = pendingEntryPoint == .keyboard ? .keyboard : .touchpad
+                    if connected { self.pendingEntryPoint = nil }
+                }
+            }
+            .onChange(of: entryRouter.request, initial: true) { _, request in
+                guard let request else { return }
+                prepareForPresentation()
+                showingSettings = false
+                showingConnectionDetails = false
+                showingScanner = false
+                selectedMode = request.destination == .keyboard ? .keyboard : .touchpad
+                pendingEntryPoint = model.isConnected ? nil : request.destination
+                entryRouter.request = nil
             }
             .onChange(of: mediaTargetIDs) { _, ids in
                 if let selectedMediaTargetID, ids?.contains(selectedMediaTargetID) == true {
