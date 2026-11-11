@@ -87,6 +87,19 @@ that version keeps an extension service worker alive while its native messaging
 port remains connected. A muted `<video>` is reported with effective volume
 zero; a positive volume command unmutes it.
 
+Each new service-worker instance also enumerates already-loaded supported tabs
+and requests a fresh snapshot, including hidden tabs that have not emitted a
+new page event. Profile startup and extension installation/update use the same
+discovery, sharing any in-flight enumeration. A valid page snapshot must still
+arrive before native work begins; discarded tabs, unsupported URLs and missing
+content scripts do not open a native connection. Discovery never reloads a tab,
+injects scripts or replays an action. After an extension update invalidates an
+old content script, refresh that page as described above.
+
+This follows Chrome's [service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle):
+global variables are lost when a worker stops. Discovery uses the existing
+Tabs and host permissions, with no new permission or persistent keepalive timer.
+
 Site selectors can change without notice. Automated tests use DOM fixtures and
 do not claim live-site compatibility for every account, layout, region, or
 episode. Verify on the desired tab before relying on next/previous controls.

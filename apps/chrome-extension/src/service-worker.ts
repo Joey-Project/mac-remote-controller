@@ -56,6 +56,7 @@ let nativeReconnectTimer: number | undefined;
 let nativeReconnectDelayMilliseconds = nativeReconnectInitialDelayMilliseconds;
 let targetRefreshTimer: number | undefined;
 let nextDispatchId = 0;
+let existingTargetDiscovery: Promise<void> | undefined;
 
 function allowedKindForURL(url: string | undefined): 'youtube' | 'bilibili' | undefined {
   if (!url) return undefined;
@@ -173,6 +174,40 @@ function refreshKnownTargets(): void {
       markTargetUnavailable(tabId);
     }
   }
+}
+
+function discoverExistingTargets(): void {
+  if (existingTargetDiscovery) return;
+  existingTargetDiscovery = (async () => {
+    try {
+      const tabs = await chrome.tabs.query({
+        url: ['https://www.youtube.com/*', 'https://www.bilibili.com/*', 'https://bilibili.com/*'],
+        discarded: false,
+      });
+      for (const tab of tabs) {
+        const tabId = tab.id;
+        if (
+          typeof tabId !== 'number' ||
+          !Number.isSafeInteger(tabId) ||
+          tabId <= 0 ||
+          tab.discarded ||
+          !allowedKindForURL(tab.url)
+        )
+          continue;
+        try {
+          // A fresh validated page snapshot restores registration. Do not restore
+          // stale tab identities or replay playback commands after worker loss.
+          void chrome.tabs.sendMessage(tabId, { type: 'mediaRefresh' }).catch(() => undefined);
+        } catch {
+          // A tab can close before delivery. Never inject or reload its page.
+        }
+      }
+    } catch {
+      // Browser startup can race enumeration; later activation can try again.
+    }
+  })().finally(() => {
+    existingTargetDiscovery = undefined;
+  });
 }
 
 function validateSnapshot(
@@ -370,8 +405,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  refreshKnownTargets();
+  discoverExistingTargets();
 });
 chrome.runtime.onInstalled.addListener(() => {
-  refreshKnownTargets();
+  discoverExistingTargets();
 });
+
+// Globals are empty on every new service-worker instance, not only profile startup.
+discoverExistingTargets();

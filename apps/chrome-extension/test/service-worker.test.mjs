@@ -19,7 +19,16 @@ function makeEvent() {
   };
 }
 
-async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = false } = {}) {
+async function makeHarness({
+  failedConnectionAttempts = [],
+  deferTabCallbacks = false,
+  mediaKind = 'youtube',
+  existingTabs = [],
+  emptyTabIds = [],
+  unavailableTabIds = [],
+  failedTabQueries = [],
+  deferTabQuery = false,
+} = {}) {
   const source = await readFile(new URL('../dist/service-worker.js', import.meta.url), 'utf8');
   const nativeMessages = [];
   const tabMessages = [];
@@ -27,6 +36,8 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
   const intervals = [];
   const timeouts = new Map();
   const ports = [];
+  const tabQueries = [];
+  let resolveTabQuery;
   let timeoutId = 0;
   let connectionAttempts = 0;
   let runtimeLastError;
@@ -37,8 +48,8 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
   const startup = makeEvent();
   const sender = { tab: { id: 41 }, frameId: 0, url: 'https://www.youtube.com/watch?v=1' };
   const snapshot = {
-    kind: 'youtube',
-    name: 'YouTube · Hidden episode',
+    kind: mediaKind,
+    name: `${mediaKind === 'youtube' ? 'YouTube' : 'Bilibili'} · Hidden episode`,
     capabilities: {
       playPause: true,
       seek: true,
@@ -92,10 +103,29 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
     tabs: {
       onRemoved: tabRemoved,
       onUpdated: tabUpdated,
+      query(filter) {
+        tabQueries.push(filter);
+        if (failedTabQueries.includes(tabQueries.length)) {
+          return Promise.reject(new Error('Chrome tab enumeration is unavailable.'));
+        }
+        if (deferTabQuery) {
+          return new Promise((resolve) => {
+            resolveTabQuery = resolve;
+          });
+        }
+        return Promise.resolve(existingTabs);
+      },
       sendMessage(tabId, message, callback) {
         tabMessages.push({ tabId, message });
+        if (unavailableTabIds.includes(tabId)) {
+          return Promise.reject(new Error('The content script is unavailable.'));
+        }
         if (message.type === 'mediaRefresh') {
-          workerMessageListener({ type: 'mediaState', snapshot }, sender);
+          const tab = existingTabs.find((candidate) => candidate.id === tabId);
+          workerMessageListener(
+            { type: 'mediaState', snapshot: emptyTabIds.includes(tabId) ? null : snapshot },
+            { ...sender, tab: { id: tabId }, url: tab?.url ?? sender.url },
+          );
         }
         if (callback) {
           if (deferTabCallbacks) tabCallbacks.push({ tabId, message, callback });
@@ -132,6 +162,10 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
     }),
   );
   workerMessageListener = runtimeMessage.firstListener();
+  const settleDiscovery = async () => {
+    for (let index = 0; index < 8; index += 1) await Promise.resolve();
+  };
+  await settleDiscovery();
 
   return {
     nativeMessages,
@@ -140,6 +174,12 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
     intervals,
     timeouts,
     ports,
+    tabQueries,
+    settleDiscovery,
+    completeTabQuery() {
+      assert.ok(resolveTabQuery, 'a tab enumeration must be pending');
+      resolveTabQuery(existingTabs);
+    },
     get nativeMessage() {
       return ports.at(-1)?.onMessage;
     },
@@ -183,6 +223,118 @@ async function makeHarness({ failedConnectionAttempts = [], deferTabCallbacks = 
     },
   };
 }
+
+test('a cold worker rediscovers an existing hidden player without a page event', async () => {
+  const harness = await makeHarness({
+    existingTabs: [{ id: 41, url: 'https://www.youtube.com/watch?v=1', active: false }],
+  });
+  assert.equal(harness.connectAttempts, 1);
+  assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+  assert.equal(harness.nativeMessages.at(-1).targetId, 'chrome:41');
+  assert.equal(harness.tabMessages.length, 1);
+  assert.equal(harness.tabMessages[0].message.type, 'mediaRefresh');
+  assert.equal(harness.activeIntervals().length, 1);
+});
+
+test('cold discovery restores Bilibili players on both supported host names', async () => {
+  for (const hostname of ['bilibili.com', 'www.bilibili.com']) {
+    const harness = await makeHarness({
+      mediaKind: 'bilibili',
+      existingTabs: [{ id: 41, url: `https://${hostname}/video/BVfixture`, active: false }],
+    });
+    assert.equal(harness.connectAttempts, 1);
+    assert.equal(harness.nativeMessages.at(-1).type, 'media.targetUpdate');
+    assert.equal(harness.nativeMessages.at(-1).target.kind, 'bilibili');
+  }
+});
+
+test('startup and installation share a pending enumeration without opening duplicate ports', async () => {
+  const harness = await makeHarness({
+    existingTabs: [{ id: 41, url: 'https://www.youtube.com/watch?v=1' }],
+    deferTabQuery: true,
+  });
+  harness.startup.dispatch();
+  harness.installed.dispatch();
+  assert.equal(harness.tabQueries.length, 1);
+  assert.equal(harness.connectAttempts, 0);
+  harness.completeTabQuery();
+  await harness.settleDiscovery();
+  assert.equal(harness.tabQueries.length, 1);
+  assert.equal(harness.connectAttempts, 1);
+  assert.equal(harness.tabMessages.length, 1);
+});
+
+test('discovery filters unsupported, discarded and invalid tab identities', async () => {
+  const harness = await makeHarness({
+    existingTabs: [
+      { id: 41, url: 'https://www.youtube.com/watch?v=1' },
+      { id: 42, url: 'https://example.com/' },
+      { id: 43, url: 'https://www.youtube.com/watch?v=2', discarded: true },
+      { id: -1, url: 'https://www.youtube.com/watch?v=3' },
+      { id: 44, url: 'http://www.youtube.com/watch?v=4' },
+      { id: 45, url: 'https://www.youtube.com.example.com/watch?v=5' },
+    ],
+  });
+  assert.deepEqual(
+    harness.tabMessages.map(({ tabId }) => tabId),
+    [41],
+  );
+  assert.equal(harness.connectAttempts, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.tabQueries[0])), {
+    url: ['https://www.youtube.com/*', 'https://www.bilibili.com/*', 'https://bilibili.com/*'],
+    discarded: false,
+  });
+});
+
+test('cold discovery preserves the existing media registration and native-port bounds', async () => {
+  const harness = await makeHarness({
+    existingTabs: Array.from({ length: 80 }, (_, index) => ({
+      id: index + 1,
+      url: `https://www.youtube.com/watch?v=${index + 1}`,
+    })),
+  });
+  assert.equal(harness.connectAttempts, 1);
+  assert.equal(harness.activeIntervals().length, 1);
+  assert.equal(
+    harness.nativeMessages.filter((message) => message.type === 'media.targetUpdate').length,
+    64,
+  );
+});
+
+test('a missing old content script does not open a host or replay an action', async () => {
+  const harness = await makeHarness({
+    existingTabs: [{ id: 41, url: 'https://www.youtube.com/watch?v=1' }],
+    unavailableTabIds: [41],
+  });
+  assert.equal(harness.tabMessages.length, 1);
+  assert.equal(harness.connectAttempts, 0);
+  assert.equal(harness.activeIntervals().length, 0);
+  assert.equal(harness.pendingTimeoutDelays().length, 0);
+});
+
+test('a supported page without a player does not keep native work alive after discovery', async () => {
+  const harness = await makeHarness({
+    existingTabs: [{ id: 41, url: 'https://www.youtube.com/' }],
+    emptyTabIds: [41],
+  });
+  assert.equal(harness.tabMessages.length, 1);
+  assert.equal(harness.connectAttempts, 0);
+  assert.equal(harness.activeIntervals().length, 0);
+  assert.equal(harness.pendingTimeoutDelays().length, 0);
+});
+
+test('a failed discovery remains idle and a later startup can recover', async () => {
+  const harness = await makeHarness({
+    existingTabs: [{ id: 41, url: 'https://www.youtube.com/watch?v=1' }],
+    failedTabQueries: [1],
+  });
+  assert.equal(harness.connectAttempts, 0);
+  harness.startup.dispatch();
+  await harness.settleDiscovery();
+  assert.equal(harness.tabQueries.length, 2);
+  assert.equal(harness.connectAttempts, 1);
+  assert.equal(harness.nativeMessages.at(-1).targetId, 'chrome:41');
+});
 
 test('startup and installation stay idle until a supported media tab is discovered', async () => {
   const harness = await makeHarness();
