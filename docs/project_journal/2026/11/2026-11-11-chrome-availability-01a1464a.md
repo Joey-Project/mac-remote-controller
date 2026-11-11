@@ -5,7 +5,7 @@ status: active
 created: 2026-11-11
 updated: 2026-11-11
 branch: codex/chrome-availability-20261111
-pr:
+pr: https://github.com/Joey-Project/mac-remote-controller/pull/30
 supersedes: []
 superseded_by:
 ---
