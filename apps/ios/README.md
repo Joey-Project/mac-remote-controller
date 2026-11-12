@@ -22,8 +22,8 @@ Entry points do not pair, connect, send input or unlock a Mac automatically.
 They do not show cached connection or lock state. Pairing credentials remain in
 the main app's Keychain; the extension needs no App Group or shared credential.
 
-Control Centre entries use Apple's `OpenIntent` in both app and extension
-targets. Widget links accept only `sofaremote://remote/touchpad` and
+Control Centre entries use two fixed foreground App Intents shared by the app
+and extension targets. Widget links accept only `sofaremote://remote/touchpad` and
 `sofaremote://remote/keyboard`; unknown routes and links carrying additional data
 are ignored. These URLs select a page and never encode remote commands.
 
@@ -197,6 +197,16 @@ status. To reuse existing simulators, pass their UDIDs as arguments; those
 devices are never shut down or deleted by the script.
 Debug builds use the selected destination's active architecture for both the
 app and its package dependencies.
+
+UI tests use local ad-hoc signing, with no Apple account or team. The native
+Control Centre test is opt-in: run the script with
+`TEST_RUNNER_SOFA_REMOTE_NATIVE_CONTROLS_UI_TEST=1` to forward the flag to XCTest.
+It adds both controls through the system gallery and checks their destination
+pages without sending remote input. It customizes Control Centre, so prefer the
+default temporary devices. iPhone system controls passed local acceptance;
+iPad system-gallery queries timed out and remain unverified. Ordinary CI runs
+the URL-route regressions, which remain separate from native control activation
+and Home/Lock Screen widget acceptance.
 
 The runner mutes system audio and leaves it muted. Result bundles, including
 failure screenshots, are saved under

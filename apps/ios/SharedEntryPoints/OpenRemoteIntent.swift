@@ -3,41 +3,29 @@ import AppleCore
 import Foundation
 import Observation
 
-enum RemoteEntryMode: String, AppEnum {
-    case touchpad
-    case keyboard
-
-    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Remote mode")
-    static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-        .touchpad: "Touchpad", .keyboard: "Keyboard"
-    ]
-
-    var entryPoint: RemoteEntryPoint {
-        switch self {
-        case .touchpad: .touchpad
-        case .keyboard: .keyboard
-        }
-    }
-}
-
-/// Shared target membership lets the system run this opening intent in the app.
-struct OpenRemoteIntent: OpenIntent {
-    static let title: LocalizedStringResource = "Open Sofa Remote"
-    static let description = IntentDescription("Open the touchpad or keyboard on this device.")
+/// Fixed foreground actions avoid resolving a screen enum across app processes.
+struct OpenTouchpadIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Sofa Remote Touchpad"
+    static var openAppWhenRun: Bool { true }
 
     @available(iOS 26.0, *)
     static var supportedModes: IntentModes { .foreground }
 
-    @Parameter(title: "Mode") var target: RemoteEntryMode
-
-    init() {}
-
-    init(target: RemoteEntryMode) {
-        self.target = target
+    func perform() async throws -> some IntentResult {
+        await RemoteEntryRouter.shared.open(.touchpad)
+        return .result()
     }
+}
+
+struct OpenKeyboardIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Sofa Remote Keyboard"
+    static var openAppWhenRun: Bool { true }
+
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .foreground }
 
     func perform() async throws -> some IntentResult {
-        await RemoteEntryRouter.shared.open(target.entryPoint)
+        await RemoteEntryRouter.shared.open(.keyboard)
         return .result()
     }
 }

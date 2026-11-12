@@ -3,9 +3,9 @@ id: 20261111-control-centre-01a1464a
 title: iOS Control Centre and Widget Entry Points
 status: active
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-12
 branch: codex/control-centre-entrypoints-20261111
-pr:
+pr: https://github.com/Joey-Project/mac-remote-controller/pull/31
 supersedes: []
 superseded_by:
 ---
@@ -21,7 +21,7 @@ superseded_by:
 ## Current State
 
 - Control Centre exposes separate Touchpad and Keyboard controls on iOS/iPadOS
-  18 or newer. Their shared `OpenIntent` runs in the foreground app. Widgets
+  18 or newer. Two fixed foreground App Intents run in the main app. Widgets
   retain iOS 17 support: the small and accessory families open touchpad, while
   the medium Home widget has separate touchpad and keyboard links.
 - The extension has no App Group, pairing storage or remote connection. Its
@@ -31,7 +31,7 @@ superseded_by:
   the requested mode until a connection completes. Reopening an entry dismisses
   settings/details and releases an existing local drag before changing modes.
 - The app embeds `SofaRemoteWidgets.appex`. App and extension inherit the same
-  version settings; the intent is a source member of both targets. Existing
+  version settings; both intents are source members of both targets. Existing
   Swift CI covers the shared entry and extension sources.
 - Renewal allows only this fixed WidgetKit bundle and identifier. It issues
   a separate profile through the probe's fixed `widget-profile` mode, checks
@@ -48,12 +48,24 @@ superseded_by:
 - Two strict navigation URL tests and all 41 renewal-tool tests pass. New UI
   tests cover cold/repeated URL opening and disconnected/unknown routes without
   input. Their execution remains separate from compilation.
+- Real native Control Centre discovery, addition and taps on iOS 26.5 Simulator
+  exposed a failure in the original enum-parameter OpenIntent path. Two fixed
+  foreground actions replace that declaration combination; both production
+  controls now open the correct app mode through actual system UI. The native
+  regression test waits for rendered controls instead of tapping placeholders.
+- Simulator UI tests use local ad-hoc signing without an Apple team or account
+  so WidgetKit/intent execution is exercised normally. Mocked lifecycle tests
+  enforce those flags while preserving device cleanup and failure propagation.
+  Native system-gallery acceptance is explicit opt-in because it changes the
+  Simulator's controls. Ordinary CI retains the deterministic URL regressions.
 
 ## Remaining Acceptance
 
-- Run iPhone/iPad Simulator entry-routing tests and real Control Centre/Lock
-  Screen/Home widget launches. Local GUI tests were unavailable while Mac was
-  locked; no automatic unlock was used.
+- Complete native iPad Control Centre and Lock Screen/Home widget launches.
+  The iPad gallery accessibility query and native Home widget long-press-menu
+  attempts timed out and are not passes; keep discovery, adding, rendering and
+  link activation separate. No real-device acceptance is implied by Simulator
+  results.
 - First sign both iOS bundle identifiers with the existing development team and
   certificate, then validate actual extension-profile issuance, candidate
   signatures, installation and renewed expiry on the paired phone.

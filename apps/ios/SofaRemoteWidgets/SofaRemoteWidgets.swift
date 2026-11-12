@@ -17,7 +17,7 @@ struct SofaRemoteWidgetBundle: WidgetBundle {
 struct TouchpadControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.joeyteng.sofaremote.touchpad") {
-            ControlWidgetButton(action: OpenRemoteIntent(target: .touchpad)) {
+            ControlWidgetButton(action: OpenTouchpadIntent()) {
                 Label("Touchpad", systemImage: "cursorarrow.motionlines")
             }
         }
@@ -30,7 +30,7 @@ struct TouchpadControl: ControlWidget {
 struct KeyboardControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.joeyteng.sofaremote.keyboard") {
-            ControlWidgetButton(action: OpenRemoteIntent(target: .keyboard)) {
+            ControlWidgetButton(action: OpenKeyboardIntent()) {
                 Label("Keyboard", systemImage: "keyboard")
             }
         }
