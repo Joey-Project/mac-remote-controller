@@ -45,7 +45,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testPinningVolumePersistsAcrossModesWithoutSendingCommands() throws {
+    func testControlPanelsPersistAcrossModesWithoutSendingCommands() throws {
         launchApp(scenario: "long-name")
         defer { terminateApp() }
 
@@ -55,12 +55,13 @@ final class SofaRemoteiOSUITests: XCTestCase {
         XCTAssertEqual(try commands().count, 0)
 
         element("mode.keyboard").tap()
-        XCTAssertTrue(element("volume.card").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("keyboard.text").waitForExistence(timeout: 3))
+        XCTAssertFalse(element("volume.card").exists)
         XCTAssertEqual(try commands().count, 0)
         element("mode.touchpad").tap()
         XCTAssertFalse(element("volume.card").exists)
 
-        element("volume.pin").tap()
+        togglePanel("panels.volume")
         let pinnedCard = element("volume.card")
         XCTAssertTrue(pinnedCard.waitForExistence(timeout: 3))
         let touchpadFrame = pinnedCard.frame
@@ -76,11 +77,11 @@ final class SofaRemoteiOSUITests: XCTestCase {
         assertSameFrame(element("volume.card").frame, touchpadFrame)
         XCTAssertEqual(try commands().count, 0, "Changing visible controls must not send input.")
 
-        element("volume.pin").tap()
+        togglePanel("panels.volume")
         XCTAssertFalse(element("volume.card").exists)
         XCTAssertEqual(try commands().count, 0, "Pinning or unpinning volume is local UI state.")
         let toolbarControls = [
-            "mode.keyboard", "volume.pin", "remote.menu", "remote.connectionDetails"
+            "mode.keyboard", "remote.panels", "remote.menu", "remote.connectionDetails"
         ]
         for identifier in toolbarControls {
             let control = element(identifier)
@@ -96,16 +97,15 @@ final class SofaRemoteiOSUITests: XCTestCase {
         defer { terminateApp() }
 
         openSettings()
-        for identifier in ["gesture.drag", "gesture.shortcuts"] {
-            XCTAssertTrue(element(identifier).waitForExistence(timeout: 3))
-            XCTAssertTrue(element(identifier).isEnabled)
-        }
+        let drag = element("gesture.drag")
+        XCTAssertTrue(drag.waitForExistence(timeout: 3))
+        XCTAssertTrue(drag.isEnabled)
         XCTAssertFalse(element("gesture.force").isEnabled)
         XCTAssertTrue(element("settings.forceUnavailable").exists)
         XCTAssertFalse(element("gesture.haptics").isEnabled)
         XCTAssertTrue(element("settings.hapticsUnavailable").exists)
         attachScreenshot("Gesture and feedback settings")
-        element("gesture.shortcuts").switches.firstMatch.tap()
+        XCTAssertFalse(element("gesture.shortcuts").exists)
         XCTAssertEqual(try commands().count, 0, "Gesture preferences are local settings.")
     }
 
@@ -116,7 +116,7 @@ final class SofaRemoteiOSUITests: XCTestCase {
 
         openSettings()
         let gesturePreferences = [
-            "gesture.drag", "gesture.shortcuts", "gesture.force", "gesture.haptics"
+            "gesture.drag", "gesture.force", "gesture.haptics"
         ]
         for identifier in gesturePreferences {
             XCTAssertTrue(element(identifier).waitForExistence(timeout: 3))

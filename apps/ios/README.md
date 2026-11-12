@@ -79,8 +79,10 @@ without an enclosing page scroll view. Drag one finger to move the desktop
 pointer, tap to left-click, double-tap to send a native Mac double-click, tap
 with two fingers to right-click, and scroll with two fingers. On a companion
 that advertises gesture support, three fingers
-drag while holding the Mac's left mouse button, and four-finger swipes request
-Mission Control (up), App Exposé (down), or the previous/next Space (left/right).
+drag while holding the Mac's left mouse button. Open **Control panels** in the
+toolbar and enable **Desktop controls** for Previous desktop, Mission Control,
+App windows (App Exposé), and Next desktop buttons. Four-finger touchpad actions
+are disabled while their continuous interaction remains deferred.
 Mission Control and App Exposé use native Dock notifications; Spaces use a
 complete touchpad swipe event sequence. These actions emit no keyboard or modifier
 events and do not depend on the Mac's Control-arrow shortcut mappings. The native
@@ -89,7 +91,7 @@ interface reports an error rather than falling back to a keyboard shortcut.
 This does not create a virtual trackpad device or require a driver. On macOS 27,
 the Space swipe carries an HID payload; earlier systems use Dock gesture fields.
 
-The Settings page lets you turn three-finger drag, four-finger shortcuts, pressure
+The Settings page lets you turn three-finger drag, pressure
 click, and optional haptic feedback on or off. Preferences apply immediately and
 are saved on this device using the existing preference keys. Open Settings from
 the remote's more menu or from the setup screen without connecting a Mac.
@@ -133,11 +135,16 @@ remain in order. If the bounded queue overloads, movement after the latest
 click or keyboard command may be cleared and replaced with the newest movement.
 Movement that positions an accepted click stays ahead of that click.
 
-The volume control uses a fixed position at the top of the screen. It starts
-hidden in touchpad mode; use the toolbar's speaker button to show or hide the
-volume/playback overlay. Its visibility persists across mode changes. Keyboard mode always shows the
-control at that same top and horizontal position. Changing modes or volume
-visibility does not send text or adjust volume.
+The toolbar's **Control panels** menu independently toggles **Volume and playback**
+and **Desktop controls**. Both groups start hidden. Show either group, stack both,
+or choose **Hide all controls**; the two choices are saved on this device across
+mode changes, reconnects and app launches. In touchpad mode the groups overlay
+the top of the unchanged touch surface, and hidden groups intercept no touches.
+Keyboard mode keeps visible groups above the separate keyboard content.
+Changing panel visibility does not send text, adjust volume, or execute a Mac action.
+Desktop buttons require a capable companion and Accessibility permission; their
+actions use the existing authenticated, ordered command route. An active local
+pointer drag is released before a desktop command is queued.
 Opening and returning from Settings or connection details preserves the selected
 mode, keyboard draft, player selection and overlay visibility. Presenting these
 screens ends an active pointer drag and dismisses text focus without sending text.
