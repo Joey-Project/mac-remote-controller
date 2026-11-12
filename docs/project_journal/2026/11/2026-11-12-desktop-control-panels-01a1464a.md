@@ -36,7 +36,9 @@ superseded_by:
 - New Simulator tests cover every visibility combination, independent stacking,
   persistence and Hide all, exact button commands, and unavailable companions
   or Accessibility. Existing keyboard, settings and touchpad regressions stay
-  in the suite. Compilation and actual UI execution are separate evidence.
+  in the suite. The opt-in live Chrome acceptance test explicitly enables the
+  volume/playback group when hidden, so it works with fresh preferences too.
+  Compilation and actual UI execution are separate evidence.
 
 ## Remaining Acceptance
 
