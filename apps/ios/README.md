@@ -4,6 +4,39 @@ Open `SofaRemoteiOS.xcodeproj` in the selected Xcode, choose your own signing te
 and run `SofaRemoteiOS` on an iPhone or iPad with iOS/iPadOS 17 or newer. Both use
 the same target, with a responsive layout and iPad multitasking enabled.
 
+## Control Centre and widgets
+
+On iOS/iPadOS 18 or newer, edit Control Centre, choose **Add a Control**, and
+search for **Sofa Remote**. Add **Sofa Remote Touchpad** or **Sofa Remote Keyboard**.
+Each opens its corresponding page in the app. The same controls are available
+where the system offers Lock Screen or Action button controls.
+
+The **Sofa Remote** widget is available from the Home Screen widget gallery on
+iOS/iPadOS 17 or newer. The small widget opens the touchpad; the medium widget
+has separate Touchpad and Keyboard links. Lock Screen circular, rectangular and
+inline widgets open the touchpad on supported devices.
+
+If disconnected, an entry first shows the usual connection screen. Choose your
+paired Mac normally; the requested mode is retained until connection completes.
+Entry points do not pair, connect, send input or unlock a Mac automatically.
+They do not show cached connection or lock state. Pairing credentials remain in
+the main app's Keychain; the extension needs no App Group or shared credential.
+
+Control Centre entries use two fixed foreground App Intents shared by the app
+and extension targets. Widget links accept only `sofaremote://remote/touchpad` and
+`sofaremote://remote/keyboard`; unknown routes and links carrying additional data
+are ignored. These URLs select a page and never encode remote commands.
+
+The app contains a separately signed WidgetKit extension. First device signing
+must provision both bundle identifiers with the same development team and
+certificate. Use the updated [renewal probe](../../tooling/renewal/README.md#widgetkit-extension-renewal)
+before adopting this app into a daily renewal job. The extension receives its
+own renewed profile; older accepted apps without extensions keep their existing
+renewal flow. First-device signing and real profile issuance remain distinct
+from a successful Simulator build.
+
+## Pair and connect
+
 1. Run the Mac companion on the same local network.
 2. Unlock the Mac. On iPhone/iPad, allow Local Network access and tap the
    unpaired Mac under **Nearby Macs**.
@@ -164,6 +197,16 @@ status. To reuse existing simulators, pass their UDIDs as arguments; those
 devices are never shut down or deleted by the script.
 Debug builds use the selected destination's active architecture for both the
 app and its package dependencies.
+
+UI tests use local ad-hoc signing, with no Apple account or team. The native
+Control Centre test is opt-in: run the script with
+`TEST_RUNNER_SOFA_REMOTE_NATIVE_CONTROLS_UI_TEST=1` to forward the flag to XCTest.
+It adds both controls through the system gallery and checks their destination
+pages without sending remote input. It customizes Control Centre, so prefer the
+default temporary devices. iPhone system controls passed local acceptance;
+iPad system-gallery queries timed out and remain unverified. Ordinary CI runs
+the URL-route regressions, which remain separate from native control activation
+and Home/Lock Screen widget acceptance.
 
 The runner mutes system audio and leaves it muted. Result bundles, including
 failure screenshots, are saved under

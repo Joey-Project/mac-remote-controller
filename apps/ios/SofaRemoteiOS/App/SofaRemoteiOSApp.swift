@@ -13,6 +13,7 @@ struct SofaRemoteiOSApp: App {
     var body: some Scene {
         WindowGroup {
             RemoteView(model: model)
+                .onOpenURL { RemoteEntryRouter.shared.open($0) }
                 #if DEBUG
                     .overlay(alignment: .topLeading) {
                         if model.isLiveMediaTesting {

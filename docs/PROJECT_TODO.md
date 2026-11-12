@@ -22,7 +22,10 @@
   Mac code window, Bonjour enrollment and Keychain persistence on real devices;
   preserve existing pairing records during acceptance.
   [Pairing workstream](project_journal/2026/11/2026-11-09-numeric-pairing-01a1464a.md).
-- [pending] iOS Control Centre and widget entry points.
+- [in_progress] iOS Control Centre and widget entry points: touchpad/keyboard
+  navigation and fixed-extension renewal support are implemented. Complete
+  first-device signing, real extension-profile renewal and system-entry acceptance.
+  [Entry-point workstream](project_journal/2026/11/2026-11-11-control-centre-01a1464a.md).
 - [pending] Further UX: configurable seek duration in Settings, reconnect and
   permission guidance, Dynamic Type and VoiceOver acceptance, and physical iPad
   rotation/multitasking acceptance.

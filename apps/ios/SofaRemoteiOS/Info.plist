@@ -2,6 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.joeyteng.sofaremote.navigation</string>
+			<key>CFBundleURLSchemes</key>
+			<array><string>sofaremote</string></array>
+		</dict>
+	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Connect to your paired Mac over Bluetooth Low Energy.</string>
 	<key>NSBonjourServices</key>

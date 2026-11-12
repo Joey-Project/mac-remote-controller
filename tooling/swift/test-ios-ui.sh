@@ -96,6 +96,7 @@ for ((index = 0; index < ${#destinations[@]}; index += 2)); do
     printf 'Waiting for simulator %s to finish booting\n' "$device_id"
     xcrun simctl bootstatus "$device_id" -b
     printf 'Running UI tests for %s; results: %s\n' "$device_id" "$result_bundle"
+    # Native widget/intent execution needs local signing; '-' uses no Apple account.
     if xcodebuild -quiet \
         -project "$repo_root/apps/ios/SofaRemoteiOS.xcodeproj" \
         -scheme SofaRemoteiOS \
@@ -111,7 +112,7 @@ for ((index = 0; index < ${#destinations[@]}; index += 2)); do
         -derivedDataPath "$derived_data" \
         -clonedSourcePackagesDirPath "$repo_root/.codex-tmp/apple-tools/SourcePackages" \
         -resultBundlePath "$result_bundle" \
-        test CODE_SIGNING_ALLOWED=NO; then
+        test CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=; then
         :
     else
         xcodebuild_status=$?

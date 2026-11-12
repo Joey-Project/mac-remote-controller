@@ -78,7 +78,15 @@ cat >"$fake_bin/xcodebuild" <<'FAKE_XCODEBUILD'
 set -euo pipefail
 
 destination=''
+signed=false
+adhoc=false
+no_team=false
 while (($# > 0)); do
+    case "$1" in
+        CODE_SIGNING_ALLOWED=YES) signed=true ;;
+        CODE_SIGN_IDENTITY=-) adhoc=true ;;
+        DEVELOPMENT_TEAM=) no_team=true ;;
+    esac
     if [[ "$1" == '-destination' && $# -ge 2 ]]; then
         destination="$2"
         shift 2
@@ -86,6 +94,10 @@ while (($# > 0)); do
         shift
     fi
 done
+if [[ "$signed:$adhoc:$no_team" != "true:true:true" ]]; then
+    printf 'Simulator UI tests must use local ad-hoc signing without an account.\n' >&2
+    exit 92
+fi
 device_id="${destination##*id=}"
 printf 'test %s\n' "$device_id" >>"$EVENT_LOG"
 if [[ "$device_id" == "${FAIL_XCODEBUILD_ID-}" ]]; then

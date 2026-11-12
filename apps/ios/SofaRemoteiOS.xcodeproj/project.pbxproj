@@ -7,6 +7,8 @@
 
 /* Begin PBXContainerItemProxy section */
 		100000000000000000000044 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = 100000000000000000000002; remoteInfo = SofaRemoteiOS; };
+
+        CA110000000000000000000E = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = CA1100000000000000000014; remoteInfo = SofaRemoteWidgets; };
 /* End PBXContainerItemProxy section */
 /* Begin PBXBuildFile section */
 		E60000000000000000000009 /* RemoteKeyboardControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6000000000000000000000A /* RemoteKeyboardControls.swift */; };
@@ -40,8 +42,18 @@
 		A72400000000000000000001 /* NumericPairingInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72400000000000000000002 /* NumericPairingInput.swift */; };
 		A72500000000000000000001 /* NumericPairingFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72500000000000000000002 /* NumericPairingFixture.swift */; };
 		A72600000000000000000001 /* NumericPairingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72600000000000000000002 /* NumericPairingUITests.swift */; };
+
+        CA1100000000000000000001 /* OpenRemoteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA110000000000000000000A; };
+        CA1100000000000000000002 /* OpenRemoteIntent.swift in Widget Sources */ = {isa = PBXBuildFile; fileRef = CA110000000000000000000A; };
+        CA1100000000000000000003 /* SofaRemoteWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA110000000000000000000B; };
+        CA1100000000000000000004 /* AppleCore in Widget Frameworks */ = {isa = PBXBuildFile; productRef = CA1100000000000000000028; };
+        CA1100000000000000000005 /* SofaRemoteWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = CA110000000000000000000C; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+        CA1100000000000000000006 /* EntryPointUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA110000000000000000000D; };
 /* End PBXBuildFile section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+        CA1100000000000000000018 /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (CA1100000000000000000005,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
 /* Begin PBXFileReference section */
 		E6000000000000000000000A /* RemoteKeyboardControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteKeyboardControls.swift; sourceTree = "<group>"; };
 		E60000000000000000000002 /* RemoteToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteToolbar.swift; sourceTree = "<group>"; };
@@ -75,6 +87,11 @@
 		A72400000000000000000002 /* NumericPairingInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NumericPairingInput.swift"; sourceTree = "<group>"; };
 		A72500000000000000000002 /* NumericPairingFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NumericPairingFixture.swift"; sourceTree = "<group>"; };
 		A72600000000000000000002 /* NumericPairingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NumericPairingUITests.swift"; sourceTree = "<group>"; };
+
+        CA110000000000000000000A /* OpenRemoteIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRemoteIntent.swift; sourceTree = "<group>"; };
+        CA110000000000000000000B /* SofaRemoteWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SofaRemoteWidgets.swift; sourceTree = "<group>"; };
+        CA110000000000000000000C /* SofaRemoteWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = SofaRemoteWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+        CA110000000000000000000D /* EntryPointUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryPointUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +104,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		100000000000000000000043 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000049 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+        CA1100000000000000000016 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (CA1100000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -94,6 +112,8 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000008 /* App */,
+                CA110000000000000000000F /* SharedEntryPoints */,
+                CA1100000000000000000010 /* SofaRemoteWidgets */,
 				100000000000000000000038 /* SofaRemoteiOSUITests */,
 				100000000000000000000009 /* Products */,
 			);
@@ -133,6 +153,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000036 /* SofaRemoteiOSUITests.swift */,
+                CA110000000000000000000D /* EntryPointUITests.swift */,
 				A72600000000000000000002 /* NumericPairingUITests.swift */,
 				D55000000000000000000002 /* UnlockMenuUITests.swift */,
 				E60000000000000000000008 /* SettingsUITests.swift */,
@@ -146,11 +167,15 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000011 /* SofaRemoteiOS.app */,
+                CA110000000000000000000C /* SofaRemoteWidgets.appex */,
 				100000000000000000000039 /* SofaRemoteiOSUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+
+        CA110000000000000000000F /* SharedEntryPoints */ = {isa = PBXGroup; children = (CA110000000000000000000A,); path = SharedEntryPoints; sourceTree = "<group>"; };
+        CA1100000000000000000010 /* SofaRemoteWidgets */ = {isa = PBXGroup; children = (CA110000000000000000000B,); path = SofaRemoteWidgets; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -161,9 +186,10 @@
 				100000000000000000000014 /* Sources */,
 				100000000000000000000015 /* Frameworks */,
 				100000000000000000000016 /* Resources */,
+                CA1100000000000000000018 /* Embed App Extensions */,
 			);
 			buildRules = ();
-			dependencies = ();
+			dependencies = (CA1100000000000000000019,);
 			name = SofaRemoteiOS;
 			packageProductDependencies = (
 				100000000000000000000018 /* AppleCore */,
@@ -186,9 +212,21 @@
 			productReference = 100000000000000000000039 /* SofaRemoteiOSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+
+        CA1100000000000000000014 /* SofaRemoteWidgets */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = CA110000000000000000001E;
+            buildPhases = (CA1100000000000000000015, CA1100000000000000000016, CA1100000000000000000017,);
+            buildRules = (); dependencies = ();
+            name = SofaRemoteWidgets; productName = SofaRemoteWidgets;
+            packageProductDependencies = (CA1100000000000000000028,);
+            productReference = CA110000000000000000000C;
+            productType = "com.apple.product-type.app-extension";
+        };
 /* End PBXNativeTarget section */
 /* Begin PBXTargetDependency section */
 		100000000000000000000045 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 100000000000000000000002 /* SofaRemoteiOS */; targetProxy = 100000000000000000000044 /* PBXContainerItemProxy */; };
+        CA1100000000000000000019 = {isa = PBXTargetDependency; target = CA1100000000000000000014; targetProxy = CA110000000000000000000E; };
 /* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
@@ -221,6 +259,7 @@
 			targets = (
 				100000000000000000000002 /* SofaRemoteiOS */,
 				100000000000000000000040 /* SofaRemoteiOSUITests */,
+                CA1100000000000000000014 /* SofaRemoteWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -232,6 +271,7 @@
 			files = ();
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+        CA1100000000000000000017 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -240,6 +280,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				100000000000000000000012 /* SofaRemoteiOSApp.swift in Sources */,
+                CA1100000000000000000001 /* OpenRemoteIntent.swift in Sources */,
 				100000000000000000000025 /* RemoteView.swift in Sources */,
 				C42000000000000000000001 /* MediaControls.swift in Sources */,
 				A30000000000000000000001 /* SystemVolumeCard.swift in Sources */,
@@ -265,7 +306,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, A72600000000000000000001 /* NumericPairingUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */, F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CA1100000000000000000006 /* EntryPointUITests.swift in Sources */, 100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, A72600000000000000000001 /* NumericPairingUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */, F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+        CA1100000000000000000015 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CA1100000000000000000002, CA1100000000000000000003,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -273,6 +315,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 0.1.0;
 				ONLY_ACTIVE_ARCH = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
@@ -283,6 +327,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 0.1.0;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
 			};
@@ -335,6 +381,36 @@
 		};
 		100000000000000000000047 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.joeyteng.sofaremote.iosUITests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = SofaRemoteiOS; }; name = Debug; };
 		100000000000000000000048 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.joeyteng.sofaremote.iosUITests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = SofaRemoteiOS; }; name = Release; };
+
+        CA110000000000000000001F /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+            APPLICATION_EXTENSION_API_ONLY = YES;
+            GENERATE_INFOPLIST_FILE = YES;
+            INFOPLIST_FILE = SofaRemoteWidgets/Info.plist;
+            INFOPLIST_KEY_CFBundleDisplayName = "Sofa Remote";
+            IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+            LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+            PRODUCT_BUNDLE_IDENTIFIER = com.joeyteng.sofaremote.ios.widgets;
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SDKROOT = iphoneos; SKIP_INSTALL = YES;
+            SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+            SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2";
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+        }; name = Debug; };
+
+        CA1100000000000000000020 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+            APPLICATION_EXTENSION_API_ONLY = YES;
+            GENERATE_INFOPLIST_FILE = YES;
+            INFOPLIST_FILE = SofaRemoteWidgets/Info.plist;
+            INFOPLIST_KEY_CFBundleDisplayName = "Sofa Remote";
+            IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+            LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+            PRODUCT_BUNDLE_IDENTIFIER = com.joeyteng.sofaremote.ios.widgets;
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SDKROOT = iphoneos; SKIP_INSTALL = YES;
+            SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+            SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2";
+
+        }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -357,6 +433,7 @@
 			defaultConfigurationName = Release;
 		};
 		100000000000000000000046 /* Build configuration list for PBXNativeTarget "SofaRemoteiOSUITests" */ = {isa = XCConfigurationList; buildConfigurations = (100000000000000000000047 /* Debug */, 100000000000000000000048 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        CA110000000000000000001E = {isa = XCConfigurationList; buildConfigurations = (CA110000000000000000001F, CA1100000000000000000020,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -372,6 +449,7 @@
 			package = 100000000000000000000017 /* XCLocalSwiftPackageReference "apple-core" */;
 			productName = AppleCore;
 		};
+        CA1100000000000000000028 = {isa = XCSwiftPackageProductDependency; package = 100000000000000000000017; productName = AppleCore; };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 100000000000000000000001 /* Project object */;

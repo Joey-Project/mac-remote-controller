@@ -1,6 +1,6 @@
 --- a/Sources/xtool/XTool.swift
 +++ b/Sources/xtool/XTool.swift
-@@ -10 +10,22 @@
+@@ -10 +10,23 @@
 -        prepareDependencies { _ in
 +        let arguments = Array(CommandLine.arguments.dropFirst())
 +        let allowed = arguments == ["--help"] || arguments == ["--version"]
@@ -16,6 +16,7 @@
 +            || arguments == ["ds", "renewal-probe", "create-profile"]
 +            || arguments == ["ds", "renewal-probe", "renew-profile"]
 +            || arguments == ["ds", "renewal-probe", "app-profile"]
++            || arguments == ["ds", "renewal-probe", "widget-profile"]
 +            || arguments == ["ds", "renewal-probe", "mac-profile"]
 +        guard allowed else {
 +            FileHandle.standardError.write(Data("Only scoped renewal-probe commands are enabled.\n".utf8))
@@ -114,7 +115,7 @@
 +            DSRenewalProbeCommand.self,
 --- /dev/null
 +++ b/Sources/XToolSupport/DSCommands/DSRenewalProbeCommand.swift
-@@ -0,0 +1,173 @@
+@@ -0,0 +1,175 @@
 +import Foundation
 +import ArgumentParser
 +import XKit
@@ -128,6 +129,7 @@
 +    enum Mode: String, ExpressibleByArgument {
 +        case storage, preflight, inspect, registerDevice = "register-device", createProfile = "create-profile"
 +        case renewProfile = "renew-profile", appProfile = "app-profile", macProfile = "mac-profile"
++        case widgetProfile = "widget-profile"
 +    }
 +    @Argument var mode: Mode
 +
@@ -236,6 +238,7 @@
 +        let selectedIdentifier: String
 +        switch mode {
 +        case .appProfile: selectedIdentifier = "com.joeyteng.sofaremote.ios"
++        case .widgetProfile: selectedIdentifier = "com.joeyteng.sofaremote.ios.widgets"
 +        case .macProfile: selectedIdentifier = "com.joeyteng.sofaremote.renewalprobe.mac"
 +        default: selectedIdentifier = configuration.probeBundleIdentifier
 +        }

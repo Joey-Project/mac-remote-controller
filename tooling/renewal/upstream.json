@@ -3,7 +3,7 @@
   "commit": "70e1568fdfcb20b560774057cd783f02361293b9",
   "archiveURL": "https://codeload.github.com/xtool-org/xtool/tar.gz/70e1568fdfcb20b560774057cd783f02361293b9",
   "archiveSHA256": "9f5c887cf245805125f15fd5bdb03587041c1b72e072a80aec6097eaa122814c",
-  "patchSHA256": "1464d6fd2331de52596d0a99fa70008c71a81e5e1e889077ec4b2762a3a7ae1a",
+  "patchSHA256": "f8ffb4eb2dad80ff937c227dae1cbf6c7ffe4351bd9f2121577a674d9159c36c",
   "resolvedSHA256": "b2cf9e76840cc07da1e2c915743e84900dfc9b3b54be5260da43f19e96773708",
   "patchedPaths": [
     "Sources/xtool/XTool.swift",
