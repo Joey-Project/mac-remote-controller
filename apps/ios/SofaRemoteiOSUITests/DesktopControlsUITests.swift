@@ -170,6 +170,7 @@ final class DesktopControlsUITests: XCTestCase {
         let toggle = element(identifier)
         XCTAssertTrue(toggle.waitForExistence(timeout: 3))
         toggle.tap()
+        XCTAssertTrue(toggle.waitForNonExistence(timeout: 3), "Control panels menu did not close.")
     }
 
     @MainActor
@@ -196,7 +197,8 @@ final class DesktopControlsUITests: XCTestCase {
                     XCTAssertTrue(frame.insetBy(dx: -1, dy: -1).contains(slider.frame))
                 }
             } else {
-                XCTAssertFalse(control.exists, "Unexpected \(identifier)")
+                XCTAssertTrue(
+                    control.waitForNonExistence(timeout: 3), "Unexpected \(identifier)")
             }
         }
     }
@@ -226,5 +228,6 @@ extension SofaRemoteiOSUITests {
         let control = element(identifier)
         XCTAssertTrue(control.waitForExistence(timeout: 3))
         control.tap()
+        XCTAssertTrue(control.waitForNonExistence(timeout: 3), "Control panels menu did not close.")
     }
 }

@@ -49,6 +49,9 @@ superseded_by:
   test moves that slider and verifies only volume commands with the requested
   value are sent. This avoids treating passive accessibility wrappers as
   actionable controls while retaining actual interaction coverage.
+- Panel tests wait for a selected menu item and hidden cards to disappear
+  before checking subsequent states. The waits are bounded and state based;
+  product transitions and animation durations remain unchanged.
 
 ## Remaining Acceptance
 
