@@ -43,10 +43,12 @@ superseded_by:
   button's individual identity and the card's complete bounds. This avoids
   inheriting the card identifier onto its children; visual layout and the
   native system-action route stay unchanged.
-- Panel visibility tests check nonempty bounds fully inside the app window
-  and hit-test the actual buttons or volume slider. A passive container has
-  no action of its own; iOS 27.2 reported it as not hittable even when all four
-  button taps and their matching commands passed in the same CI run.
+- Panel visibility tests check nonempty bounds fully inside the app window,
+  hit-test the actual desktop buttons, and locate the native volume slider by
+  its Slider type, enabled state and complete bounds. A separate functional
+  test moves that slider and verifies only volume commands with the requested
+  value are sent. This avoids treating passive accessibility wrappers as
+  actionable controls while retaining actual interaction coverage.
 
 ## Remaining Acceptance
 

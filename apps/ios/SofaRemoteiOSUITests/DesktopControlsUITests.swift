@@ -92,6 +92,26 @@ final class DesktopControlsUITests: XCTestCase {
     }
 
     @MainActor
+    func testSystemVolumeSliderSendsOnlyVolumeCommands() throws {
+        launch()
+        defer { app.terminate() }
+        XCTAssertTrue(element("remote.panels").waitForExistence(timeout: 5))
+        togglePanel("panels.volume")
+        assertPanels(volume: true, desktop: false)
+
+        let slider = app.sliders["volume.slider"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 3))
+        XCTAssertTrue(slider.isEnabled)
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+
+        let accepted = try commands()
+        XCTAssertFalse(accepted.isEmpty, "Moving the slider must change the system volume.")
+        XCTAssertTrue(accepted.allSatisfy { $0["name"] as? String == "system.volume.set" })
+        let value = try XCTUnwrap(accepted.last?["value"] as? Double)
+        XCTAssertEqual(value, 0.5, accuracy: 0.1)
+    }
+
+    @MainActor
     func testDesktopButtonsRequireCapabilityAndAccessibility() throws {
         for scenario in ["legacy-companion", "permission-denied"] {
             launch(scenario: scenario)
@@ -163,12 +183,17 @@ final class DesktopControlsUITests: XCTestCase {
                 XCTAssertFalse(frame.isEmpty, "Empty bounds for \(identifier)")
                 XCTAssertTrue(
                     viewport.contains(frame), "\(identifier) bounds \(frame) exceed \(viewport)")
-                // The container has no action; hit-test its interactive children.
-                let children =
-                    identifier == "desktop.card"
-                    ? actions.map { "desktop.\($0)" } : ["volume.slider"]
-                for child in children {
-                    XCTAssertTrue(element(child).isHittable, "Control is not hittable: \(child)")
+                if identifier == "desktop.card" {
+                    for action in actions {
+                        XCTAssertTrue(app.buttons["desktop.\(action)"].isHittable)
+                    }
+                } else {
+                    // Query the Slider role; generic accessibility nodes are not actionable.
+                    let slider = app.sliders["volume.slider"]
+                    XCTAssertTrue(slider.waitForExistence(timeout: 3))
+                    XCTAssertTrue(slider.isEnabled)
+                    XCTAssertFalse(slider.frame.isEmpty)
+                    XCTAssertTrue(frame.insetBy(dx: -1, dy: -1).contains(slider.frame))
                 }
             } else {
                 XCTAssertFalse(control.exists, "Unexpected \(identifier)")
