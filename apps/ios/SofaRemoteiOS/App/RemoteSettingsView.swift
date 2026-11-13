@@ -4,7 +4,6 @@ import UIKit
 
 struct RemoteSettingsView: View {
     @Binding var threeFingerDragEnabled: Bool
-    @Binding var fourFingerShortcutsEnabled: Bool
     @Binding var forceClickEnabled: Bool
     @Binding var hapticsEnabled: Bool
     let companionSupportsGestures: Bool?
@@ -19,9 +18,6 @@ struct RemoteSettingsView: View {
                 Toggle("Three-finger drag", isOn: $threeFingerDragEnabled)
                     .disabled(companionUnavailable)
                     .accessibilityIdentifier("gesture.drag")
-                Toggle("Four-finger Mac shortcuts", isOn: $fourFingerShortcutsEnabled)
-                    .disabled(companionUnavailable)
-                    .accessibilityIdentifier("gesture.shortcuts")
                 Toggle("Pressure click when supported", isOn: $forceClickEnabled)
                     .disabled(companionUnavailable || !forceTouchAvailable)
                     .accessibilityIdentifier("gesture.force")

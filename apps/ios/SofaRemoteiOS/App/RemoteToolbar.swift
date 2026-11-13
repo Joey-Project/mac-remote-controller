@@ -5,6 +5,7 @@ struct RemoteToolbar: ToolbarContent {
     @Bindable var model: RemoteModel
     let selectedMode: RemoteMode
     @Binding var isVolumePinned: Bool
+    @Binding var isDesktopPinned: Bool
     let onSwitchMode: () -> Void
     let onConnectionDetails: () -> Void
     let onSettings: () -> Void
@@ -39,21 +40,36 @@ struct RemoteToolbar: ToolbarContent {
             .accessibilityIdentifier("remote.connectionDetails")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if selectedMode == .touchpad {
-                Button {
-                    isVolumePinned.toggle()
-                } label: {
-                    Image(systemName: isVolumePinned ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .frame(minWidth: 44, minHeight: 44)
+            Menu {
+                Toggle("Volume and playback", isOn: $isVolumePinned)
+                    .accessibilityIdentifier("panels.volume")
+                Toggle("Desktop controls", isOn: $isDesktopPinned)
+                    .accessibilityIdentifier("panels.desktop")
+                Divider()
+                Button("Hide all controls") {
+                    isVolumePinned = false
+                    isDesktopPinned = false
                 }
-                .accessibilityLabel(
-                    isVolumePinned
-                        ? "Hide volume and playback controls" : "Show volume and playback controls"
-                )
-                .accessibilityValue(isVolumePinned ? "Visible" : "Hidden")
-                .accessibilityIdentifier("volume.pin")
+                .disabled(!isVolumePinned && !isDesktopPinned)
+                .accessibilityIdentifier("panels.hideAll")
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .frame(minWidth: 44, minHeight: 44)
             }
+            .accessibilityLabel("Control panels")
+            .menuActionDismissBehavior(.enabled)
+            .accessibilityValue(panelSummary)
+            .accessibilityIdentifier("remote.panels")
             RemoteActionsMenu(model: model, onSettings: onSettings)
+        }
+    }
+
+    private var panelSummary: String {
+        switch (isVolumePinned, isDesktopPinned) {
+        case (false, false): "All hidden"
+        case (true, false): "Volume and playback"
+        case (false, true): "Desktop controls"
+        case (true, true): "Volume and playback, Desktop controls"
         }
     }
 }

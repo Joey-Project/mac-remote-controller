@@ -3,7 +3,7 @@ id: 20261024-multitouch-gestures-01a1464a
 title: Multitouch Gestures and Held Pointer Cleanup
 status: active
 created: 2026-10-24
-updated: 2026-11-09
+updated: 2026-11-12
 branch: codex/touchpad-gesture-experience
 pr:
 supersedes: []
@@ -15,11 +15,17 @@ superseded_by:
 ## Summary
 
 - Extend the connected touchpad with capability-gated three-finger drag and
-  four-finger Mission Control, App Exposé, and Spaces shortcuts. One-finger
+  explicit Mission Control, App Exposé, and Spaces buttons. One-finger
   movement/tap and two-finger right-click/scroll remain available.
 
 ## Current State
 
+- The current iOS UI defers four-finger touch recognition and exposes the same
+  fixed desktop actions through explicit buttons in an independently hideable
+  panel. Pinch, scroll, right-click, three-finger drag, and existing peer
+  compatibility remain in place. The retained continuous four-finger protocol
+  and Mac executor are historical compatibility paths, not an enabled phone UI.
+  See [Control panels](../11/2026-11-12-desktop-control-panels-01a1464a.md).
 - The current priority is the user's reported gap from Magic Trackpad behavior:
   two fingers scroll but cannot pinch to zoom, and four-finger behavior is
   missing on the physical Mac. Chrome extension unavailability is recorded
@@ -186,7 +192,8 @@ superseded_by:
   two-finger pan/scroll and tap-to-right-click without accidental clicks when
   transitioning or cancelling a pinch.
 - Validate native magnification in actual target apps, including a view that
-  ignores it, and continuous four-finger execution/reversal on the physical Mac.
+  ignores it, and explicit desktop-button execution on the physical Mac.
+  Continuous four-finger execution/reversal remains deferred.
   AppKit decoding and deterministic event-capture tests do not establish
   cross-application delivery or successful desktop animation.
 - Keep virtual-HID provisioning deferred. Preserve the accepted touchpad,

@@ -21,9 +21,9 @@ struct RemoteView: View {
     @State private var selectedMode: RemoteMode = .touchpad
     @State private var entryRouter = RemoteEntryRouter.shared
     @State private var pendingEntryPoint: RemoteEntryPoint?
-    @State private var isVolumePinned = false
+    @AppStorage("remote.panels.volume") private var isVolumePinned = false
+    @AppStorage("remote.panels.desktop") private var isDesktopPinned = false
     @AppStorage("gesture.threeFingerDrag") private var threeFingerDragEnabled = true
-    @AppStorage("gesture.fourFingerShortcuts") private var fourFingerShortcutsEnabled = true
     @AppStorage("gesture.forceClick") private var forceClickEnabled = true
     @AppStorage("gesture.haptics") private var hapticsEnabled = false
 
@@ -54,6 +54,7 @@ struct RemoteView: View {
                     RemoteToolbar(
                         model: model, selectedMode: selectedMode,
                         isVolumePinned: $isVolumePinned,
+                        isDesktopPinned: $isDesktopPinned,
                         onSwitchMode: switchMode,
                         onConnectionDetails: {
                             prepareForPresentation()
@@ -74,7 +75,6 @@ struct RemoteView: View {
             .navigationDestination(isPresented: $showingSettings) {
                 RemoteSettingsView(
                     threeFingerDragEnabled: $threeFingerDragEnabled,
-                    fourFingerShortcutsEnabled: $fourFingerShortcutsEnabled,
                     forceClickEnabled: $forceClickEnabled, hapticsEnabled: $hapticsEnabled,
                     companionSupportsGestures: model.isConnected ? gesturesSupported : nil)
             }
@@ -194,28 +194,26 @@ private extension RemoteView {
             .padding(.top, 8)
             .padding(.bottom, 12)
 
-            if isVolumePinned {
-                VStack(spacing: 10) {
-                    systemVolumeCard
-                    mediaControlsCard
-                }
-                .padding(.horizontal, horizontalInset(for: availableWidth))
-                .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(1)
+            if isVolumePinned || isDesktopPinned {
+                controlPanels
+                    .padding(.horizontal, horizontalInset(for: availableWidth))
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(1)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: isVolumePinned)
+        .animation(.easeInOut(duration: 0.2), value: isDesktopPinned)
     }
 
     private func keyboardMode(availableWidth: CGFloat) -> some View {
-        VStack(spacing: 10) {
-            systemVolumeCard
-                .padding(.horizontal, horizontalInset(for: availableWidth))
-                .padding(.top, 8)
-            mediaControlsCard
-
-            ScrollView {
+        ScrollView {
+            VStack(spacing: 10) {
+                if isVolumePinned || isDesktopPinned {
+                    controlPanels
+                        .padding(.horizontal, horizontalInset(for: availableWidth))
+                        .padding(.top, 8)
+                }
                 VStack(spacing: 16) {
                     if !remoteEnabled {
                         Label(
@@ -233,19 +231,31 @@ private extension RemoteView {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
             }
-            .scrollDismissesKeyboard(.interactively)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private func horizontalInset(for width: CGFloat) -> CGFloat {
         width < 600 ? 12 : 24
     }
 
+    private var controlPanels: some View {
+        RemoteControlPanels(
+            model: model, volumeScope: $volumeScope, target: selectedMediaTarget,
+            showsVolume: isVolumePinned, showsDesktop: isDesktopPinned,
+            playback: mediaControlsCard
+        ) { action in
+            guard remoteEnabled && gesturesSupported else { return }
+            prepareForPresentation()
+            model.send(RemoteCommand(name: .systemShortcut, shortcut: action))
+        }
+    }
+
     private var touchpadCard: some View {
         TouchpadCard(
             isEnabled: remoteEnabled,
             dragEnabled: gesturesSupported && threeFingerDragEnabled,
-            shortcutsEnabled: gesturesSupported && fourFingerShortcutsEnabled,
+            shortcutsEnabled: false,
             forceClickEnabled: gesturesSupported && forceClickEnabled,
             hapticsEnabled: gesturesSupported && hapticsEnabled,
             simulatedGesturesEnabled: model.remoteState?.capabilities?.contains(
@@ -273,10 +283,7 @@ private extension RemoteView {
                 model.sendLocalPointerDragMove(dragID, x: x, y: y)
             },
             onDragEnd: { releaseLocalDrag() },
-            onShortcut: { action in
-                guard gesturesSupported && fourFingerShortcutsEnabled else { return }
-                model.send(RemoteCommand(name: .systemShortcut, shortcut: action))
-            },
+            onShortcut: { _ in },
             onGesture: { frame in
                 guard
                     model.remoteState?.capabilities?.contains(WireCapabilities.simulatedGestures)
@@ -333,18 +340,6 @@ private extension RemoteView {
             in: RoundedRectangle(cornerRadius: 18))
     }
 
-    private var systemVolumeCard: some View {
-        SystemVolumeCard(
-            model: model,
-            volumeScope: $volumeScope,
-            target: selectedMediaTarget,
-            onSetPlayerVolume: { target, value, displayPercent, requestID in
-                model.sendPlayerVolume(
-                    targetID: target.id, gainRatio: value, displayPercent: displayPercent,
-                    requestID: requestID)
-            })
-    }
-
     private var canSendText: Bool {
         remoteEnabled && !isTextComposing && !textToSend.isEmpty && textToSend.utf8.count <= 4_096
     }
@@ -374,7 +369,6 @@ private extension RemoteView {
     private func resetInteractionState() {
         releaseLocalDrag()
         selectedMode = .touchpad
-        isVolumePinned = false
         volumeScope = .system
         selectedMediaTargetID = nil
         isTextInputFocused = false

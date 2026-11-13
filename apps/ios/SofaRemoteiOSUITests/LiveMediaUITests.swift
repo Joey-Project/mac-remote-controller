@@ -24,6 +24,7 @@ final class LiveMediaUITests: XCTestCase {
         }
         XCTAssertTrue(menu.waitForExistence(timeout: 15))
         element("mode.keyboard", in: app).tap()
+        showPlaybackPanel(in: app)
         let picker = element("media.target", in: app)
         XCTAssertTrue(picker.waitForExistence(timeout: 10))
         picker.tap()
@@ -54,6 +55,19 @@ final class LiveMediaUITests: XCTestCase {
         screenshot.name = "Live Chrome seek acknowledged by Mac"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    @MainActor
+    private func showPlaybackPanel(in app: XCUIApplication) {
+        XCTAssertTrue(element("keyboard.text", in: app).waitForExistence(timeout: 3))
+        let volumePanel = element("volume.card", in: app)
+        if !volumePanel.exists {
+            element("remote.panels", in: app).tap()
+            let volumeToggle = element("panels.volume", in: app)
+            XCTAssertTrue(volumeToggle.waitForExistence(timeout: 3))
+            volumeToggle.tap()
+        }
+        XCTAssertTrue(volumePanel.waitForExistence(timeout: 3))
     }
 
     @MainActor

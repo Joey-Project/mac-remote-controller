@@ -1,10 +1,12 @@
 # Project TODO
 
 - [in_progress] Touchpad experience: validate phased pinch magnification and
-  continuous four-finger progress/cancellation on real target apps and the Mac.
+  explicit desktop-action buttons on real target apps and the Mac. Four-finger
+  touchpad actions are deferred in favor of an independently hideable desktop panel.
   Virtual HID is deferred pending an Apple entitlement; retain pointer/drag efficiency and the
   accepted keyboard, toolbar and volume UI.
   [Gesture workstream](project_journal/2026/10/2026-10-24-multitouch-gestures-01a1464a.md).
+  [Control panels](project_journal/2026/11/2026-11-12-desktop-control-panels-01a1464a.md).
 - [in_progress] Chrome extension availability: recover existing media tabs after
   service-worker restart with fresh page snapshots. Continue live registration,
   Native Messaging, bridge and tab-delivery acceptance; the reported live failure

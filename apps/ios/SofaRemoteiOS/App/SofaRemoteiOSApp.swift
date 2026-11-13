@@ -68,6 +68,10 @@ struct SofaRemoteiOSApp: App {
             scenario = Self.scenario(in: arguments)
             // Functional UI tests must not depend on Simulator animation completion.
             if isActive { UIView.setAnimationsEnabled(false) }
+            if isActive, !arguments.contains("--ui-testing-preserve-panels") {
+                UserDefaults.standard.removeObject(forKey: "remote.panels.volume")
+                UserDefaults.standard.removeObject(forKey: "remote.panels.desktop")
+            }
             if isActive, scenario?.supportsNumericPairing == true,
                 let state = UITestFixture(arguments: ["--ui-testing"]).initialState
             {
