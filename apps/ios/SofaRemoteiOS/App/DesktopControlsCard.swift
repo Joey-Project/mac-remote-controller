@@ -65,6 +65,7 @@ struct DesktopControlsCard: View {
             in: RoundedRectangle(cornerRadius: 18)
         )
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("desktop.card")
     }
 
