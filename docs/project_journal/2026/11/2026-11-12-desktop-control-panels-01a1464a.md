@@ -43,6 +43,10 @@ superseded_by:
   button's individual identity and the card's complete bounds. This avoids
   inheriting the card identifier onto its children; visual layout and the
   native system-action route stay unchanged.
+- Panel visibility tests check nonempty bounds fully inside the app window
+  and hit-test the actual buttons or volume slider. A passive container has
+  no action of its own; iOS 27.2 reported it as not hittable even when all four
+  button taps and their matching commands passed in the same CI run.
 
 ## Remaining Acceptance
 
@@ -63,8 +67,8 @@ superseded_by:
   that attempt is not counted as passed. After a user-performed helper unlock
   on 2026-11-13, the three desktop-card CI failures were reproduced on a local
   iPhone before the accessibility correction. All five desktop-panel tests
-  then passed on both iPhone 17 Pro and iPad mini (A17 Pro) Simulators running
-  iOS 26.5, with no skips. The iPad executed the same signed test products via
+  then passed at `7fa69bc` on both iPhone 17 Pro and iPad mini (A17 Pro) Simulators
+  running iOS 26.5, with no skips. The iPad executed the same signed test products via
   `test-without-building`. Temporary devices were shut down and deleted.
   Full iPhone/iPad CI execution remains separate from these targeted local tests.
 - Source: `apps/ios/SofaRemoteiOS/App/DesktopControlsCard.swift`, `RemoteView.swift`

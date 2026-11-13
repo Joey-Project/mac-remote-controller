@@ -158,7 +158,18 @@ final class DesktopControlsUITests: XCTestCase {
             let control = element(identifier)
             if visible {
                 XCTAssertTrue(control.waitForExistence(timeout: 3), "Missing \(identifier)")
-                XCTAssertTrue(control.isHittable)
+                let frame = control.frame
+                let viewport = app.windows.firstMatch.frame.insetBy(dx: -1, dy: -1)
+                XCTAssertFalse(frame.isEmpty, "Empty bounds for \(identifier)")
+                XCTAssertTrue(
+                    viewport.contains(frame), "\(identifier) bounds \(frame) exceed \(viewport)")
+                // The container has no action; hit-test its interactive children.
+                let children =
+                    identifier == "desktop.card"
+                    ? actions.map { "desktop.\($0)" } : ["volume.slider"]
+                for child in children {
+                    XCTAssertTrue(element(child).isHittable, "Control is not hittable: \(child)")
+                }
             } else {
                 XCTAssertFalse(control.exists, "Unexpected \(identifier)")
             }
