@@ -93,7 +93,10 @@ the Space swipe carries an HID payload; earlier systems use Dock gesture fields.
 
 The Settings page lets you turn three-finger drag, pressure
 click, and optional haptic feedback on or off. Preferences apply immediately and
-are saved on this device using the existing preference keys. Open Settings from
+are saved on this device using the existing preference keys. Media playback also
+offers a shared backward/forward skip interval of 5, 10, 15 or 30 seconds, with
+10 seconds as the default. This setting is editable offline and persists across
+relaunches. Open Settings from
 the remote's more menu or from the setup screen without connecting a Mac.
 Unsupported controls explain the missing hardware or companion support.
 Pressure click works only where
@@ -158,8 +161,9 @@ loss; their outcome may be unknown. No screen preview is transmitted.
 When the Mac media bridge is enabled, supported Chrome tabs and IINA player
 windows appear in a separate player-source picker. The selected source stays
 independent of the frontmost desktop app. A single row contains previous item,
-backward 10 seconds, play/pause, forward 10 seconds, and next item. Seek duration
-is fixed for now; it has no inline editor. These controls and player volume do not retarget
+backward seek, play/pause, forward seek, and next item. Both seek buttons use
+the interval selected in Settings, and their symbols and accessibility labels
+show that duration. The row has no inline editor. These controls and player volume do not retarget
 Mac system input. Player volume is displayed as a percentage of unity gain, such
 as 60%, 120%, or 400%, and follows the selected adapter's reported maximum
 and offers fixed 10-percentage-point steps with a stronger 100% detent, even

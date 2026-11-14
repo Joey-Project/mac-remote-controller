@@ -1,3 +1,4 @@
+import AppleCore
 import CoreHaptics
 import SwiftUI
 import UIKit
@@ -6,6 +7,7 @@ struct RemoteSettingsView: View {
     @Binding var threeFingerDragEnabled: Bool
     @Binding var forceClickEnabled: Bool
     @Binding var hapticsEnabled: Bool
+    @Binding var mediaSeekSeconds: Int
     let companionSupportsGestures: Bool?
     @State private var forceTouchAvailable = false
     private let hapticsAvailable = CHHapticEngine.capabilitiesForHardware().supportsHaptics
@@ -14,6 +16,27 @@ struct RemoteSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Picker(
+                    "Skip interval",
+                    selection: Binding(
+                        get: { MediaSeekInterval(savedValue: mediaSeekSeconds).rawValue },
+                        set: { mediaSeekSeconds = $0 })
+                ) {
+                    ForEach(MediaSeekInterval.allCases, id: \.rawValue) { interval in
+                        Text("\(interval.rawValue) seconds").tag(interval.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                .accessibilityValue(
+                    "\(MediaSeekInterval(savedValue: mediaSeekSeconds).rawValue) seconds"
+                )
+                .accessibilityIdentifier("settings.seekInterval")
+            } header: {
+                Text("Media playback")
+            } footer: {
+                Text("Used for both backward and forward seeking in browser and player controls.")
+            }
             Section {
                 Toggle("Three-finger drag", isOn: $threeFingerDragEnabled)
                     .disabled(companionUnavailable)

@@ -119,6 +119,13 @@ struct SofaRemoteiOSApp: App {
                         ]
                         : (scenario == .unlockReady || scenario == .unlockDenied
                             ? [WireCapabilities.remoteUnlock] : [])),
+                mediaTargets: scenario == .mediaPlayer
+                    ? [
+                        MediaTarget(
+                            id: "iina:ui-test", name: "Test IINA", kind: .iina,
+                            capabilities: MediaCapabilities(
+                                playPause: true, seek: true, next: true, previous: true))
+                    ] : nil,
                 sessionLocked: locked,
                 unlockAvailable: controls
                     ? scenario != .sessionControlsNoAccessibility
@@ -183,6 +190,7 @@ struct SofaRemoteiOSApp: App {
         case numericPairingExpired = "numeric-pairing-expired"
         case numericPairingRevoked = "numeric-pairing-revoked"
         case disconnected
+        case mediaPlayer = "media-player"
         case longName = "long-name"
         case unsupportedVolume = "unsupported-volume"
         case permissionDenied = "permission-denied"
