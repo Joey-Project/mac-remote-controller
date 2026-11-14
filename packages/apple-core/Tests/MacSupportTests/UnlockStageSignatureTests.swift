@@ -9,6 +9,25 @@ final class UnlockStageSignatureTests: XCTestCase {
         XCTAssertEqual(try validate(fixture).status, 0)
     }
 
+    func testAdHocCompanionHasNoCertificateContinuityIdentity() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        XCTAssertNil(try UnlockSigning.certificateSHA256(of: fixture.app))
+        try UnlockFiles.write(
+            Data("unsigned".utf8), to: fixture.root.appendingPathComponent("plain"))
+        XCTAssertThrowsError(
+            try UnlockSigning.certificateSHA256(of: fixture.root.appendingPathComponent("plain")))
+    }
+
+    func testConfiguredCertificateIdentityMatchesIndependentlyExtractedFingerprint() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let app = environment["SOFA_TEST_CERTIFICATE_APP"],
+            let expected = environment["SOFA_TEST_CERTIFICATE_SHA256"]
+        else { throw XCTSkip("A configured Mac may supply a read-only signed-app fixture.") }
+        XCTAssertTrue(UnlockInstallationRecord.validCertificateHash(expected))
+        XCTAssertEqual(try UnlockSigning.certificateSHA256(of: URL(fileURLWithPath: app)), expected)
+    }
+
     func testWrongMainHashAndResignedNestedReplacementAreRejected() throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }

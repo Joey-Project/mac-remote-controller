@@ -25,13 +25,19 @@ public enum UnlockDeployment {
             throw UnlockFailure.signature
         }
         if arguments[0] == "uninstall" { try uninstall(); return }
+        let identity = UnlockUpdateIdentity(
+            uid: owner, requirement: arguments[6],
+            certificateSHA256: try UnlockSigning.certificateSHA256(of: app))
+        var consent: UnlockUpdateConsent?
         if FileManager.default.fileExists(atPath: UnlockInstallationRecord.url.path) {
-            try uninstall()
+            consent = try uninstall(preservingFor: identity)
         }
-        try install(app: app, owner: owner, client: arguments[6])
+        try install(app: app, identity: identity, consent: consent)
     }
 
-    private static func install(app: URL, owner: UInt32, client: String) throws {
+    private static func install(
+        app: URL, identity: UnlockUpdateIdentity, consent: UnlockUpdateConsent?
+    ) throws {
         let helper = app.appendingPathComponent("Contents/Helpers/SofaRemoteUnlockHelper")
         let plugin = app.appendingPathComponent(
             "Contents/Resources/UnlockRuntime/SofaRemoteUnlock.bundle")
@@ -58,15 +64,14 @@ public enum UnlockDeployment {
                 atPath: UnlockPaths.directory.path)
             guard existing.isEmpty else { throw UnlockFailure.setupIncomplete }
             var record = UnlockInstallationRecord(
-                clientUID: owner, clientRequirement: client,
+                clientUID: identity.uid, clientRequirement: identity.requirement,
                 helperRequirement: helperRequirement, helperHash: UnlockFiles.hash(helperBytes),
                 pluginHashes: pluginBytes.mapValues(UnlockFiles.hash),
                 daemonHash: UnlockFiles.hash(daemon), originalPolicy: original)
-            record.installerDesignatedRequirement = try UnlockSigning.designatedRequirement(
-                of: app.appendingPathComponent("Contents/Helpers/SofaRemoteUnlockInstaller"))
-            record.helperDesignatedRequirement = try UnlockSigning.designatedRequirement(of: helper)
+            try bindIdentity(&record, to: identity, app: app, helper: helper)
+            record.resumeEnabledAfterUpdate = consent?.wasEnabled ?? false
             try record.save()
-            try UnlockSettings().save()
+            try (consent?.settingsForInstallation ?? UnlockSettings()).save()
             try publishRuntime(
                 pluginBytes, requirement: pluginRequirement,
                 helperBytes: helperBytes, helperRequirement: helperRequirement, daemon: daemon)
@@ -81,6 +86,16 @@ public enum UnlockDeployment {
             try record.save()
         }
         try UnlockSystemCommand.bootstrap()
+    }
+
+    private static func bindIdentity(
+        _ record: inout UnlockInstallationRecord, to identity: UnlockUpdateIdentity,
+        app: URL, helper: URL
+    ) throws {
+        record.installerDesignatedRequirement = try UnlockSigning.designatedRequirement(
+            of: app.appendingPathComponent("Contents/Helpers/SofaRemoteUnlockInstaller"))
+        record.helperDesignatedRequirement = try UnlockSigning.designatedRequirement(of: helper)
+        record.clientCertificateSHA256 = identity.certificateSHA256
     }
 
     private static func publishRuntime(
@@ -137,11 +152,17 @@ public enum UnlockDeployment {
     }
 
     public static func uninstall() throws {
+        _ = try uninstall(preservingFor: nil)
+    }
+
+    private static func uninstall(preservingFor incoming: UnlockUpdateIdentity?) throws
+        -> UnlockUpdateConsent?
+    {
         try UnlockFiles.withStateLock {
             var record = try UnlockInstallationRecord.load()
             if record.phase == "prepared" {
                 try recoverPrepared(record)
-                return
+                return nil
             }
             guard ["installed", "enabling"].contains(record.phase),
                 let dedicated = record.dedicatedPolicy
@@ -155,21 +176,17 @@ public enum UnlockDeployment {
                 atPath: UnlockPaths.directory.path)
             guard Set(entries).isSubset(of: allowed) else { throw UnlockFailure.conflict }
             try UnlockPolicyControl.validateArtifacts(record)
-            try UnlockPolicyControl.clearAuthority()
-            if let active = record.activePolicy {
-                record.originalPolicy = try UnlockPolicyControl.restorePolicy(
-                    record: record, active: active)
-                record.activePolicy = nil
-                record.phase = "installed"
-                try record.save()
+            // Capture the last applied consent while holding the same lock as revocation
+            // and teardown; no cached pre-uninstall snapshot can reallow a revoked device.
+            let consent: UnlockUpdateConsent?
+            if let incoming {
+                consent = try UnlockUpdateConsent(
+                    previous: record, settings: UnlockSettings.load(), incoming: incoming)
             } else {
-                guard
-                    try UnlockPolicy.sameDefinition(
-                        UnlockAuthorizationDB.read(UnlockPaths.screenRight), record.originalPolicy)
-                else {
-                    throw UnlockFailure.conflict
-                }
+                consent = nil
             }
+            try UnlockPolicyControl.clearAuthority()
+            try restoreScreenPolicy(&record)
             try UnlockSystemCommand.bootout()
             try removeLeaseIfStopped()
             try UnlockAuthorizationDB.removeDedicated(expected: dedicated)
@@ -186,6 +203,22 @@ public enum UnlockDeployment {
             else {
                 throw UnlockFailure.conflict
             }
+            return consent
+        }
+    }
+
+    private static func restoreScreenPolicy(_ record: inout UnlockInstallationRecord) throws {
+        if let active = record.activePolicy {
+            record.originalPolicy = try UnlockPolicyControl.restorePolicy(
+                record: record, active: active)
+            record.activePolicy = nil
+            record.phase = "installed"
+            try record.save()
+        } else {
+            guard
+                try UnlockPolicy.sameDefinition(
+                    UnlockAuthorizationDB.read(UnlockPaths.screenRight), record.originalPolicy)
+            else { throw UnlockFailure.conflict }
         }
     }
 

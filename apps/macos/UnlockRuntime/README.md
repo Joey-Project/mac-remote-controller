@@ -26,7 +26,21 @@ Local/ad-hoc builds are supported with Hardened Runtime enabled and debug/code
 injection exceptions disabled. The helper admits only the exact installed
 companion code-directory hash and console UID, and the app verifies the helper
 in return. A new companion build therefore needs **Update Unlock Helper…**;
-update starts disabled and requires selecting allowed devices again.
+the existing administrator confirmation is still required. Normal updates for
+the same console UID and signing certificate retain the remote-unlock switch
+and allowed-device list. The installer takes this snapshot under the same lock
+as revocation and teardown. It transfers only persistent consent, never pending
+requests or one-use grants. The new helper first clears old authority, consumes
+a single-use resume intent, and restores enablement through the normal artifact
+and screen-lock policy checks. A failed restore does not retry automatically.
+
+Installation receipts record the admitted companion's leaf-certificate SHA-256.
+Changing certificate or user starts disabled with no allowed devices. Legacy
+receipts without this identity, and ad-hoc builds without a certificate, retain
+consent only when reinstalling the exact same companion hash. Consequently the
+first different build upgrading from a legacy receipt still needs one manual
+enablement/device selection. Explicit uninstallation deletes all consent; a
+later fresh install cannot inherit it.
 
 The administrator operation first copies the app into a root-private staging
 directory and verifies its pinned complete signature before running its

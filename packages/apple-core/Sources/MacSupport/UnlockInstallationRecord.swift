@@ -14,6 +14,8 @@ public struct UnlockInstallationRecord: Codable, Sendable {
     public var dedicatedPolicy: Data?
     public var installerDesignatedRequirement = ""
     public var helperDesignatedRequirement = ""
+    public var clientCertificateSHA256: String?
+    public var resumeEnabledAfterUpdate: Bool?
 
     public static var url: URL { UnlockPaths.directory.appendingPathComponent("receipt.plist") }
 
@@ -28,6 +30,7 @@ public struct UnlockInstallationRecord: Codable, Sendable {
                 && result.installerDesignatedRequirement.utf8.count <= 1024
                 && !result.helperDesignatedRequirement.isEmpty
                 && result.helperDesignatedRequirement.utf8.count <= 1024
+                && (result.clientCertificateSHA256.map(Self.validCertificateHash) ?? true)
         else { throw UnlockFailure.setupIncomplete }
         return result
     }
@@ -45,6 +48,10 @@ public struct UnlockInstallationRecord: Codable, Sendable {
         guard value.hasPrefix(prefix), value.hasSuffix("\"") else { return false }
         let hash = value.dropFirst(prefix.count).dropLast()
         return hash.count == 40 && hash.allSatisfy({ "0123456789abcdef".contains($0) })
+    }
+
+    static func validCertificateHash(_ value: String) -> Bool {
+        value.count == 64 && value.allSatisfy({ "0123456789abcdef".contains($0) })
     }
 }
 

@@ -33,6 +33,24 @@ public enum UnlockSigning {
         return try requirement(code, identifier: identifier)
     }
 
+    static func certificateSHA256(of url: URL) throws -> String? {
+        var code: SecStaticCode?
+        var information: CFDictionary?
+        guard SecStaticCodeCreateWithPath(url as CFURL, SecCSFlags(), &code) == errSecSuccess,
+            let code,
+            SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), nil)
+                == errSecSuccess,
+            SecCodeCopySigningInformation(
+                code, SecCSFlags(rawValue: kSecCSSigningInformation), &information)
+                == errSecSuccess,
+            let values = information as? [String: Any]
+        else { throw UnlockFailure.signature }
+        guard let certificates = values[kSecCodeInfoCertificates as String] as? [SecCertificate],
+            let leaf = certificates.first
+        else { return nil }
+        return UnlockFiles.hash(SecCertificateCopyData(leaf) as Data)
+    }
+
     public static func runningAppRequirement() throws -> String {
         try runningRequirement.get()
     }
