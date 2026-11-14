@@ -13,7 +13,7 @@ public final class UnlockBroker: NSObject, NSXPCListenerDelegate, @unchecked Sen
         record = installation
         guard record.phase == "installed" else { throw UnlockFailure.setupIncomplete }
         try UnlockSigning.verify(UnlockPaths.helper, requirement: record.helperRequirement)
-        try UnlockFiles.withStateLock { try UnlockPolicyControl.clearAuthority() }
+        try UnlockPolicyControl.prepareHelperStart()
         super.init()
         listener.setConnectionCodeSigningRequirement(record.clientRequirement)
         listener.delegate = self

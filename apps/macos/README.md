@@ -81,6 +81,11 @@ or a routine update.
 The unlock helper still pins the exact companion code hash: helper updates continue
 to require the existing administrator-authorized setup. This does not broaden its
 trusted clients or modify lock-screen authentication policy.
+After an installation receipt records the certificate identity, normal same-user,
+same-certificate updates retain the unlock switch and device permissions. Explicit
+uninstallation, a different certificate/user, or a legacy receipt with an
+unrecognized new code hash requires enabling the feature and choosing devices
+again. See [unlock setup and update behavior](UnlockRuntime/README.md).
 
 Offline admission tests run in CI; configured Macs also run real certificate
 continuity and negative-signature cases with:

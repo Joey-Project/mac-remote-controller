@@ -3,39 +3,49 @@ import Foundation
 
 public enum UnlockPolicyControl {
     public static func enable() throws {
+        try UnlockFiles.withStateLock { try enableWhileLocked() }
+    }
+
+    static func prepareHelperStart() throws {
         try UnlockFiles.withStateLock {
-            var record = try UnlockInstallationRecord.load()
-            var settings = try UnlockSettings.load()
-            guard record.phase == "installed", record.dedicatedPolicy != nil else {
-                throw UnlockFailure.notInstalled
-            }
-            try validateArtifacts(record)
-            let current = try UnlockAuthorizationDB.read(UnlockPaths.screenRight)
-            if let active = record.activePolicy {
-                guard try UnlockPolicy.sameDefinition(current, active) else {
-                    throw UnlockFailure.conflict
-                }
-                if settings.enabled { return }
-            } else {
-                guard let current, try UnlockPolicy.sameDefinition(current, record.originalPolicy)
-                else {
-                    throw UnlockFailure.conflict
-                }
-                let desired = try UnlockPolicy.extended(current)
-                record.phase = "enabling"
-                record.activePolicy = desired
-                try record.save()
-                let installed = try UnlockAuthorizationDB.write(
-                    UnlockPaths.screenRight, definition: desired)
-                record.activePolicy = installed
-                record.phase = "installed"
-                try record.save()
-            }
-            settings.enabled = true
-            try settings.save()
-            try UnlockFiles.write(
-                Data("1".utf8), to: UnlockPaths.directory.appendingPathComponent("enabled"))
+            try UnlockConsentStartup.prepare(
+                record: UnlockInstallationRecord.load(), clearAuthority: clearAuthority,
+                persist: { try $0.save() }, enable: enableWhileLocked)
         }
+    }
+
+    private static func enableWhileLocked() throws {
+        var record = try UnlockInstallationRecord.load()
+        var settings = try UnlockSettings.load()
+        guard record.phase == "installed", record.dedicatedPolicy != nil else {
+            throw UnlockFailure.notInstalled
+        }
+        try validateArtifacts(record)
+        let current = try UnlockAuthorizationDB.read(UnlockPaths.screenRight)
+        if let active = record.activePolicy {
+            guard try UnlockPolicy.sameDefinition(current, active) else {
+                throw UnlockFailure.conflict
+            }
+            if settings.enabled { return }
+        } else {
+            guard let current, try UnlockPolicy.sameDefinition(current, record.originalPolicy)
+            else {
+                throw UnlockFailure.conflict
+            }
+            let desired = try UnlockPolicy.extended(current)
+            record.phase = "enabling"
+            record.activePolicy = desired
+            try record.save()
+            let installed = try UnlockAuthorizationDB.write(
+                UnlockPaths.screenRight, definition: desired)
+            record.activePolicy = installed
+            record.phase = "installed"
+            try record.save()
+        }
+        settings.enabled = true
+        try settings.save()
+        try UnlockFiles.write(
+            Data("1".utf8), to: UnlockPaths.directory.appendingPathComponent("enabled"))
     }
 
     public static func disable() throws {
