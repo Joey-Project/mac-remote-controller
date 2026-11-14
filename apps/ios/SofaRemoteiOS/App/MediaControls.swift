@@ -49,13 +49,17 @@ extension RemoteView {
                             .disabled(!target.capabilities.previous)
                             .accessibilityLabel("Previous item")
                             Button {
-                                sendMedia(.seek, target: target, value: -10)
+                                sendMedia(
+                                    .seek, target: target, value: mediaSeekInterval.backwardSeconds)
                             } label: {
-                                Image(systemName: "gobackward.10")
+                                Image(systemName: "gobackward.\(mediaSeekInterval.rawValue)")
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .disabled(!target.capabilities.seek)
-                            .accessibilityLabel("Seek backward 10 seconds")
+                            .accessibilityLabel(
+                                "Seek backward \(mediaSeekInterval.rawValue) seconds"
+                            )
+                            .accessibilityIdentifier("media.seekBackward")
                             Button {
                                 sendMedia(.playPause, target: target)
                             } label: {
@@ -65,13 +69,17 @@ extension RemoteView {
                             .disabled(!target.capabilities.playPause)
                             .accessibilityLabel("Play or pause")
                             Button {
-                                sendMedia(.seek, target: target, value: 10)
+                                sendMedia(
+                                    .seek, target: target, value: mediaSeekInterval.forwardSeconds)
                             } label: {
-                                Image(systemName: "goforward.10")
+                                Image(systemName: "goforward.\(mediaSeekInterval.rawValue)")
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .disabled(!target.capabilities.seek)
-                            .accessibilityLabel("Seek forward 10 seconds")
+                            .accessibilityLabel(
+                                "Seek forward \(mediaSeekInterval.rawValue) seconds"
+                            )
+                            .accessibilityIdentifier("media.seekForward")
                             Button {
                                 sendMedia(.next, target: target)
                             } label: {

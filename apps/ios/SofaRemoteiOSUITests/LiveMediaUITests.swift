@@ -36,7 +36,7 @@ final class LiveMediaUITests: XCTestCase {
             target.waitForExistence(timeout: 5), "Open the requested Chrome video before this test."
         )
         target.tap()
-        let seek = app.buttons["Seek forward 10 seconds"]
+        let seek = element("media.seekForward", in: app)
         XCTAssertTrue(seek.waitForExistence(timeout: 5))
         XCTAssertTrue(seek.isEnabled)
         let receipts = element("live.results", in: app)

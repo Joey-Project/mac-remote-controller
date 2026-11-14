@@ -2,6 +2,84 @@ import XCTest
 
 final class SettingsUITests: XCTestCase {
     @MainActor
+    func testSeekIntervalPersistsOfflineAndAppliesToBothMediaButtons() async throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--ui-testing-scenario=disconnected"]
+        app.launch()
+        defer { app.terminate() }
+        element("remote.settings", in: app).tap()
+        let picker = element("settings.seekInterval", in: app)
+        XCTAssertTrue(picker.waitForExistence(timeout: 3))
+        let original = try XCTUnwrap(picker.value as? String)
+        let seconds = original == "30 seconds" ? 5 : 30
+        let selected = "\(seconds) seconds"
+        picker.tap()
+        app.buttons[selected].tap()
+        try await waitForValue(selected, of: picker)
+        XCTAssertEqual(try commandCount(in: app), 0)
+
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--ui-testing-scenario=media-player"]
+        app.launch()
+        let menu = element("remote.menu", in: app)
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        menu.tap()
+        XCTAssertTrue(element("remote.settings", in: app).waitForExistence(timeout: 3))
+        element("remote.settings", in: app).tap()
+        XCTAssertTrue(picker.waitForExistence(timeout: 3))
+        XCTAssertEqual(picker.value as? String, selected)
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+        selectTestMedia(in: app)
+        let backward = element("media.seekBackward", in: app)
+        let forward = element("media.seekForward", in: app)
+        XCTAssertTrue(backward.waitForExistence(timeout: 3))
+        XCTAssertEqual(backward.label, "Seek backward \(seconds) seconds")
+        XCTAssertEqual(forward.label, "Seek forward \(seconds) seconds")
+        backward.tap()
+        forward.tap()
+        try verifySeekRequests(seconds: seconds, in: app)
+
+        menu.tap()
+        element("remote.settings", in: app).tap()
+        XCTAssertTrue(picker.waitForExistence(timeout: 3))
+        picker.tap()
+        app.buttons[original].tap()
+        try await waitForValue(original, of: picker)
+        XCTAssertEqual(try commandCount(in: app), 2)
+    }
+
+    @MainActor
+    private func selectTestMedia(in app: XCUIApplication) {
+        element("mode.keyboard", in: app).tap()
+        if !element("volume.card", in: app).exists {
+            element("remote.panels", in: app).tap()
+            let toggle = element("panels.volume", in: app)
+            XCTAssertTrue(toggle.waitForExistence(timeout: 3))
+            toggle.tap()
+        }
+        let target = element("media.target", in: app)
+        XCTAssertTrue(target.waitForExistence(timeout: 3))
+        target.tap()
+        app.buttons["Test IINA"].tap()
+    }
+
+    @MainActor
+    private func verifySeekRequests(seconds: Int, in app: XCUIApplication) throws {
+        let diagnostic = element("uitest.commands", in: app)
+        let commands = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: Data(diagnostic.label.utf8)) as? [[String: Any]])
+        let requests = commands.compactMap { $0["mediaRequest"] as? [String: Any] }
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(
+            requests.compactMap { $0["value"] as? Double }, [-Double(seconds), Double(seconds)])
+        XCTAssertEqual(
+            requests.compactMap { $0["targetId"] as? String }, ["iina:ui-test", "iina:ui-test"])
+        XCTAssertEqual(requests.compactMap { $0["action"] as? String }, ["seek", "seek"])
+    }
+
+    @MainActor
     func testOfflineSettingsSaveImmediatelyAcrossLaunches() async throws {
         continueAfterFailure = false
         let app = XCUIApplication()
