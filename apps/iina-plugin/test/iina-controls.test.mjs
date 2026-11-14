@@ -34,11 +34,13 @@ function createMainHarness({
   managedBridge,
   responseStatus = () => 200,
   rejectProxySets = false,
+  beforeResponse = async () => {},
+  initiallyIdle = false,
 }) {
   let now = 1_800_000_000_000;
   let targetId = '';
   let paused = false;
-  let idle = false;
+  let idle = initiallyIdle;
   let firstCommandRead = false;
   let activeRequests = 0;
   let maximumConcurrentRequests = 0;
@@ -46,6 +48,8 @@ function createMainHarness({
   const results = [];
   const sideEffects = [];
   const handlers = new Map();
+  const logs = [];
+  const menuItems = [];
   const timers = [];
   const preferences = { bridge_port: port, bridge_token: token };
   const managed = {
@@ -64,7 +68,11 @@ function createMainHarness({
     }
     if (path.endsWith('/result')) results.push(JSON.parse(options.data.payload));
     await Promise.resolve();
-    activeRequests -= 1;
+    try {
+      await beforeResponse(call);
+    } finally {
+      activeRequests -= 1;
+    }
     const statusCode = responseStatus(call);
     if (statusCode >= 400) return { statusCode, data: {} };
     if (method === 'get') {
@@ -83,6 +91,12 @@ function createMainHarness({
     return { statusCode: 204, data: undefined };
   };
   const iina = {
+    console: { log: (message) => logs.push(message) },
+    menu: {
+      item: (title, action, options) => ({ title, action, ...options }),
+      addItem: (item) => menuItems.push(item),
+      forceUpdate: () => {},
+    },
     preferences: {
       get: (key) => preferences[key],
       set: (key, value) => {
@@ -167,8 +181,13 @@ function createMainHarness({
     iina,
     Date: { now: () => now },
     setTimeout: (resolve, delay) => {
-      timers.push({ resolve, delay });
-      return timers.length;
+      const timer = { resolve, delay };
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeout: (timer) => {
+      const index = timers.indexOf(timer);
+      if (index >= 0) timers.splice(index, 1);
     },
   });
   return {
@@ -176,6 +195,8 @@ function createMainHarness({
     commands,
     context,
     handlers,
+    logs,
+    menuItems,
     managed,
     maximumConcurrentRequests: () => maximumConcurrentRequests,
     preferences,
@@ -554,6 +575,134 @@ test('IINA rejects invalid bridge settings without making a loopback request', (
   });
 });
 
+test('IINA backs off a bridge outage, reports transitions once, and restores the healthy cadence', async () => {
+  let offline = true;
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    responseStatus: () => (offline ? 401 : 200),
+  });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.timers.length === 1);
+  for (const delay of [250, 500, 1_000, 2_000, 2_000]) {
+    assert.equal(await resolveNextTimer(harness), delay);
+    await waitFor(() => harness.timers.length === 1);
+  }
+  assert.equal(harness.logs.length, 1);
+  assert.match(harness.menuItems[0].title, /Setup rejected/);
+  assert.equal(harness.menuItems[0].enabled, false);
+  offline = false;
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.timers.length === 1);
+  assert.equal(harness.timers[0].delay, 250);
+  assert.equal(harness.menuItems[0].title, 'Sofa Remote: Connected');
+  assert.equal(harness.logs.length, 2);
+  const reads = harness.managed.reads;
+  for (let index = 0; index < 40; index += 1) {
+    await resolveNextTimer(harness);
+    await waitFor(() => harness.timers.length === 1);
+  }
+  assert.equal(harness.logs.length, 2, 'Healthy polling must not spam logs');
+  assert.equal(harness.managed.reads, reads, 'Healthy polling must not read files');
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+  assert.ok(!harness.logs.join().includes(BRIDGE_LENGTH_SENTINEL));
+  harness.handlers.get('iina.window-will-close')();
+  await waitFor(() => harness.calls.some((call) => call.path.endsWith('/unregister')));
+});
+
+test('IINA sanitizes network errors and never replays an action after a lost result acknowledgement', async () => {
+  let failResult = true;
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    commands: [{ requestId: 'lost-result', targetId: '$current', action: 'playPause' }],
+    beforeResponse: async (call) => {
+      if (failResult && call.path.endsWith('/result')) {
+        throw new Error(`Native transport error containing ${BRIDGE_LENGTH_SENTINEL}`);
+      }
+    },
+  });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.timers.length === 1);
+  assert.match(harness.menuItems[0].title, /Bridge unavailable/);
+  assert.deepEqual(harness.sideEffects, ['pause']);
+  assert.ok(!harness.logs.join().includes(BRIDGE_LENGTH_SENTINEL));
+  failResult = false;
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.timers.length === 1);
+  assert.deepEqual(harness.sideEffects, ['pause']);
+  assert.equal(harness.results.length, 1);
+  assert.equal(harness.menuItems[0].title, 'Sofa Remote: Connected');
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+  harness.handlers.get('iina.window-will-close')();
+});
+
+test('IINA serializes shutdown and discards commands delivered after the window closes', async () => {
+  let release;
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    commands: [{ requestId: 'late-command', targetId: '$current', action: 'playPause' }],
+    beforeResponse: (call) =>
+      call.path.includes('/next?')
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve(),
+  });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => release !== undefined);
+  harness.handlers.get('iina.window-will-close')();
+  assert.equal(
+    harness.calls.some((call) => call.path.endsWith('/unregister')),
+    false,
+  );
+  release();
+  await waitFor(() => harness.calls.some((call) => call.path.endsWith('/unregister')));
+  assert.deepEqual(harness.sideEffects, []);
+  assert.equal(harness.results.length, 0);
+  assert.equal(harness.timers.length, 0);
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+  const count = harness.calls.length;
+  harness.handlers.get('iina.window-loaded')();
+  harness.handlers.get('iina.window-will-close')();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(harness.calls.length, count);
+});
+
+test('IINA distinguishes missing setup, idle playback, and bridge HTTP failures', async () => {
+  const missing = createMainHarness({ port: 0, token: '' });
+  vm.runInContext(await loadMainSource(), missing.context, { timeout: 1_000 });
+  await waitFor(() => missing.timers.length === 1);
+  assert.match(missing.menuItems[0].title, /Setup required/);
+  assert.equal(missing.calls.length, 0);
+  missing.handlers.get('iina.window-will-close')();
+
+  const idle = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    initiallyIdle: true,
+  });
+  vm.runInContext(await loadMainSource(), idle.context, { timeout: 1_000 });
+  await waitFor(() => idle.timers.length === 1);
+  assert.equal(idle.menuItems[0].title, 'Sofa Remote: Connected; open a video');
+  assert.equal(
+    idle.calls.some((call) => call.path.endsWith('/update')),
+    false,
+  );
+  idle.handlers.get('iina.window-will-close')();
+
+  const failed = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    responseStatus: () => 503,
+  });
+  vm.runInContext(await loadMainSource(), failed.context, { timeout: 1_000 });
+  await waitFor(() => failed.timers.length === 1);
+  assert.match(failed.menuItems[0].title, /Bridge error/);
+  failed.handlers.get('iina.window-will-close')();
+});
+
 test('IINA playlist availability is checked against the execution-time position', async () => {
   assert.equal(canNavigatePlaylist('next', 3, 0), true);
   assert.equal(canNavigatePlaylist('next', 3, 2), false);
@@ -572,6 +721,12 @@ test('IINA playlist availability is checked against the execution-time position'
   let commandReturned = false;
   let nextCalls = 0;
   const iina = {
+    console: { log: () => {} },
+    menu: {
+      item: (title) => ({ title }),
+      addItem: () => {},
+      forceUpdate: () => {},
+    },
     preferences: { get: (key) => (key === 'bridge_port' ? 47623 : BRIDGE_LENGTH_SENTINEL) },
     event: { on: (name, handler) => handlers.set(name, handler) },
     http: {

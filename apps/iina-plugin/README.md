@@ -65,5 +65,21 @@ When the queue is empty, the plugin polls every 250 ms. Each poll refreshes the
 target and drains up to eight queued commands without a per-command polling
 delay. A full batch yields to IINA's event loop before another bounded batch;
 the plugin does not locally replay completed commands. It retries the local
-bridge after it is unavailable and unregisters its window target when IINA
-closes it. Automated checks use mocks; they do not launch IINA or play audio.
+bridge after it is unavailable. Failed cycles back off from 250 ms to at most
+two seconds; a successful cycle immediately restores the normal cadence. This
+does not add delay between healthy commands or change touchpad transport.
+
+The focused IINA window's **Plugin → Sofa Remote** menu shows its connection
+state: connected, connected but waiting for a video, setup missing/rejected,
+bridge unavailable, bridge error, or player unavailable. For setup rejection,
+choose **Set Up IINA** in the companion; for an unavailable bridge, open the
+companion and enable its media adapters. State transitions also appear once in
+IINA's plugin log, without tokens, native error bodies, titles or file paths.
+Repeated failures do not spam the log or require dismissing alerts.
+
+Closing a window stops its polling and unregisters its target after any active
+request settles. Commands arriving after closure are discarded, and a command
+whose result acknowledgement was lost is never locally replayed. Automated
+checks cover outages, credential refresh, recovery, lost acknowledgements and
+closure during a request using deterministic mocks; they do not launch IINA or
+play audio. Real long-duration stability remains a separate acceptance step.
