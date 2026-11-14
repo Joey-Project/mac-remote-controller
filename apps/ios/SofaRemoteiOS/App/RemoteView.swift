@@ -26,6 +26,11 @@ struct RemoteView: View {
     @AppStorage("gesture.threeFingerDrag") private var threeFingerDragEnabled = true
     @AppStorage("gesture.forceClick") private var forceClickEnabled = true
     @AppStorage("gesture.haptics") private var hapticsEnabled = false
+    @AppStorage("media.seekSeconds") var savedMediaSeekSeconds = 10
+
+    var mediaSeekInterval: MediaSeekInterval {
+        MediaSeekInterval(savedValue: savedMediaSeekSeconds)
+    }
 
     private var gesturesSupported: Bool { model.remoteState?.supportsGestures == true }
 
@@ -76,6 +81,7 @@ struct RemoteView: View {
                 RemoteSettingsView(
                     threeFingerDragEnabled: $threeFingerDragEnabled,
                     forceClickEnabled: $forceClickEnabled, hapticsEnabled: $hapticsEnabled,
+                    mediaSeekSeconds: $savedMediaSeekSeconds,
                     companionSupportsGestures: model.isConnected ? gesturesSupported : nil)
             }
             .sheet(isPresented: $showingScanner) {
