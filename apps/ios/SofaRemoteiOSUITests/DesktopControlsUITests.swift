@@ -108,7 +108,12 @@ final class DesktopControlsUITests: XCTestCase {
         XCTAssertFalse(accepted.isEmpty, "Moving the slider must change the system volume.")
         XCTAssertTrue(accepted.allSatisfy { $0["name"] as? String == "system.volume.set" })
         let value = try XCTUnwrap(accepted.last?["value"] as? Double)
-        XCTAssertEqual(value, 0.5, accuracy: 0.1)
+        // XCTest's adjustment is best effort. Verify the delivered value against
+        // the native control's actual position, rather than the requested target.
+        let position = Double(slider.normalizedSliderPosition)
+        XCTAssertGreaterThan(position, 0)
+        XCTAssertLessThan(position, 1)
+        XCTAssertEqual(value, position, accuracy: 0.01)
     }
 
     @MainActor

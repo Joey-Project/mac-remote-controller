@@ -35,6 +35,12 @@ superseded_by:
   guidance for 401/403 while discarding all native response bodies.
 - Strict TypeScript checks and Oxlint pass. The existing media row, phone UI,
   gain-ratio volume policy and pointer transport are unchanged.
+- The Apple CI blocker was an existing slider test assuming XCTest reaches
+  exactly the requested drag position. It now checks the delivered system-volume
+  value against the native slider's resulting position within one percentage
+  point, retains command-type isolation, and requires an interior slider value.
+  Apple's [adjustment contract](https://developer.apple.com/documentation/xcuiautomation/xcuielement/adjust%28tonormalizedsliderposition%3A%29)
+  specifies best-effort positioning. Product controls are unchanged.
 - These checks do not establish long-duration real-player stability or phone
   acceptance. The earlier credential and volume fixes remain documented in the
   [IINA recovery journal](2026-11-14-iina-recovery-01a1464a.md).
