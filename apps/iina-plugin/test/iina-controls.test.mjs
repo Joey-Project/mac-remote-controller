@@ -74,7 +74,10 @@ function createMainHarness({
       activeRequests -= 1;
     }
     const statusCode = responseStatus(call);
-    if (statusCode >= 400) return { statusCode, data: {} };
+    // IINA rejects non-success HTTP responses with a native response object.
+    if (statusCode < 200 || statusCode >= 300) {
+      return Promise.reject({ statusCode, data: {}, text: BRIDGE_LENGTH_SENTINEL });
+    }
     if (method === 'get') {
       if (idleBeforeFirstCommand && !firstCommandRead) {
         idle = true;
@@ -608,6 +611,21 @@ test('IINA backs off a bridge outage, reports transitions once, and restores the
   assert.ok(!harness.logs.join().includes(BRIDGE_LENGTH_SENTINEL));
   harness.handlers.get('iina.window-will-close')();
   await waitFor(() => harness.calls.some((call) => call.path.endsWith('/unregister')));
+});
+
+test('IINA rejects invalid native status fields without logging native response data', async () => {
+  for (const statusCode of ['401', Number.NaN, 0, 600, Infinity, undefined]) {
+    const harness = createMainHarness({
+      port: 47623,
+      token: BRIDGE_LENGTH_SENTINEL,
+      beforeResponse: () => Promise.reject({ statusCode, text: BRIDGE_LENGTH_SENTINEL }),
+    });
+    vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+    await waitFor(() => harness.timers.length === 1);
+    assert.match(harness.menuItems[0].title, /Bridge unavailable/);
+    assert.ok(!harness.logs.join().includes(BRIDGE_LENGTH_SENTINEL));
+    harness.handlers.get('iina.window-will-close')();
+  }
 });
 
 test('IINA sanitizes network errors and never replays an action after a lost result acknowledgement', async () => {

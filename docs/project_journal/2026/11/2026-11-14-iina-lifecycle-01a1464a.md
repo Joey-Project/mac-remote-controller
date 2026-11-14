@@ -30,6 +30,9 @@ superseded_by:
 - Deterministic plugin tests exercise repeated outages and recovery, bounded
   retry delays, cached preference refresh, setup rejection, idle state,
   sanitized diagnostics, lost acknowledgements and closure during a request.
+- HTTP mocks use IINA's native rejected-response semantics. Only a validated
+  numeric HTTP status is retained from a rejected object, preserving setup
+  guidance for 401/403 while discarding all native response bodies.
 - Strict TypeScript checks and Oxlint pass. The existing media row, phone UI,
   gain-ratio volume policy and pointer transport are unchanged.
 - These checks do not establish long-duration real-player stability or phone

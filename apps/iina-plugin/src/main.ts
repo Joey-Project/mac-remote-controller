@@ -97,8 +97,16 @@ async function request<T>(
       method === 'get'
         ? await iina.http.get<unknown, T>(`${baseURL}${path}`, options)
         : await iina.http.post<unknown, T>(`${baseURL}${path}`, options);
-  } catch {
-    throw new BridgeRequestError();
+  } catch (error) {
+    const value =
+      typeof error === 'object' && error !== null && 'statusCode' in error
+        ? error.statusCode
+        : undefined;
+    const statusCode =
+      typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599
+        ? value
+        : undefined;
+    throw new BridgeRequestError(statusCode);
   }
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new BridgeRequestError(response.statusCode);
