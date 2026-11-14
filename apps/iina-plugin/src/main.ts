@@ -23,6 +23,33 @@ function currentBridgeConfiguration() {
   );
 }
 
+function refreshBridgeConfiguration(): void {
+  const path = '@data/bridge.json';
+  try {
+    if (!iina.file.exists(path)) return;
+    const file = iina.file.handle(path, 'read');
+    if (!file) return;
+    let bytes: Uint8Array | undefined;
+    try {
+      bytes = file.read(4097);
+    } finally {
+      file.close();
+    }
+    if (!bytes || bytes.length > 4096) return;
+    const value: unknown = JSON.parse(String.fromCharCode(...bytes));
+    if (typeof value !== 'object' || value === null) return;
+    const fields = value as Record<string, unknown>;
+    const configuration = bridgeConfiguration(fields.port, fields.token);
+    if (!configuration) return;
+    // IINA caches preferences in memory. Refresh only our two keys from the
+    // companion's private file; no broad file-system permission is needed.
+    iina.preferences.set('bridge_port', configuration.port);
+    iina.preferences.set('bridge_token', configuration.token);
+  } catch {
+    // Keep manual setup usable if a managed file is absent or unreadable.
+  }
+}
+
 async function request<T>(
   baseURL: string,
   token: string,
@@ -90,8 +117,10 @@ async function execute(action: string, value: number | undefined): Promise<void>
       iina.playlist.playPrevious();
       return;
     case 'setVolume':
-      iina.core.audio.volume = mpvPercentFromGainRatio(value!, maximumMpvPercent)!;
-      if (shouldUnmuteForGainRatio(value!)) iina.core.audio.muted = false;
+      // IINA's core.audio proxy setter returns undefined, which throws after
+      // applying an assignment in strict mode. The mpv API has no proxy trap.
+      iina.mpv.set('volume', mpvPercentFromGainRatio(value!, maximumMpvPercent)!);
+      if (shouldUnmuteForGainRatio(value!)) iina.mpv.set('mute', false);
       return;
     default:
       throw new Error('Unsupported media action.');
@@ -136,14 +165,20 @@ async function pollOnce(configuration: { port: number; token: string }): Promise
 async function runLoop(): Promise<void> {
   if (running || disconnected) return;
   running = true;
+  refreshBridgeConfiguration();
   while (!disconnected) {
     const started = Date.now();
     let completed = 0;
     try {
-      const configuration = currentBridgeConfiguration();
+      let configuration = currentBridgeConfiguration();
+      if (!configuration) {
+        refreshBridgeConfiguration();
+        configuration = currentBridgeConfiguration();
+      }
       if (configuration) completed = await pollOnce(configuration);
     } catch {
       // Keep the token out of logs. Connection state is visible through the local companion.
+      if (!disconnected) refreshBridgeConfiguration();
     }
     // A full batch yields to IINA's event loop before continuing. Otherwise
     // keep the existing 250 ms polling cadence without delaying each command.

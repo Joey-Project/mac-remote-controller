@@ -31,6 +31,9 @@ function createMainHarness({
   idleBeforeFirstCommand = false,
   playlistCount = 1,
   playlistPosition = 0,
+  managedBridge,
+  responseStatus = () => 200,
+  rejectProxySets = false,
 }) {
   let now = 1_800_000_000_000;
   let targetId = '';
@@ -45,6 +48,11 @@ function createMainHarness({
   const handlers = new Map();
   const timers = [];
   const preferences = { bridge_port: port, bridge_token: token };
+  const managed = {
+    contents: managedBridge === undefined ? undefined : JSON.stringify(managedBridge),
+    reads: 0,
+    closedHandles: 0,
+  };
   const record = async (method, path, options) => {
     activeRequests += 1;
     maximumConcurrentRequests = Math.max(maximumConcurrentRequests, activeRequests);
@@ -57,6 +65,8 @@ function createMainHarness({
     if (path.endsWith('/result')) results.push(JSON.parse(options.data.payload));
     await Promise.resolve();
     activeRequests -= 1;
+    const statusCode = responseStatus(call);
+    if (statusCode >= 400) return { statusCode, data: {} };
     if (method === 'get') {
       if (idleBeforeFirstCommand && !firstCommandRead) {
         idle = true;
@@ -73,7 +83,31 @@ function createMainHarness({
     return { statusCode: 204, data: undefined };
   };
   const iina = {
-    preferences: { get: (key) => preferences[key] },
+    preferences: {
+      get: (key) => preferences[key],
+      set: (key, value) => {
+        preferences[key] = value;
+      },
+    },
+    file: {
+      exists: (path) => {
+        assert.equal(path, '@data/bridge.json');
+        return managed.contents !== undefined;
+      },
+      handle: (path, mode) => {
+        assert.equal(path, '@data/bridge.json');
+        assert.equal(mode, 'read');
+        return {
+          read: (count) => {
+            managed.reads += 1;
+            return new Uint8Array(Buffer.from(managed.contents).subarray(0, count));
+          },
+          close: () => {
+            managed.closedHandles += 1;
+          },
+        };
+      },
+    },
     event: { on: (name, handler) => handlers.set(name, handler) },
     http: {
       post: (path, options) => record('post', path, options),
@@ -104,6 +138,7 @@ function createMainHarness({
     },
     mpv: {
       getNumber: (name) => (name === 'volume-max' ? 130 : playlistPosition),
+      set: (name, value) => sideEffects.push({ type: name === 'mute' ? 'muted' : name, value }),
     },
     playlist: {
       count: () => playlistCount,
@@ -119,6 +154,15 @@ function createMainHarness({
     get: () => false,
     set: (value) => sideEffects.push({ type: 'muted', value }),
   });
+  if (rejectProxySets) {
+    // IINA 1.5.1 calls its native setter but its proxy trap returns undefined.
+    iina.core.audio = new Proxy(iina.core.audio, {
+      set: (target, key, value) => {
+        Reflect.set(target, key, value);
+        return false;
+      },
+    });
+  }
   const context = vm.createContext({
     iina,
     Date: { now: () => now },
@@ -132,6 +176,7 @@ function createMainHarness({
     commands,
     context,
     handlers,
+    managed,
     maximumConcurrentRequests: () => maximumConcurrentRequests,
     preferences,
     results,
@@ -317,6 +362,97 @@ test('IINA bridge settings are re-read and an invalid setup stays recoverable', 
 
   harness.handlers.get('iina.window-will-close')();
   await waitFor(() => harness.calls.some((call) => call.path.endsWith('/unregister')));
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+});
+
+test('IINA loads companion setup despite cached empty preferences without steady file reads', async () => {
+  const harness = createMainHarness({
+    port: 0,
+    token: '',
+    managedBridge: { port: 47623, token: BRIDGE_LENGTH_SENTINEL },
+  });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.timers.length === 1);
+  assert.equal(harness.calls.length, 2);
+  assert.equal(harness.preferences.bridge_port, 47623);
+  assert.equal(harness.preferences.bridge_token, BRIDGE_LENGTH_SENTINEL);
+  assert.equal(harness.managed.reads, 1);
+  assert.equal(harness.managed.closedHandles, 1);
+
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.calls.length === 4 && harness.timers.length === 1);
+  assert.equal(harness.managed.reads, 1, 'Healthy polls must not reread the setup file');
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+});
+
+test('IINA refreshes cached bridge settings after a rejected request without replay', async () => {
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    responseStatus: (call) => (call.path.startsWith('http://127.0.0.1:47623/') ? 401 : 200),
+  });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.calls.length === 1 && harness.timers.length === 1);
+  // Setup publishes a new file; IINA's in-memory preference dictionary stays stale.
+  harness.managed.contents = JSON.stringify({ port: 47624, token: BRIDGE_LENGTH_SENTINEL });
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.calls.length === 2 && harness.timers.length === 1);
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.calls.length >= 4 && harness.timers.length === 1);
+  assert.match(harness.calls[2].path, /^http:\/\/127\.0\.0\.1:47624\//);
+  assert.equal(harness.results.length, 0);
+  assert.equal(harness.sideEffects.length, 0);
+  assert.equal(harness.managed.reads, 1);
+  assert.equal(harness.managed.closedHandles, 1);
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+});
+
+test('IINA notices setup while waiting with cached empty preferences', async () => {
+  const harness = createMainHarness({ port: 0, token: '' });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.timers.length === 1);
+  assert.equal(harness.calls.length, 0);
+  harness.managed.contents = JSON.stringify({ port: 47623, token: BRIDGE_LENGTH_SENTINEL });
+  await resolveNextTimer(harness);
+  await waitFor(() => harness.calls.length === 2 && harness.timers.length === 1);
+  assert.equal(harness.managed.reads, 1);
+  assert.equal(harness.preferences.bridge_token, BRIDGE_LENGTH_SENTINEL);
+});
+
+test('IINA bounds managed setup reads and preserves valid manual preferences on invalid files', async () => {
+  for (const contents of ['{', ' '.repeat(4097), '{"port":0,"token":""}']) {
+    const harness = createMainHarness({ port: 47623, token: BRIDGE_LENGTH_SENTINEL });
+    harness.managed.contents = contents;
+    vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+    await waitFor(() => harness.calls.length === 2 && harness.timers.length === 1);
+    assert.equal(harness.preferences.bridge_port, 47623);
+    assert.equal(harness.preferences.bridge_token, BRIDGE_LENGTH_SENTINEL);
+    assert.equal(harness.managed.reads, 1);
+    assert.equal(harness.managed.closedHandles, 1);
+  }
+});
+
+test('IINA acknowledges effective volume controls when the core proxy rejects strict assignments', async () => {
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    rejectProxySets: true,
+    commands: [
+      { requestId: 'positive-gain', targetId: '$current', action: 'setVolume', value: 1.2 },
+      { requestId: 'zero-gain', targetId: '$current', action: 'setVolume', value: 0 },
+    ],
+  });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => harness.results.length === 2 && harness.timers.length === 1);
+  assert.deepEqual(
+    harness.results.map((value) => value.ok),
+    [true, true],
+  );
+  assert.deepEqual(harness.sideEffects, [
+    { type: 'volume', value: 120 },
+    { type: 'muted', value: false },
+    { type: 'volume', value: 0 },
+  ]);
   assert.equal(harness.maximumConcurrentRequests(), 1);
 });
 

@@ -21,10 +21,28 @@ public struct MediaIntegrationInstaller {
     /// Writes private configuration and returns a package for IINA's own permission/enablement flow.
     public func prepareIINA(configuration: MediaBridgeConfiguration) throws -> URL {
         let package = resources.appendingPathComponent("SofaRemote.iinaplgz")
-        let pluginRoot = applicationSupport.appendingPathComponent("com.colliderli.iina/plugins")
-        let preferences = pluginRoot.appendingPathComponent(".preferences")
-            .appendingPathComponent(Self.pluginID + ".plist")
         try requireRegularFile(package)
+        try writeIINAConfiguration(configuration)
+        return package
+    }
+
+    /// Refreshes an existing opt-in when the companion restores its bridge.
+    public func synchronizeIINAIfConfigured(configuration: MediaBridgeConfiguration) throws {
+        guard files.fileExists(atPath: iinaPreferences.path) else { return }
+        try writeIINAConfiguration(configuration)
+    }
+
+    private var iinaPluginRoot: URL {
+        applicationSupport.appendingPathComponent("com.colliderli.iina/plugins")
+    }
+
+    private var iinaPreferences: URL {
+        iinaPluginRoot.appendingPathComponent(".preferences")
+            .appendingPathComponent(Self.pluginID + ".plist")
+    }
+
+    private func writeIINAConfiguration(_ configuration: MediaBridgeConfiguration) throws {
+        let preferences = iinaPreferences
         try ensureDirectory(preferences.deletingLastPathComponent())
         try rejectLink(preferences)
         var values: [String: Any] = [:]
@@ -40,8 +58,14 @@ public struct MediaIntegrationInstaller {
         values["bridge_token"] = configuration.token
         let data = try PropertyListSerialization.data(
             fromPropertyList: values, format: .binary, options: 0)
+        // IINA caches its preference dictionary. Its @data folder is readable
+        // through the existing plugin API without a file-system permission.
+        let managed = iinaPluginRoot.appendingPathComponent(".data")
+            .appendingPathComponent(Self.pluginID).appendingPathComponent("bridge.json")
+        try ensureDirectory(managed.deletingLastPathComponent())
+        try rejectLink(managed)
         try writePrivate(data, to: preferences)
-        return package
+        try writePrivate(JSONEncoder().encode(configuration), to: managed)
     }
 
     public func installChrome() throws -> URL {

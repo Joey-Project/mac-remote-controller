@@ -62,6 +62,10 @@ final class MediaIntegrationInstallerTests: XCTestCase {
         XCTAssertEqual(preferences["bridge_port"] as? Int, 47_623)
         XCTAssertEqual(preferences["bridge_token"] as? String, fixtureToken)
         XCTAssertEqual(try permissions(preferenceFile), 0o600)
+        let managed = try JSONDecoder().decode(
+            MediaBridgeConfiguration.self, from: Data(contentsOf: managedIINAConfiguration))
+        XCTAssertEqual(managed, config)
+        XCTAssertEqual(try permissions(managedIINAConfiguration), 0o600)
         XCTAssertEqual(try String(contentsOf: unrelated, encoding: .utf8), "untouched")
         XCTAssertEqual(
             try Data(contentsOf: installedEntry), Data("installed version".utf8))
@@ -77,6 +81,47 @@ final class MediaIntegrationInstallerTests: XCTestCase {
         let plugin = support.appendingPathComponent(
             "com.colliderli.iina/plugins/\(MediaIntegrationInstaller.pluginID).iinaplugin")
         XCTAssertFalse(files.fileExists(atPath: plugin.path))
+    }
+
+    func testIINAConfigurationSynchronizationDoesNotCreateAnOptIn() throws {
+        try installer.synchronizeIINAIfConfigured(
+            configuration: MediaBridgeConfiguration(port: 47_623, token: fixtureToken))
+        XCTAssertFalse(files.fileExists(atPath: managedIINAConfiguration.path))
+        XCTAssertFalse(files.fileExists(atPath: support.path))
+    }
+
+    func testExistingIINASetupIsRefreshedWhenTheCompanionRestarts() throws {
+        _ = try installer.prepareIINA(
+            configuration: MediaBridgeConfiguration(port: 47_623, token: fixtureToken))
+        let configuration = MediaBridgeConfiguration(port: 47_624, token: fixtureToken)
+        try installer.synchronizeIINAIfConfigured(configuration: configuration)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                MediaBridgeConfiguration.self, from: Data(contentsOf: managedIINAConfiguration)),
+            configuration)
+        XCTAssertEqual(try permissions(managedIINAConfiguration), 0o600)
+    }
+
+    func testLinkedIINADataDirectoryDoesNotChangePreferencesOrExternalContents() throws {
+        _ = try installer.prepareIINA(
+            configuration: MediaBridgeConfiguration(port: 47_623, token: fixtureToken))
+        let preferences = support.appendingPathComponent(
+            "com.colliderli.iina/plugins/.preferences/\(MediaIntegrationInstaller.pluginID).plist")
+        let before = try Data(contentsOf: preferences)
+        let external = root.appendingPathComponent("other-plugin-data")
+        try files.createDirectory(at: external, withIntermediateDirectories: true)
+        let sentinel = external.appendingPathComponent("keep.txt")
+        try Data("keep".utf8).write(to: sentinel)
+        try files.removeItem(at: managedIINAConfiguration.deletingLastPathComponent())
+        try files.createSymbolicLink(
+            at: managedIINAConfiguration.deletingLastPathComponent(), withDestinationURL: external)
+
+        XCTAssertThrowsError(
+            try installer.synchronizeIINAIfConfigured(
+                configuration: MediaBridgeConfiguration(port: 47_624, token: fixtureToken)))
+        XCTAssertEqual(try Data(contentsOf: preferences), before)
+        XCTAssertEqual(try files.contentsOfDirectory(atPath: external.path), ["keep.txt"])
+        XCTAssertEqual(try Data(contentsOf: sentinel), Data("keep".utf8))
     }
 
     func testChromeInstallsStableHelperAndExactOriginWithoutChangingOtherHosts() throws {
@@ -130,6 +175,10 @@ final class MediaIntegrationInstallerTests: XCTestCase {
     }
 
     private var support: URL { home.appendingPathComponent("Library/Application Support") }
+    private var managedIINAConfiguration: URL {
+        support.appendingPathComponent(
+            "com.colliderli.iina/plugins/.data/\(MediaIntegrationInstaller.pluginID)/bridge.json")
+    }
     private var installer: MediaIntegrationInstaller {
         MediaIntegrationInstaller(home: home, resources: resources, helper: helper)
     }

@@ -3,7 +3,7 @@ id: 20261024-media-01a1464a
 title: Native Media Adapters for IINA and Chrome
 status: active
 created: 2026-10-24
-updated: 2026-11-09
+updated: 2026-11-14
 branch: codex/ready-media-ui-tests
 pr:
 supersedes: []
@@ -100,9 +100,10 @@ superseded_by:
   local bridge, supported tab and correlated command results after the current
   touchpad priority. Do not replace or reload the user's installation as part
   of merely recording this report.
-- The user reported an intermittent IINA disconnect after successful setup and
-  explicitly deferred it while Wi-Fi pointer smoothness takes priority. Keep the
-  current media UI and volume behavior unchanged during input performance repairs.
+- The IINA follow-up established a stale bridge credential and IINA's cached
+  preferences, then reproduced strict-mode volume proxy failures in real IINA.
+  Recovery and real-player acceptance are tracked in the
+  [IINA recovery workstream](../11/2026-11-14-iina-recovery-01a1464a.md).
 - Expose seek duration in a future settings screen if needed; keep it out of the
   compact media control row.
 - Follow the stack acceptance procedure after review and CI. Install only the

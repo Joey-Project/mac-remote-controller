@@ -5,7 +5,7 @@ into this plugin's private local preferences, preserving other settings, and ope
 the bundled package in IINA. Confirm IINA's installation and permission prompt;
 IINA then installs and enables the plugin. No token copying is needed. For an
 existing plugin, approve replacement and choose **Plugin → Reload All Plugins**
-or restart IINA to reload its cached preferences. Open a video, then select its
+or restart IINA to load the updated plugin code. Open a video, then select its
 IINA media source on the phone. The companion remembers the bridge opt-in across
 relaunches; disabling it keeps it off on subsequent launches.
 
@@ -47,12 +47,19 @@ request path. The plugin sends one `payload` field containing the JSON message;
 the loopback bridge accepts this bounded single-field form only on IINA POST
 routes. Chrome continues to send JSON directly.
 
-The token is stored only in local plugin preferences and companion-owned
-mode-0600 configuration. It is not sent to web pages and is not written to
-plugin logs. Each polling cycle rereads the port and token preferences. Missing
-or invalid settings cause no bridge request; the plugin keeps waiting and uses
-updated settings on its next cycle, so fixing the preference does not require
-reinstalling or restarting the plugin.
+The token is stored only in local plugin preferences and private mode-0600
+configuration. It is not sent to web pages or written to plugin logs. **Set Up
+IINA** also writes `@data/bridge.json` in this plugin's private data directory.
+The companion refreshes this file when restoring an already configured bridge.
+IINA caches its preferences in memory, so the plugin reads the managed file on
+startup and after a failed bridge request, then updates only its cached port
+and token. Healthy polling adds no file reads. A bridge restart or credential
+change therefore does not require another plugin restart.
+
+Each polling cycle still reads the cached port/token preferences, preserving
+manual setup when no managed file exists. Missing or invalid settings cause no
+bridge request; while waiting, the plugin also checks for newly published setup.
+Managed reads are bounded to 4 KiB and need no additional plugin permission.
 
 When the queue is empty, the plugin polls every 250 ms. Each poll refreshes the
 target and drains up to eight queued commands without a per-command polling
