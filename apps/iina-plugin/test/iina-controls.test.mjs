@@ -670,6 +670,33 @@ test('IINA serializes shutdown and discards commands delivered after the window 
   assert.equal(harness.calls.length, count);
 });
 
+test('IINA stops draining the command queue when a window closes during result delivery', async () => {
+  let release;
+  const harness = createMainHarness({
+    port: 47623,
+    token: BRIDGE_LENGTH_SENTINEL,
+    commands: [
+      { requestId: 'applied-before-close', targetId: '$current', action: 'playPause' },
+      { requestId: 'must-stay-queued', targetId: '$current', action: 'playPause' },
+    ],
+    beforeResponse: (call) =>
+      call.path.endsWith('/result')
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve(),
+  });
+  vm.runInContext(await loadMainSource(), harness.context, { timeout: 1_000 });
+  await waitFor(() => release !== undefined);
+  harness.handlers.get('iina.window-will-close')();
+  release();
+  await waitFor(() => harness.calls.some((call) => call.path.endsWith('/unregister')));
+  assert.equal(harness.calls.filter((call) => call.path.includes('/next?')).length, 1);
+  assert.equal(harness.commands.length, 1);
+  assert.deepEqual(harness.sideEffects, ['pause']);
+  assert.equal(harness.maximumConcurrentRequests(), 1);
+});
+
 test('IINA distinguishes missing setup, idle playback, and bridge HTTP failures', async () => {
   const missing = createMainHarness({ port: 0, token: '' });
   vm.runInContext(await loadMainSource(), missing.context, { timeout: 1_000 });

@@ -171,7 +171,7 @@ async function pollOnce(configuration: { port: number; token: string }): Promise
   await request(baseURL, configuration.token, 'post', '/update', state.target);
   if (disconnected) return 0;
   let completed = 0;
-  while (completed < maximumCommandsPerPoll) {
+  while (!disconnected && completed < maximumCommandsPerPoll) {
     const result = await request<{
       command?: { requestId: string; targetId: string; action: string; value?: number };
     }>(baseURL, configuration.token, 'get', `/next?targetId=${encodeURIComponent(targetId)}`);
