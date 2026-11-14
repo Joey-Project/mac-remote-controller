@@ -58,6 +58,9 @@ final class MediaAdapterController {
             isEnabled = true
             token = configuration.token
             message = "Listening on 127.0.0.1:\(configuration.port)."
+            do {
+                try integrationInstaller().synchronizeIINAIfConfigured(configuration: configuration)
+            } catch { setupMessage = error.localizedDescription }
             onTargetsChanged?(mediaTargets)
         } catch {
             isEnabled = false
