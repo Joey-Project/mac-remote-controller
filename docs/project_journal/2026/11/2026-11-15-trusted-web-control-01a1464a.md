@@ -5,7 +5,7 @@ status: active
 created: 2026-11-15
 updated: 2026-11-15
 branch: codex/web-remote-20261115
-pr:
+pr: https://github.com/Joey-Project/mac-remote-controller/pull/37
 supersedes: []
 superseded_by:
 ---
@@ -60,6 +60,9 @@ superseded_by:
 - Certificate/key loading runs off the main actor. Replacement material is
   preloaded before listener restart. The separate daily Certbot check uses a
   private local runtime and leaves the phone-renewal automation untouched.
+  Oversized historical Certbot logs are trimmed before the next attempt so a
+  verbose failure cannot permanently exhaust renewal's log budget; unrelated
+  files and symlink targets remain untouched.
 - Domain/account identifiers, keys, tokens and certificates stay in private
   local configuration, outside Git. Setup and maintenance are documented under
   `tooling/web_remote/`.

@@ -124,7 +124,11 @@ renewal automation, wake/unlock either device, or run before user login.
 
 `certificate-status.json` records check time, exit code and whether the leaf
 certificate changed. Private provider logs have a size budget; command output
-is capped at 256 KiB and each attempt at four minutes. SIGTERM retires the owned
+is capped at 256 KiB and each attempt at four minutes. If historical logs exceed
+the budget, the next attempt first trims only owned private regular Certbot logs;
+it preserves unrelated files, rejects symlinks, and keeps the separate bounded
+command output. Old verbose failures cannot permanently starve renewal.
+SIGTERM retires the owned
 Certbot process group. A successful check with `certificateChanged: false` is
 not evidence of a renewed expiration date. The companion checks chain content
 once a minute, preloads replacement TLS material, and then reopens its listener.

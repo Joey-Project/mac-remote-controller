@@ -17,6 +17,41 @@ SPEC.loader.exec_module(maintenance)
 
 
 class MaintenanceTests(unittest.TestCase):
+    def test_oversized_history_does_not_starve_later_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            logs = root / "logs"
+            logs.mkdir(mode=0o700)
+            for name in ("letsencrypt.log", "letsencrypt.log.1"):
+                path = logs / name
+                path.touch(mode=0o600)
+                with path.open("wb") as output:
+                    output.truncate(maintenance.LOG_BUDGET)
+            unrelated = logs / "operator-note.txt"
+            unrelated.write_text("keep this diagnostic")
+            for _ in range(2):
+                code = maintenance.bounded_run(
+                    [sys.executable, "-c", "raise SystemExit(7)"],
+                    root / "output", logs, seconds=5,
+                )
+                self.assertEqual(code, 7)
+            self.assertLessEqual(sum(path.stat().st_size for path in logs.iterdir()),
+                                 maintenance.LOG_BUDGET)
+            self.assertEqual(unrelated.read_text(), "keep this diagnostic")
+
+    def test_log_recovery_never_follows_a_managed_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            logs = root / "logs"
+            logs.mkdir(mode=0o700)
+            outside = root / "keep"
+            outside.write_bytes(b"unrelated contents")
+            (logs / "letsencrypt.log").symlink_to(outside)
+            with self.assertRaises(ValueError):
+                maintenance.bounded_run([sys.executable, "-c", "raise SystemExit(7)"],
+                                        root / "output", logs, seconds=5)
+            self.assertEqual(outside.read_bytes(), b"unrelated contents")
+
     def test_sigterm_retires_the_owned_certbot_child(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -26,7 +61,7 @@ class MaintenanceTests(unittest.TestCase):
             certificate.parent.mkdir(parents=True)
             certificate.write_bytes(b"test certificate")
             (root / "cloudflare-credentials.ini").touch(mode=0o600)
-            (root / "acme-production-logs").mkdir()
+            (root / "acme-production-logs").mkdir(mode=0o700)
             child_script = root / "child.py"
             child_script.write_text(
                 "import os, pathlib, time\n"
@@ -64,7 +99,7 @@ class MaintenanceTests(unittest.TestCase):
             root = Path(directory)
             output = root / "output"
             logs = root / "logs"
-            logs.mkdir()
+            logs.mkdir(mode=0o700)
             code = maintenance.bounded_run(
                 [sys.executable, "-c", "import time; time.sleep(30)"], output, logs, seconds=0.1,
             )
@@ -79,7 +114,7 @@ class MaintenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             logs = root / "logs"
-            logs.mkdir()
+            logs.mkdir(mode=0o700)
             code = maintenance.bounded_run(
                 [sys.executable, "-c", "raise SystemExit(7)"], root / "output", logs, seconds=5,
             )

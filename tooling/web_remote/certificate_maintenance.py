@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import selectors
 import signal
 import stat
@@ -15,9 +16,15 @@ import subprocess
 import tempfile
 import time
 
+LOG_BUDGET = 2 * 1024 * 1024
+CERTBOT_LOG = re.compile(r"letsencrypt\.log(?:\.[0-9]+)?\Z")
+
 
 def require_private(path: Path, *, directory: bool = False) -> None:
-    metadata = path.lstat()
+    require_private_metadata(path.lstat(), directory=directory)
+
+
+def require_private_metadata(metadata, *, directory: bool = False) -> None:
     expected_type = stat.S_ISDIR if directory else stat.S_ISREG
     if (
         not expected_type(metadata.st_mode)
@@ -25,6 +32,45 @@ def require_private(path: Path, *, directory: bool = False) -> None:
         or stat.S_IMODE(metadata.st_mode) & 0o077
     ):
         raise ValueError("Expected an owned private directory or file.")
+
+
+def log_entries(directory: int):
+    """Bound the scan and reject managed symlinks rather than following them."""
+    files = []
+    with os.scandir(directory) as entries:
+        for index, entry in enumerate(entries):
+            if index >= 1024:
+                raise ValueError("Unexpected certificate log inventory.")
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                # Certbot may rotate a file while the active attempt is measured.
+                continue
+            if CERTBOT_LOG.fullmatch(entry.name):
+                require_private_metadata(metadata)
+            if stat.S_ISREG(metadata.st_mode):
+                files.append((entry.name, metadata.st_size))
+    return files
+
+
+def recover_log_budget(directory: int) -> None:
+    files = log_entries(directory)
+    if sum(size for _, size in files) <= LOG_BUDGET:
+        return
+    for name, _ in files:
+        if not CERTBOT_LOG.fullmatch(name):
+            continue
+        descriptor = os.open(name, os.O_WRONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        try:
+            # Trim only this opened, owned, private regular log object. Other
+            # files and symlink targets are untouched; timestamp changes do not
+            # affect this access policy. The separate bounded output is retained.
+            require_private_metadata(os.fstat(descriptor))
+            os.ftruncate(descriptor, 0)
+        finally:
+            os.close(descriptor)
+    if sum(size for _, size in log_entries(directory)) > LOG_BUDGET:
+        raise ValueError("Non-Certbot files exceed the certificate log budget.")
 
 
 def terminate(child: subprocess.Popen) -> None:
@@ -36,6 +82,18 @@ def terminate(child: subprocess.Popen) -> None:
 
 def bounded_run(command: list[str], output_path: Path, logs: Path, seconds: float = 240) -> int:
     """Retain at most 256 KiB of output; terminate on deadline or a 2 MiB log budget."""
+    directory = os.open(logs, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        require_private_metadata(os.fstat(directory), directory=True)
+        # Recover before spawning: previous verbose failures cannot starve every
+        # later renewal attempt before Certbot gets a chance to rotate its logs.
+        recover_log_budget(directory)
+        return run_child(command, output_path, directory, seconds)
+    finally:
+        os.close(directory)
+
+
+def run_child(command: list[str], output_path: Path, directory: int, seconds: float) -> int:
     child = subprocess.Popen(
         command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, start_new_session=True,
@@ -48,8 +106,8 @@ def bounded_run(command: list[str], output_path: Path, logs: Path, seconds: floa
     try:
         with output_path.open("wb") as output:
             while selector.get_map():
-                internal_bytes = sum(path.stat().st_size for path in logs.iterdir() if path.is_file())
-                if time.monotonic() - started >= seconds or internal_bytes > 2 * 1024 * 1024:
+                internal_bytes = sum(size for _, size in log_entries(directory))
+                if time.monotonic() - started >= seconds or internal_bytes > LOG_BUDGET:
                     stopped = True
                     break
                 for key, _ in selector.select(timeout=0.2):
