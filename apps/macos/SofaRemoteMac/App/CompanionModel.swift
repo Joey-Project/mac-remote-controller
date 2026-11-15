@@ -3,6 +3,7 @@ import Foundation
 import MacSupport
 import Network
 import Observation
+import WebRemoteSupport
 
 @MainActor
 @Observable
@@ -23,6 +24,7 @@ final class CompanionModel {
     let sessionDisplay = SessionDisplayController()
     var pendingSessionControlID: UUID?
     let phoneRecovery = PhoneRecoveryController()
+    let webRemote = WebRemoteController()
     @ObservationIgnored var numericPairing: NumericPairingCoordinator?
     @ObservationIgnored let numericPairingWindow = NumericPairingWindowController()
 
@@ -57,6 +59,7 @@ final class CompanionModel {
             unlockController.onChange = { [weak self] in self?.refreshStateAndBroadcast() }
             unlockController.refreshIfDue()
             try startListener()
+            configureWebRemote()
             let pairedTokens: () -> [(id: String, token: String)] = { [weak self] in
                 self?.pairedDevices.map { (id: $0.id, token: $0.token) } ?? []
             }
@@ -91,6 +94,7 @@ final class CompanionModel {
             return false
         }
         numericPairing?.cancel()
+        webRemote.stop()
         heldPointerOwner = nil
         sessionDisplay.endRemoteControl()
         timer?.invalidate()
@@ -143,6 +147,8 @@ final class CompanionModel {
         let peer = WebSocketPeer(connection: connection)
         accept(peer)
     }
+
+    func acceptWebRemote(_ peer: WebSocketRemotePeer) { accept(peer) }
 
     private func accept(_ peer: RemotePeer) {
         let id = UUID()
@@ -282,6 +288,7 @@ extension CompanionModel {
         }.map { $0.value }
         for client in expired { client.peer.close() }
         numericPairing?.tick()
+        webRemote.tick()
         releaseExpiredInput(at: now)
         retryPendingHeldInputReleases()
     }

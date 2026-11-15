@@ -40,6 +40,10 @@ export class RemoteInputBuffer {
     private readonly onFailure: () => void,
   ) {}
 
+  get heldButtons(): readonly PointerButton[] {
+    return Array.from(this.held);
+  }
+
   connect(sender: (command: InputCommand) => boolean): void {
     this.disconnect();
     this.sender = sender;

@@ -7,8 +7,10 @@ Bilibili. The Apple clients implement local pairing, desktop controls, system
 volume, and typed controls for explicitly selected media sources. Android does
 not yet implement the media adapters.
 
-`apps/web-remote/` is an offline browser interaction preview only; it has no
-Mac connection, pairing, or control transport.
+`apps/web-remote/` includes a separate live LAN client with trusted HTTPS,
+four-digit pairing, touchpad/keyboard controls, system volume, and reconnect.
+The original offline interaction preview remains available. See
+[Web setup](tooling/web_remote/README.md) for private DNS and certificate setup.
 
 The Mac menu-bar **Setup & Recovery** section also contains experimental
 [remote-unlock helper management and manual phone recovery](apps/macos/UnlockRuntime/README.md).
@@ -30,12 +32,14 @@ apps/
   android/            Kotlin and Jetpack Compose app
   chrome-extension/   TypeScript Manifest V3 extension and Native Messaging proxy
   iina-plugin/        TypeScript IINA plugin package
-  web-remote/         Offline browser UI preview (no Mac connection)
+  web-remote/         Live LAN remote and separate offline UI preview
 packages/
   apple-core/         Shared Swift package
+  web-gateway/        Mac-only HTTPS/WSS and browser pairing
   protocol/           Versioned wire contract and cross-client fixtures
 tooling/
   swift/              Shared Apple checks and SwiftLint bootstrap
+  web_remote/         Private Web setup, certificate checks, and transport tests
 ```
 
 Each app and the Swift package keep their build/cache rules in a local
@@ -50,14 +54,14 @@ IDE settings, caches, and signing material are ignored; none are tracked.
 
 ## Repository checks
 
-| Area             | Formatting             | Static checks            | Compiler and tests                                   |
-| ---------------- | ---------------------- | ------------------------ | ---------------------------------------------------- |
-| Repository       | Prettier               | Markdownlint, actionlint | Shell validation for repository scripts              |
-| Swift            | Xcode's `swift format` | SwiftLint                | Shared package tests; macOS and iOS Simulator builds |
-| Chrome extension | Prettier               | Type-aware Oxlint        | Strict `tsc`; unit tests; extension bundle           |
-| IINA plugin      | Prettier               | Oxlint                   | Strict `tsc`; mock tests; plugin bundle              |
-| Web preview      | Prettier               | Oxlint                   | Strict `tsc`; offline-boundary tests; static bundle  |
-| Android          | ktlint                 | Android Lint             | Kotlin compilation; debug APK                        |
+| Area             | Formatting             | Static checks            | Compiler and tests                                       |
+| ---------------- | ---------------------- | ------------------------ | -------------------------------------------------------- |
+| Repository       | Prettier               | Markdownlint, actionlint | Shell validation for repository scripts                  |
+| Swift            | Xcode's `swift format` | SwiftLint                | Shared package tests; macOS and iOS Simulator builds     |
+| Chrome extension | Prettier               | Type-aware Oxlint        | Strict `tsc`; unit tests; extension bundle               |
+| IINA plugin      | Prettier               | Oxlint                   | Strict `tsc`; mock tests; plugin bundle                  |
+| Web client       | Prettier               | Oxlint                   | Strict `tsc`; input/lifecycle and offline-boundary tests |
+| Android          | ktlint                 | Android Lint             | Kotlin compilation; debug APK                            |
 
 Swift and Kotlin compilation provide their type checks. The iOS target includes
 both iPhone and iPad; macOS has its own app target and lifecycle.

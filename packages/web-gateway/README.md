@@ -1,11 +1,14 @@
 # Web Remote Support
 
-Mac-only foundations for a browser-trusted HTTPS remote endpoint. Native
+Mac-only browser-trusted HTTPS/WSS remote endpoint. Native
 AppleCore transport and helper dependencies remain separate.
 
-This package currently validates explicit private-LAN endpoint configuration and
-publishes changes to one verified Cloudflare DNS-only A record. It does not yet
-start an HTTPS listener or authorize browser commands.
+The gateway validates an explicit private-LAN binding, uses a dedicated SwiftNIO
+I/O thread, serves bounded same-origin requests, and grants an input-only Web
+peer after Mac-displayed four-digit pairing. Secure HttpOnly cookies never enter
+wire messages. Native command ordering, paired-device revocation and held-input
+cleanup are reused by the companion. Browser peers cannot request privileged
+session/display operations or media/system shortcuts.
 
 The DNS publisher requires a separately supplied token. Tokens are not part of
 the Codable configuration and must not be logged or committed. Callers must
@@ -16,5 +19,9 @@ backoff after errors, and re-read an ambiguously updated record before retrying.
 swift test --package-path packages/web-gateway
 ```
 
-Live transport and certificate maintenance must be completed and tested before
-this package can provide no-install Mac control.
+`SofaRemoteWebFixture` exercises the same transport with in-memory authorization
+and mock effects. It never imports AppKit or posts desktop events. Its explicit
+loopback test mode is not used by the Mac app. Apple CI drives real TLS/HTTP/WSS
+with an ephemeral trusted test certificate, including release and revocation.
+
+See [Web setup and certificate maintenance](../../tooling/web_remote/README.md).

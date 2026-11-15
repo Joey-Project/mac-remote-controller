@@ -5,7 +5,7 @@ public enum WebRoute: Equatable, Sendable {
     case status
     case pairingStart
     case pairingConfirm
-    case disconnect
+    case forget
     case socket
 }
 
@@ -58,7 +58,7 @@ public struct WebRequestPolicy: Sendable {
         switch uri {
         case "/api/pairing/start": return .pairingStart
         case "/api/pairing/confirm": return .pairingConfirm
-        case "/api/disconnect": return .disconnect
+        case "/api/pairing/forget": return .forget
         default: return nil
         }
     }

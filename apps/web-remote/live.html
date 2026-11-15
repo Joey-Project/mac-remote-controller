@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101114" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Sofa Remote</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main class="remote">
+      <header class="topbar">
+        <div class="identity">
+          <strong id="mac-name">Sofa Remote</strong
+          ><span id="status" role="status">Connecting…</span>
+        </div>
+        <nav aria-label="Control mode">
+          <button id="touchpad-mode" class="selected" aria-pressed="true">Touchpad</button>
+          <button id="keyboard-mode" aria-pressed="false">Keyboard</button>
+        </nav>
+        <details id="menu">
+          <summary aria-label="Remote menu">•••</summary>
+          <div class="menu-panel">
+            <label><input id="show-volume" type="checkbox" /> Volume on touchpad</label>
+            <button id="connect">Reconnect</button>
+            <button id="disconnect">Disconnect</button>
+            <button id="forget" class="destructive">Forget pairing</button>
+          </div>
+        </details>
+      </header>
+      <p id="error" role="alert" hidden></p>
+      <section id="pairing" class="pairing" hidden aria-label="Pair this browser">
+        <h1>Pair with your Mac</h1>
+        <p>Keep the Mac unlocked. Enter the four-digit code it displays.</p>
+        <form id="start-pairing">
+          <label for="browser-name">Browser name</label>
+          <input id="browser-name" value="Web browser" maxlength="64" autocomplete="off" />
+          <button type="submit">Show code on Mac</button>
+        </form>
+        <form id="confirm-pairing" hidden>
+          <label for="pairing-code">Code shown on your Mac</label>
+          <input
+            id="pairing-code"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]{4}"
+            maxlength="4"
+            autocomplete="one-time-code"
+            required
+          />
+          <button type="submit">Pair & connect</button>
+        </form>
+      </section>
+      <section id="controls" class="controls" aria-label="Remote controls" inert>
+        <section id="volume" class="volume" hidden aria-label="System volume">
+          <label for="volume-range">System volume</label><output id="volume-value">—</output>
+          <input id="volume-range" type="range" min="0" max="100" step="1" value="0" disabled />
+        </section>
+        <section id="touchpad-panel" class="touchpad-panel">
+          <div
+            id="touch-surface"
+            class="touch-surface"
+            role="application"
+            tabindex="0"
+            aria-label="Mac touchpad: one finger moves, two fingers scroll or tap for right click, three fingers drag"
+          >
+            <div class="pad-mark" aria-hidden="true">⌁</div>
+            <p>
+              One finger to move<br />Two fingers to scroll or tap for right click<br />Three
+              fingers to drag
+            </p>
+          </div>
+          <div class="clicks">
+            <button data-button="left">Click</button
+            ><button data-button="right">Right click</button>
+          </div>
+        </section>
+        <section id="keyboard-panel" class="keyboard-panel" hidden aria-label="Mac keyboard">
+          <form id="send-text">
+            <label for="text-input">Text to send to Mac</label>
+            <textarea
+              id="text-input"
+              rows="3"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+            ></textarea>
+            <button id="send-text-button" type="submit">Send text</button>
+          </form>
+          <div class="keys" aria-label="Control keys">
+            <button data-key="escape">Esc</button><button data-key="return">Return</button>
+            <button data-key="space">Space</button><button data-key="backspace">⌫ Backspace</button>
+          </div>
+          <div class="arrows" aria-label="Arrow keys">
+            <button data-key="up" aria-label="Up arrow">↑</button>
+            <button data-key="left" aria-label="Left arrow">←</button>
+            <button data-key="down" aria-label="Down arrow">↓</button>
+            <button data-key="right" aria-label="Right arrow">→</button>
+          </div>
+        </section>
+      </section>
+      <noscript>JavaScript is required to use the remote.</noscript>
+    </main>
+  </body>
+</html>

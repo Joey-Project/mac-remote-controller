@@ -31,8 +31,10 @@
 - [pending] Further UX: configurable seek duration in Settings, reconnect and
   permission guidance, Dynamic Type and VoiceOver acceptance, and physical iPad
   rotation/multitasking acceptance.
-- [pending] No-install control: evaluate a real Web client or App Clip. The
-  existing Web package is only an offline interaction preview; trust and endpoint
-  design remain prerequisites for real control.
+- [in_progress] No-install control: the trusted LAN Web client implements
+  four-digit pairing, pointer/keyboard/system-volume controls and reconnect.
+  Complete physical Safari/multitouch acceptance and real Mac effect checks;
+  retain App Clip evaluation as a later alternative.
+  [Web workstream](project_journal/2026/11/2026-11-15-trusted-web-control-01a1464a.md).
 - [pending] Implement actual Android pairing, connection and remote control;
   the current Kotlin/Compose app remains a scaffold.

@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""Exercise real TLS/HTTP/WebSocket framing against a desktop-free Swift fixture."""
+
+import argparse
+import base64
+import hashlib
+import http.client
+import json
+import os
+from pathlib import Path
+import signal
+import socket
+import ssl
+import struct
+import subprocess
+import tempfile
+import time
+import uuid
+
+
+class SocketClient:
+    def __init__(self, context, port, authority, origin, cookie=None):
+        self.socket = context.wrap_socket(
+            socket.create_connection(("127.0.0.1", port), timeout=3),
+            server_hostname="remote.example.test",
+        )
+        key = base64.b64encode(os.urandom(16)).decode()
+        lines = [
+            "GET /remote HTTP/1.1", f"Host: {authority}", f"Origin: {origin}",
+            "Upgrade: websocket", "Connection: Upgrade", "Sec-WebSocket-Version: 13",
+            f"Sec-WebSocket-Key: {key}",
+        ]
+        if cookie:
+            lines.append(f"Cookie: {cookie}")
+        self.socket.sendall(("\r\n".join(lines) + "\r\n\r\n").encode())
+        response = bytearray()
+        while not response.endswith(b"\r\n\r\n") and len(response) < 8192:
+            try:
+                response.extend(self.exact(1))
+            except EOFError:
+                break
+        self.upgraded = response.startswith(b"HTTP/1.1 101 ")
+        if self.upgraded:
+            expected = base64.b64encode(hashlib.sha1(
+                (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()
+            ).digest())
+            assert expected in response, "Invalid WebSocket upgrade digest"
+
+    def exact(self, count):
+        value = bytearray()
+        while len(value) < count:
+            part = self.socket.recv(count - len(value))
+            if not part:
+                raise EOFError("Socket closed")
+            value.extend(part)
+        return bytes(value)
+
+    def send(self, value):
+        payload = json.dumps(value, separators=(",", ":")).encode()
+        mask = os.urandom(4)
+        length = len(payload)
+        header = bytes([0x81, 0x80 | length]) if length < 126 else (
+            bytes([0x81, 0xFE]) + struct.pack("!H", length)
+        )
+        self.socket.sendall(header + mask + bytes(
+            byte ^ mask[index % 4] for index, byte in enumerate(payload)
+        ))
+
+    def receive(self):
+        first, second = self.exact(2)
+        assert not second & 0x80, "Server must not mask frames"
+        count = second & 0x7F
+        if count == 126:
+            count = struct.unpack("!H", self.exact(2))[0]
+        if count == 127:
+            count = struct.unpack("!Q", self.exact(8))[0]
+        assert count <= 65536
+        data = self.exact(count)
+        return first & 0x0F, data
+
+    def message(self):
+        opcode, data = self.receive()
+        assert opcode == 1, "Expected a text message"
+        value = json.loads(data)
+        assert "authToken" not in value, "Credential escaped into JavaScript"
+        return value
+
+    def close(self):
+        self.socket.close()
+
+
+def wait_for(predicate, seconds=5):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        result = predicate()
+        if result:
+            return result
+        time.sleep(0.02)
+    raise AssertionError("Fixture condition timed out")
+
+
+def exercise(fixture, assets, root):
+    certificate = root / "certificate.pem"
+    key = root / "key.pem"
+    subprocess.run([
+        "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+        "-subj", "/CN=remote.example.test", "-addext",
+        "subjectAltName=DNS:remote.example.test,IP:127.0.0.1",
+        "-keyout", str(key), "-out", str(certificate),
+    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+    key.chmod(0o600)
+    with socket.socket() as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    authority = f"remote.example.test:{port}"
+    origin = f"https://{authority}"
+    evidence = root / "evidence.json"
+    configuration = root / "fixture.json"
+    configuration.write_text(json.dumps({
+        "endpoint": {"hostname": "remote.example.test", "port": port,
+                     "bindAddress": "192.168.1.10", "certificateChain": str(certificate),
+                     "privateKey": str(key)},
+        "assetsDirectory": str(assets), "evidenceFile": str(evidence),
+        "loopbackOnly": True, "restartOnce": True,
+    }))
+    context = ssl.create_default_context(cafile=str(certificate))
+    context.minimum_version = ssl.TLSVersion.TLSv1_3
+    child = subprocess.Popen([str(fixture), str(configuration)], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def state():
+        return json.loads(evidence.read_text()) if evidence.exists() else {}
+
+    def request(method, path, body=None, cookie=None, source=origin):
+        headers = {"Host": authority}
+        if source:
+            headers["Origin"] = source
+        if cookie:
+            headers["Cookie"] = cookie
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            body = json.dumps(body)
+        connection = http.client.HTTPSConnection("127.0.0.1", port, context=context, timeout=3)
+        try:
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            payload = response.read(65537)
+            return response.status, response.getheaders(), payload
+        finally:
+            connection.close()
+
+    try:
+        wait_for(lambda: state().get("ready") or child.poll() is not None, seconds=15)
+        assert child.poll() is None, "Fixture did not start"
+        assert state()["fixtureOnly"] and state()["desktopEvents"] == 0
+        try:
+            with ssl.create_default_context().wrap_socket(
+                socket.create_connection(("127.0.0.1", port), timeout=3),
+                server_hostname="remote.example.test",
+            ):
+                raise AssertionError("An untrusted certificate was accepted")
+        except ssl.SSLCertVerificationError:
+            pass
+        status, headers, body = request("GET", "/")
+        assert status == 200 and b"Sofa Remote" in body
+        header_map = {name.lower(): value for name, value in headers}
+        assert "frame-ancestors 'none'" in header_map["content-security-policy"]
+        assert header_map["cache-control"] == "no-store"
+        assert request("POST", "/api/pairing/start", {"name": "Attacker"},
+                       source="https://other.example.test")[0] == 403
+        assert request("POST", "/api/pairing/start", {"name": "No origin"}, source=None)[0] == 403
+        anonymous = SocketClient(context, port, authority, origin)
+        assert not anonymous.upgraded
+        anonymous.close()
+        status, headers, body = request("POST", "/api/pairing/start", {"name": "Transport test"})
+        assert status == 200
+        pairing = json.loads(body)
+        assert "code" not in pairing and "pairingCode" not in pairing
+        cookie_header = next(value for name, value in headers if name.lower() == "set-cookie")
+        assert all(flag in cookie_header for flag in ["Secure", "HttpOnly", "SameSite=Strict", "Path=/"])
+        owner_cookie = cookie_header.split(";", 1)[0]
+        code = wait_for(lambda: state().get("pairingCode"))
+        confirmation = {"requestId": pairing["requestId"], "code": code}
+        assert request("POST", "/api/pairing/confirm", confirmation)[0] == 410
+        wrong = dict(confirmation, code="0000" if code != "0000" else "0001")
+        assert request("POST", "/api/pairing/confirm", wrong, cookie=owner_cookie)[0] == 403
+        status, headers, body = request("POST", "/api/pairing/confirm", confirmation,
+                                        cookie=owner_cookie)
+        assert status == 200 and json.loads(body) == {"paired": True}
+        cookie = next(value.split(";", 1)[0] for name, value in headers
+                      if name.lower() == "set-cookie" and value.startswith("__Host-sofaremote="))
+        assert request("POST", "/api/pairing/confirm", confirmation, cookie=owner_cookie)[0] == 410
+        assert json.loads(request("GET", "/api/status", cookie=cookie)[2])["paired"]
+        client = SocketClient(context, port, authority, origin, cookie)
+        assert client.upgraded
+        welcome = client.message()
+        assert welcome["type"] == "welcome"
+        session = welcome["connectionId"]
+        for sequence, command in enumerate([
+            {"name": "pointer.move", "x": 3, "y": -2},
+            {"name": "keyboard.key", "key": "left"},
+            {"name": "keyboard.text", "text": "transport fixture"},
+            {"name": "pointer.button.down", "button": "left"},
+        ], 1):
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": sequence, "command": command})
+            result = client.message()
+            assert result["type"] == "result" and result["sequence"] == sequence
+        wait_for(lambda: state()["heldButtons"] == 1)
+        client.close()
+        wait_for(lambda: state()["releasedButtonsOnClose"] == 1)
+        client = SocketClient(context, port, authority, origin, cookie)
+        session = client.message()["connectionId"]
+        client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                     "requestId": str(uuid.uuid4()), "sequence": 1,
+                     "command": {"name": "session.unlock"}})
+        assert client.receive()[0] == 8, "Browser escaped the command scope"
+        client.close()
+        client = SocketClient(context, port, authority, origin, cookie)
+        client.message()
+        assert request("POST", "/api/pairing/forget", {}, cookie=cookie)[0] == 200
+        assert client.receive()[0] == 8, "Revocation left an active socket"
+        client.close()
+        rejected = SocketClient(context, port, authority, origin, cookie)
+        assert not rejected.upgraded, "Revoked cookie reconnected"
+        rejected.close()
+        assert state()["desktopEvents"] == 0
+        print("TLS, origin admission, PIN ownership, WSS input, release and revocation passed.")
+    finally:
+        if child.poll() is None:
+            child.send_signal(signal.SIGTERM)
+        try:
+            result = child.wait(timeout=5)
+            assert result == 0, "Fixture did not stop cleanly"
+        except subprocess.TimeoutExpired:
+            os.killpg(child.pid, signal.SIGKILL)
+            child.wait(timeout=3)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--fixture", type=Path, required=True)
+    parser.add_argument("--assets", type=Path, required=True)
+    args = parser.parse_args()
+    with tempfile.TemporaryDirectory(prefix="sofa-web-transport-") as directory:
+        exercise(args.fixture.resolve(), args.assets.resolve(), Path(directory))
+
+
+if __name__ == "__main__":
+    main()

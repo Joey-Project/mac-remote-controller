@@ -10,6 +10,8 @@ const outputDirectory = resolve(packageDirectory, 'dist');
 await rm(outputDirectory, { force: true, recursive: true });
 await mkdir(outputDirectory, { recursive: true });
 await copyFile(resolve(packageDirectory, 'index.html'), resolve(outputDirectory, 'index.html'));
+await mkdir(resolve(outputDirectory, 'live'), { recursive: true });
+await copyFile(resolve(packageDirectory, 'live.html'), resolve(outputDirectory, 'live/index.html'));
 
 await build({
   bundle: true,
@@ -21,9 +23,20 @@ await build({
 });
 
 await build({
+  bundle: true,
+  entryPoints: [resolve(sourceDirectory, 'live-main.ts')],
+  format: 'esm',
+  outfile: resolve(outputDirectory, 'live/app.js'),
+  platform: 'browser',
+  target: ['es2022'],
+});
+
+await build({
   entryPoints: [
     resolve(sourceDirectory, 'preview-model.ts'),
     resolve(sourceDirectory, 'remote-input.ts'),
+    resolve(sourceDirectory, 'web-connection.ts'),
+    resolve(sourceDirectory, 'live-touchpad.ts'),
   ],
   format: 'esm',
   outdir: outputDirectory,

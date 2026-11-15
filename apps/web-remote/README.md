@@ -1,4 +1,14 @@
-# Web interaction preview
+# Web remote and offline interaction preview
+
+`live.html` is the real LAN remote. It is bundled into the Mac companion and
+served only by its explicitly enabled, browser-trusted HTTPS/WSS gateway. It
+supports Mac-displayed code pairing, pointer/keyboard/system-volume control,
+acknowledged text, revocation and reconnect. See
+[private Web setup](../../tooling/web_remote/README.md). Credentials stay in
+Secure HttpOnly cookies; offline input is discarded rather than replayed.
+
+The following describes the separate original `index.html` preview. Its
+offline boundary tests still apply only to that entry point.
 
 This small TypeScript page is an **offline UI exploration**, not a remote-control
 client. It lets you feel the touchpad, keyboard, and volume layout in Safari or
@@ -41,10 +51,10 @@ and `build` scripts alongside the native adapters. For focused local checks, use
 `pnpm --filter @mac-remote-controller/web-remote-preview <script>` from the
 repository root. `dist/` and package-local `node_modules/` are ignored.
 
-## Web-control feasibility
+## Design background
 
-The existing native pairing design cannot be used directly by a Safari SPA
-without changing its trust model. See the focused
+The native certificate pin cannot be checked directly by a Safari SPA. The live
+gateway therefore uses normal browser PKI plus local code consent, rather than
+claiming to reuse native TLS pinning. See the earlier
 [web transport feasibility note](../../docs/project_journal/2026/10/2026-10-24-web-remote-feasibility-01a1464a.md)
-for the protocol gap, App Clip tradeoffs, and the minimum prerequisites for a
-future trusted gateway.
+for the original protocol gap and App Clip tradeoffs.
