@@ -21,9 +21,12 @@ await build({
 });
 
 await build({
-  entryPoints: [resolve(sourceDirectory, 'preview-model.ts')],
+  entryPoints: [
+    resolve(sourceDirectory, 'preview-model.ts'),
+    resolve(sourceDirectory, 'remote-input.ts'),
+  ],
   format: 'esm',
-  outfile: resolve(outputDirectory, 'preview-model.js'),
+  outdir: outputDirectory,
   platform: 'node',
   target: ['node22'],
 });
