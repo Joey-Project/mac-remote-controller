@@ -15,6 +15,35 @@ const tickMilliseconds = 250;
 
 let disconnected = false;
 let running = false;
+let wakePoll: (() => void) | undefined;
+let connectionState = '';
+const connectionItem = iina.menu.item('Sofa Remote: Connecting…', undefined, { enabled: false });
+iina.menu.addItem(connectionItem);
+
+function reportConnection(state: string): void {
+  if (state === connectionState) return;
+  connectionState = state;
+  connectionItem.title = `Sofa Remote: ${state}`;
+  iina.menu.forceUpdate();
+  // Only static diagnostic categories are logged, never native error bodies,
+  // tokens, media titles, paths, or command payloads.
+  iina.console.log(`Sofa Remote connection: ${state}`);
+}
+
+class BridgeRequestError extends Error {
+  constructor(readonly statusCode?: number) {
+    super('The local media bridge request failed.');
+  }
+}
+
+function failureState(error: unknown): string {
+  if (!(error instanceof BridgeRequestError)) return 'Player unavailable; retrying';
+  if (error.statusCode === 401 || error.statusCode === 403) {
+    return 'Setup rejected; choose Set Up IINA in Sofa Remote';
+  }
+  if (error.statusCode !== undefined) return 'Bridge error; retrying';
+  return 'Bridge unavailable; open Sofa Remote and enable media adapters';
+}
 
 function currentBridgeConfiguration() {
   return bridgeConfiguration(
@@ -62,12 +91,25 @@ async function request<T>(
     params: {} as Record<string, string>,
     data: method === 'post' ? iinaFormData(data ?? {}) : {},
   };
-  const response =
-    method === 'get'
-      ? await iina.http.get<unknown, T>(`${baseURL}${path}`, options)
-      : await iina.http.post<unknown, T>(`${baseURL}${path}`, options);
+  let response: IINA.HTTPResponse<T>;
+  try {
+    response =
+      method === 'get'
+        ? await iina.http.get<unknown, T>(`${baseURL}${path}`, options)
+        : await iina.http.post<unknown, T>(`${baseURL}${path}`, options);
+  } catch (error) {
+    const value =
+      typeof error === 'object' && error !== null && 'statusCode' in error
+        ? error.statusCode
+        : undefined;
+    const statusCode =
+      typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599
+        ? value
+        : undefined;
+    throw new BridgeRequestError(statusCode);
+  }
   if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw new Error(`Sofa Remote bridge returned HTTP ${response.statusCode}.`);
+    throw new BridgeRequestError(response.statusCode);
   }
   return response.data as T;
 }
@@ -135,11 +177,13 @@ async function pollOnce(configuration: { port: number; token: string }): Promise
     return 0;
   }
   await request(baseURL, configuration.token, 'post', '/update', state.target);
+  if (disconnected) return 0;
   let completed = 0;
-  while (completed < maximumCommandsPerPoll) {
+  while (!disconnected && completed < maximumCommandsPerPoll) {
     const result = await request<{
       command?: { requestId: string; targetId: string; action: string; value?: number };
     }>(baseURL, configuration.token, 'get', `/next?targetId=${encodeURIComponent(targetId)}`);
+    if (disconnected) break;
     const command = result.command;
     if (!command) break;
     let error: string | undefined;
@@ -166,6 +210,7 @@ async function runLoop(): Promise<void> {
   if (running || disconnected) return;
   running = true;
   refreshBridgeConfiguration();
+  let failures = 0;
   while (!disconnected) {
     const started = Date.now();
     let completed = 0;
@@ -175,28 +220,60 @@ async function runLoop(): Promise<void> {
         refreshBridgeConfiguration();
         configuration = currentBridgeConfiguration();
       }
-      if (configuration) completed = await pollOnce(configuration);
-    } catch {
-      // Keep the token out of logs. Connection state is visible through the local companion.
+      if (configuration) {
+        completed = await pollOnce(configuration);
+        if (!disconnected) {
+          reportConnection(iina.core.status.idle ? 'Connected; open a video' : 'Connected');
+        }
+      } else {
+        reportConnection('Setup required; choose Set Up IINA in Sofa Remote');
+      }
+      failures = 0;
+    } catch (error) {
+      if (disconnected) break;
+      failures = Math.min(failures + 1, 4);
+      reportConnection(failureState(error));
       if (!disconnected) refreshBridgeConfiguration();
     }
+    if (disconnected) break;
     // A full batch yields to IINA's event loop before continuing. Otherwise
     // keep the existing 250 ms polling cadence without delaying each command.
     const delay =
-      completed === maximumCommandsPerPoll
-        ? 0
-        : Math.max(0, tickMilliseconds - (Date.now() - started));
-    await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      failures > 0
+        ? Math.max(0, tickMilliseconds * 2 ** (failures - 1) - (Date.now() - started))
+        : completed === maximumCommandsPerPoll
+          ? 0
+          : Math.max(0, tickMilliseconds - (Date.now() - started));
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        wakePoll = undefined;
+        resolve();
+      }, delay);
+      wakePoll = () => {
+        clearTimeout(timer);
+        wakePoll = undefined;
+        resolve();
+      };
+    });
   }
   running = false;
+  await unregisterTarget();
 }
 
 function unregister(): void {
+  if (disconnected) return;
   disconnected = true;
+  wakePoll?.();
+  // Finish the one in-flight request before unregistering. A late /next
+  // response must never operate on a closing player or start another poll.
+  if (!running) void unregisterTarget();
+}
+
+async function unregisterTarget(): Promise<void> {
   const configuration = currentBridgeConfiguration();
   if (!configuration) return;
   const baseURL = `http://127.0.0.1:${configuration.port}/v1/iina`;
-  void request(baseURL, configuration.token, 'post', '/unregister', { targetId }).catch(
+  await request(baseURL, configuration.token, 'post', '/unregister', { targetId }).catch(
     () => undefined,
   );
 }
