@@ -77,7 +77,10 @@ by those applications; the API does not approve them.
   for invalid CLI arguments or a transport/protocol error.
 - A stale owner-private socket can be recovered. An active listener, symlink,
   ordinary file or insecure directory is preserved and refused. Shutdown only
-  removes the exact socket object created by that server.
+  removes the matching socket object created by that server. An owner-private
+  `control.sock.lock` file serializes cooperating instances through startup and
+  cleanup, preventing an old instance from removing its replacement's socket.
+  The empty lock file is retained; do not delete it while a companion is running.
 
 The direct wire form for a reload is:
 

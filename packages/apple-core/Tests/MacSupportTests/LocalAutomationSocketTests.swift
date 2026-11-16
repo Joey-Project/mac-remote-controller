@@ -148,5 +148,39 @@
                 XCTAssertEqual($0 as? LocalAutomationFailure, .invalidFrame)
             }
         }
+
+        func testConcurrentRestartCannotLoseTheNewEndpointDuringOldCleanup() throws {
+            let url = try endpoint()
+            for _ in 0..<30 {
+                let first = server(url)
+                try first.start()
+                let stopped = DispatchGroup()
+                stopped.enter()
+                DispatchQueue.global(qos: .utility).async {
+                    first.stop()
+                    stopped.leave()
+                }
+                let next = server(url)
+                var started = false
+                do { try next.start(); started = true } catch {
+                    XCTAssertEqual(error as? LocalAutomationFailure, .alreadyRunning)
+                }
+                XCTAssertEqual(stopped.wait(timeout: .now() + 3), .success)
+                if !started { try next.start() }
+                defer { next.stop() }
+                XCTAssertEqual(
+                    try LocalAutomationClient.send(.init(.status), to: url).outcome, .success)
+            }
+        }
+
+        func testAnExistingNonemptyLeaseFileIsPreservedAndRefused() throws {
+            let url = try endpoint()
+            let lease = url.appendingPathExtension("lock")
+            try Data("keep".utf8).write(to: lease)
+            XCTAssertEqual(chmod(lease.path, 0o600), 0)
+            XCTAssertThrowsError(try server(url).start())
+            XCTAssertEqual(try String(contentsOf: lease, encoding: .utf8), "keep")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        }
     }
 #endif

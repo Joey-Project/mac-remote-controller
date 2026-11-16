@@ -15,6 +15,7 @@
             label: "com.joeyteng.sofaremote.automation", qos: .utility)
         private var source: DispatchSourceRead?
         private var boundIdentity: stat?
+        private var lease: LocalAutomationLease?
         private var peers: [UUID: LocalAutomationPeer] = [:]
 
         public init(url: URL = LocalAutomationClient.socketURL, handler: @escaping Handler) {
@@ -25,13 +26,18 @@
             source?.cancel()
             for peer in peers.values { peer.cancel() }
             removeOwnedEndpoint()
+            lease = nil
         }
 
         public func start() throws {
             try queue.sync {
                 guard source == nil else { throw LocalAutomationFailure.alreadyRunning }
                 try LocalAutomationSocket.directory(url, create: true)
-                let descriptor = try LocalAutomationSocket.make()
+                lease = try LocalAutomationLease(socketURL: url)
+                let descriptor: Int32
+                do { descriptor = try LocalAutomationSocket.make() } catch {
+                    lease = nil; throw error
+                }
                 do {
                     try removeStaleEndpoint()
                     guard
@@ -54,6 +60,7 @@
                 } catch {
                     close(descriptor)
                     removeOwnedEndpoint()
+                    lease = nil
                     throw error
                 }
             }
@@ -65,6 +72,7 @@
                 for peer in peers.values { peer.cancel() }
                 peers.removeAll()
                 removeOwnedEndpoint()
+                lease = nil
             }
         }
 
