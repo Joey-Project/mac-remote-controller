@@ -104,8 +104,7 @@ pairing again. The Web menu can forget its own pairing and disconnect immediatel
 
 The configured port is persistent: app restarts, LAN address changes and
 certificate renewal do not select a new port. The default is `47625`; changing
-it requires an explicit setup change and a new browser URL (including pairing
-again for that different origin).
+it requires an explicit setup change and an updated browser URL.
 
 Backgrounding an unpaired browser preserves its pairing form and rechecks
 authorization when it returns. Controls stay hidden until the Mac confirms an
