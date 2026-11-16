@@ -5,12 +5,14 @@ status: completed
 created: 2026-11-16
 updated: 2026-11-16
 branch: wip/macos-local-automation
-pr:
+pr: 39
 supersedes: []
 superseded_by:
 ---
 
 # macOS Local Automation
+
+Implemented in [PR #39](https://github.com/Joey-Project/mac-remote-controller/pull/39).
 
 ## Outcome
 
@@ -33,6 +35,9 @@ superseded_by:
   hidden/disabled/locked controls, stale requests, explicit code reads, unsafe
   filesystem objects, active/stale endpoints, frame limits and idle clients.
 - Compiled CLI integration uses a real private socket with a fake service.
+- Local validation covers 372 package tests (one signed-app-fixture-only skip),
+  15 focused automation tests, three compiled CLI checks and two coverage checks.
+  The universal Mac app and nested CLI pass strict signature verification.
 - CI checks app UI coverage, builds/signs the bundled CLI, and retains the full
   AppleCore/MacSupport, Apple-app and existing iPhone/iPad UI suites.
 - Runtime/production deployment and physical control acceptance remain separate
