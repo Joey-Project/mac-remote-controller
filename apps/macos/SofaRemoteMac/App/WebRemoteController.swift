@@ -45,6 +45,18 @@ final class WebRemoteController {
     let root = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/SofaRemote/Web", isDirectory: true)
 
+    var pairingPrompt: WebPairingPrompt? { pairing?.prompt }
+    func refreshPairing() { pairing?.refresh() }
+    func cancelPairing() { pairing?.cancel() }
+
+    func openInBrowser() {
+        if let address { NSWorkspace.shared.open(address) }
+    }
+
+    func copyURL() {
+        if let address { CompanionClipboard.copy(address.absoluteString) }
+    }
+
     func reload() {
         stop()
         do {

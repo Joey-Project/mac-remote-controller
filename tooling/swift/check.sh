@@ -69,6 +69,10 @@ swift test \
     --scratch-path "$tool_root/apple-core-build" \
     --quiet
 
+printf '\n==> Local automation CLI integration\n'
+python3 "$repo_root/tooling/automation/test_cli.py" \
+    --binary "$tool_root/apple-core-build/debug/SofaRemoteControl"
+
 printf '\n==> Web gateway package tests\n'
 swift test \
     --package-path "$repo_root/packages/web-gateway" \

@@ -1,4 +1,5 @@
 import AppKit
+import MacSupport
 import SwiftUI
 
 struct MediaBridgeView: View {
@@ -10,43 +11,39 @@ struct MediaBridgeView: View {
                 "Enable local media adapters",
                 isOn: Binding(
                     get: { model.mediaAdapters.isEnabled },
-                    set: { model.setMediaBridgeEnabled($0) }))
+                    set: { model.setMediaBridgeEnabled($0) })
+            )
+            .accessibilityIdentifier(CompanionControl.mediaEnabled.rawValue)
             Text(
                 model.mediaAdapters.message
             )
             .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Set Up IINA") {
-                    guard let package = model.mediaAdapters.configureIINA() else { return }
-                    NSWorkspace.shared.open(package)
+                    model.mediaAdapters.setUpIINA()
                 }
+                .accessibilityIdentifier(CompanionControl.mediaSetupIINA.rawValue)
                 Button("Set Up Chrome") {
-                    guard let folder = model.mediaAdapters.configureChrome() else { return }
-                    NSWorkspace.shared.activateFileViewerSelecting([folder])
-                    if let chrome = NSWorkspace.shared.urlForApplication(
-                        withBundleIdentifier: "com.google.Chrome"),
-                        let page = URL(string: "chrome://extensions")
-                    {
-                        NSWorkspace.shared.open(
-                            [page], withApplicationAt: chrome,
-                            configuration: NSWorkspace.OpenConfiguration())
-                    }
+                    model.mediaAdapters.setUpChrome()
                 }
+                .accessibilityIdentifier(CompanionControl.mediaSetupChrome.rawValue)
             }
             if let setupMessage = model.mediaAdapters.setupMessage {
                 Text(setupMessage).font(.caption).textSelection(.enabled)
             }
-            if model.mediaAdapters.isEnabled, let token = model.mediaAdapters.token,
+            if model.mediaAdapters.isEnabled, model.mediaAdapters.token != nil,
                 let port = model.mediaAdapters.port
             {
-                DisclosureGroup("Manual setup") {
+                DisclosureGroup(
+                    "Manual setup",
+                    isExpanded: Binding(
+                        get: { model.mediaAdapters.manualSetupExpanded },
+                        set: { model.mediaAdapters.manualSetupExpanded = $0 })
+                ) {
                     Button("Copy token for IINA setup") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(token, forType: .string)
-                        NSPasteboard.general.setData(
-                            Data(),
-                            forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+                        model.mediaAdapters.copyToken()
                     }
+                    .accessibilityIdentifier(CompanionControl.mediaCopyToken.rawValue)
                     .help("Paste into the Sofa Remote plugin preferences in IINA.")
                     Text(
                         "In IINA Preferences → Plugins → Sofa Remote, paste the copied token. "
@@ -54,6 +51,7 @@ struct MediaBridgeView: View {
                     )
                     .font(.caption2).foregroundStyle(.secondary)
                 }
+                .accessibilityIdentifier(CompanionControl.mediaManualExpanded.rawValue)
             }
         }
     }

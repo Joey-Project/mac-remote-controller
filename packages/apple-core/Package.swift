@@ -19,7 +19,8 @@ let package = Package(
         ),
         .executable(name: "SofaRemoteNativeHost", targets: ["SofaRemoteNativeHost"]),
         .executable(name: "SofaRemoteUnlockHelper", targets: ["SofaRemoteUnlockHelper"]),
-        .executable(name: "SofaRemoteUnlockInstaller", targets: ["SofaRemoteUnlockInstaller"])
+        .executable(name: "SofaRemoteUnlockInstaller", targets: ["SofaRemoteUnlockInstaller"]),
+        .executable(name: "SofaRemoteControl", targets: ["SofaRemoteControl"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-certificates.git", exact: "1.21.0"),
@@ -46,6 +47,7 @@ let package = Package(
             name: "SofaRemoteUnlockHelper", dependencies: ["MacSupport", "UnlockNative"]),
         .executableTarget(
             name: "SofaRemoteUnlockInstaller", dependencies: ["MacSupport", "UnlockNative"]),
+        .executableTarget(name: "SofaRemoteControl", dependencies: ["MacSupport"]),
         .testTarget(
             name: "AppleCoreTests",
             dependencies: ["AppleCore"],

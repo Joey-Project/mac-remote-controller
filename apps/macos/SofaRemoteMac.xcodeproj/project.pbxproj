@@ -6,6 +6,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A91600000000000000000001 /* CompanionModel+Automation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91600000000000000000002; };
+		A91700000000000000000001 /* CompanionModel+Controls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91700000000000000000002; };
 		A81100000000000000000001 /* WebRemoteController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81100000000000000000002; };
 		A81200000000000000000001 /* WebRemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81200000000000000000002; };
 		A81300000000000000000001 /* WebPairingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81300000000000000000002; };
@@ -30,6 +32,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A91600000000000000000002 /* CompanionModel+Automation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Automation.swift"; sourceTree = "<group>"; };
+		A91700000000000000000002 /* CompanionModel+Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Controls.swift"; sourceTree = "<group>"; };
 		A81100000000000000000002 /* WebRemoteController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRemoteController.swift; sourceTree = "<group>"; };
 		A81200000000000000000002 /* WebRemoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRemoteView.swift; sourceTree = "<group>"; };
 		A81300000000000000000002 /* WebPairingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebPairingWindowController.swift; sourceTree = "<group>"; };
@@ -80,6 +84,8 @@
 			children = (
 				000000000000000000000010 /* SofaRemoteMacApp.swift */,
 				000000000000000000000025 /* CompanionModel.swift */,
+				A91600000000000000000002 /* CompanionModel+Automation.swift */,
+				A91700000000000000000002 /* CompanionModel+Controls.swift */,
 				A81100000000000000000002 /* WebRemoteController.swift */,
 				A81200000000000000000002 /* WebRemoteView.swift */,
 				A81300000000000000000002 /* WebPairingWindowController.swift */,
@@ -211,6 +217,7 @@
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/SofaRemote.iinaplugin/preferences.html",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MediaAdapters/SofaRemote.iinaplgz",
 				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/SofaRemoteNativeHost",
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/SofaRemoteControl",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
@@ -242,6 +249,8 @@
 			files = (
 				000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */,
 				000000000000000000000024 /* CompanionModel.swift in Sources */,
+				A91600000000000000000001 /* CompanionModel+Automation.swift in Sources */,
+				A91700000000000000000001 /* CompanionModel+Controls.swift in Sources */,
 				A81100000000000000000001 /* WebRemoteController.swift in Sources */,
 				A81200000000000000000001 /* WebRemoteView.swift in Sources */,
 				A81300000000000000000001 /* WebPairingWindowController.swift in Sources */,

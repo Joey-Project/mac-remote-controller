@@ -1,5 +1,6 @@
 import AppKit
 import CoreImage.CIFilterBuiltins
+import MacSupport
 import SwiftUI
 
 @main
@@ -48,6 +49,7 @@ private struct CompanionView: View {
                 if !model.remoteState.accessibilityGranted {
                     Text("Allow Accessibility to control the pointer and keyboard.")
                     Button("Allow Accessibility…") { model.desktop.requestAccessibility() }
+                        .accessibilityIdentifier(CompanionControl.accessibilityRequest.rawValue)
                 } else {
                     Label("Pointer and keyboard ready", systemImage: "checkmark.circle")
                 }
@@ -72,19 +74,18 @@ private struct CompanionView: View {
                         Text("Expires \(expires, style: .relative)").font(.caption)
                     }
                     Button("Close pairing") { model.closePairing() }
+                        .accessibilityIdentifier(CompanionControl.qrClose.rawValue)
                     Button("Copy invitation") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(invitation, forType: .string)
-                        NSPasteboard.general.setData(
-                            Data(),
-                            forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+                        model.copyInvitation()
                     }
+                    .accessibilityIdentifier(CompanionControl.qrCopy.rawValue)
                 } else {
                     Text(
                         "Choose this Mac in Sofa Remote on your iPhone or iPad to show a four-digit pairing code."
                     )
                     .font(.callout)
                     Button("Use QR pairing instead…") { model.openPairing() }
+                        .accessibilityIdentifier(CompanionControl.qrOpen.rawValue)
                     Text(
                         "Pair over Wi-Fi first. Paired devices can then connect over Bluetooth LE."
                     )
@@ -107,9 +108,11 @@ private struct CompanionView: View {
                                         model.unlockController.setDevice(device.id, allowed: $0)
                                     })
                             )
+                            .accessibilityIdentifier(CompanionControl.deviceUnlock.rawValue)
                             .disabled(
                                 !model.unlockController.reachable || model.unlockController.isBusy)
                             Button("Remove", role: .destructive) { model.revoke(device) }
+                                .accessibilityIdentifier(CompanionControl.deviceRemove.rawValue)
                         }
                     }
                 }
@@ -118,6 +121,7 @@ private struct CompanionView: View {
                 }
                 Divider()
                 Button("Quit Sofa Remote") { NSApplication.shared.terminate(nil) }
+                    .accessibilityIdentifier(CompanionControl.appQuit.rawValue)
             }
             .padding(20)
         }
