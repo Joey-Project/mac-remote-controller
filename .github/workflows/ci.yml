@@ -43,8 +43,8 @@ jobs:
       - name: Build TypeScript packages
         run: pnpm run build
 
-  apple:
-    name: Swift and Apple apps
+  apple-build:
+    name: Apple builds and package tests
     runs-on: xcode-27
     timeout-minutes: 90
     env:
@@ -68,26 +68,68 @@ jobs:
           python3 -I tooling/unlock/build_canary.py --output .codex-tmp/unlock-canary-ci
           python3 -m unittest discover -s tooling/unlock -p 'test_*.py' -v
           python3 -I tooling/unlock/test_runtime.py --output .codex-tmp/unlock-runtime-ci
+      - name: Check Swift and build Apple apps
+        run: tooling/swift/check.sh
+
+  apple-renewal:
+    name: Apple renewal probe
+    runs-on: xcode-27
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
       - name: Reconstruct and build renewal research probe
         run: |
           python3 tooling/renewal/prepare.py --destination .codex-tmp/renewal-ci/source
           swift build --package-path .codex-tmp/renewal-ci/source \
             --scratch-path .codex-tmp/renewal-ci/Build \
             --product xtool --force-resolved-versions --disable-sandbox
-      - name: Test iPhone and iPad controls in Simulator
-        run: tooling/swift/test-ios-ui.sh
+
+  apple-ui:
+    name: iOS UI (${{ matrix.family }})
+    runs-on: xcode-27
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [iphone, ipad]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Test controls in Simulator
+        run: tooling/swift/test-ios-ui.sh --device-family "$DEVICE_FAMILY"
+        env:
+          DEVICE_FAMILY: ${{ matrix.family }}
         timeout-minutes: 70
-      - name: Check Swift and build Apple apps
-        run: tooling/swift/check.sh
       - name: Upload UI test results
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: ios-ui-test-results
+          name: ios-ui-test-results-${{ matrix.family }}
           path: .codex-tmp/apple-tools/UI-Tests/Results/*.xcresult
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
+
+  apple:
+    name: Swift and Apple apps
+    runs-on: ubuntu-latest
+    needs: [apple-build, apple-renewal, apple-ui]
+    if: ${{ always() }}
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Require every Apple job to succeed
+        env:
+          BUILD_RESULT: ${{ needs.apple-build.result }}
+          RENEWAL_RESULT: ${{ needs.apple-renewal.result }}
+          UI_RESULT: ${{ needs.apple-ui.result }}
+        run: bash tooling/swift/check-apple-results.sh "$BUILD_RESULT" "$RENEWAL_RESULT" "$UI_RESULT"
 
   android:
     name: Kotlin and Android
@@ -155,7 +197,7 @@ jobs:
         run: bash tooling/swift/test-ios-ui-lifecycle.sh
       - name: Test background renewal tooling without credentials or devices
         run: python3 -m unittest discover -s tooling/renewal/tests -v
-      - name: Test development signing admission without credentials
+      - name: Test Apple tooling without credentials
         run: python3 -m unittest discover -s tooling/swift/tests -v
       - name: Test Web certificate maintenance without credentials
         run: python3 -m unittest discover -s tooling/web_remote/tests -v
