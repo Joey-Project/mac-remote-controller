@@ -34,11 +34,11 @@ case "${1-}:${2-}" in
         fi
         count=$((count + 1))
         printf '%s\n' "$count" >"$CREATE_COUNTER"
-        case "$count" in
-            1) device_id=simulator-phone ;;
-            2) device_id=simulator-tablet ;;
+        case "${4-}" in
+            com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro) device_id=simulator-phone ;;
+            com.apple.CoreSimulator.SimDeviceType.iPad-mini-A17-Pro) device_id=simulator-tablet ;;
             *)
-                printf 'unexpected simulator creation number: %s\n' "$count" >&2
+                printf 'unexpected simulator device type: %s\n' "${4-}" >&2
                 exit 90
                 ;;
         esac
@@ -241,4 +241,40 @@ assert_absent 'delete simulator-explicit-a' "$CURRENT_EVENTS"
 assert_absent 'shutdown simulator-explicit-b' "$CURRENT_EVENTS"
 assert_absent 'delete simulator-explicit-b' "$CURRENT_EVENTS"
 
-printf 'PASS: mocked iOS UI simulator lifecycle (5 scenarios)\n'
+for family in iphone ipad; do
+    case "$family" in
+        iphone) device_id=simulator-phone; other_device=simulator-tablet ;;
+        ipad) device_id=simulator-tablet; other_device=simulator-phone ;;
+    esac
+    status=0
+    FAIL_XCODEBUILD_ID=''
+    run_production_script "single-$family" --device-family "$family" || status=$?
+    [[ "$status" -eq 0 ]] || fail "single $family destination exited with status $status"
+    assert_contains "test $device_id" "$CURRENT_EVENTS"
+    assert_contains "shutdown $device_id" "$CURRENT_EVENTS"
+    assert_contains "delete $device_id" "$CURRENT_EVENTS"
+    assert_absent "create $other_device" "$CURRENT_EVENTS"
+    assert_before 'audio-muted-check' "boot $device_id" "$CURRENT_EVENTS"
+    [[ "$(cat "$test_root/single-$family.create-counter")" -eq 1 ]] || fail 'created an extra simulator'
+
+    status=0
+    FAIL_XCODEBUILD_ID="$device_id"
+    run_production_script "single-$family-failure" --device-family "$family" || status=$?
+    [[ "$status" -eq 65 ]] || fail "single $family failure returned status $status instead of 65"
+    assert_contains "shutdown $device_id" "$CURRENT_EVENTS"
+    assert_contains "delete $device_id" "$CURRENT_EVENTS"
+    assert_absent "create $other_device" "$CURRENT_EVENTS"
+done
+
+for arguments in unsupported missing mixed; do
+    status=0
+    case "$arguments" in
+        unsupported) run_production_script "$arguments" --device-family other || status=$? ;;
+        missing) run_production_script "$arguments" --device-family || status=$? ;;
+        mixed) run_production_script "$arguments" --device-family iphone simulator-explicit-a || status=$? ;;
+    esac
+    [[ "$status" -eq 64 ]] || fail "invalid family arguments returned status $status instead of 64"
+    [[ ! -s "$CURRENT_EVENTS" ]] || fail 'invalid arguments reached audio or simulator tools'
+done
+
+printf 'PASS: mocked iOS UI simulator lifecycle (12 scenarios)\n'

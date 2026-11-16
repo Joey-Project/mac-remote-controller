@@ -9,6 +9,26 @@ result_bundle_root="${IOS_UI_TEST_RESULT_BUNDLE:-$output_root/Results}"
 run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 created_devices=()
 destinations=()
+device_types=(
+    com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro
+    com.apple.CoreSimulator.SimDeviceType.iPad-mini-A17-Pro
+)
+
+if [[ "${1-}" == '--device-family' ]]; then
+    if [[ "$#" -ne 2 ]]; then
+        printf 'Usage: %s [--device-family iphone|ipad | simulator-id ...]\n' "$0" >&2
+        exit 64
+    fi
+    case "$2" in
+        iphone) device_types=(com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro) ;;
+        ipad) device_types=(com.apple.CoreSimulator.SimDeviceType.iPad-mini-A17-Pro) ;;
+        *)
+            printf 'Unsupported simulator device family: %s\n' "$2" >&2
+            exit 64
+            ;;
+    esac
+    set --
+fi
 
 cleanup_created_device() {
     local device="$1"
@@ -77,9 +97,7 @@ if [[ "$#" -gt 0 ]]; then
     done
 else
     # No runtime argument selects the newest installed compatible runtime.
-    for device_type in \
-        com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro \
-        com.apple.CoreSimulator.SimDeviceType.iPad-mini-A17-Pro; do
+    for device_type in "${device_types[@]}"; do
         device="$(xcrun simctl create "Sofa Remote UI $$" "$device_type")"
         created_devices+=("$device")
         destinations+=(-destination "platform=iOS Simulator,id=$device")
