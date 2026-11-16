@@ -1,3 +1,4 @@
+import MacSupport
 import SwiftUI
 
 struct UnlockSetupView: View {
@@ -11,16 +12,20 @@ struct UnlockSetupView: View {
                 Toggle(
                     "Enable remote unlock",
                     isOn: Binding(
-                        get: { controller.enabled }, set: { controller.setEnabled($0) }))
+                        get: { controller.enabled }, set: { controller.setEnabled($0) })
+                )
+                .accessibilityIdentifier(CompanionControl.unlockEnabled.rawValue)
             } else {
                 Button(setupLabel) {
                     controller.manage(uninstall: false)
                 }
+                .accessibilityIdentifier(CompanionControl.unlockManage.rawValue)
             }
             if controller.installed {
                 Button("Uninstall Unlock Helper…", role: .destructive) {
                     controller.manage(uninstall: true)
                 }
+                .accessibilityIdentifier(CompanionControl.unlockUninstall.rawValue)
             }
             Text("Unlocks an existing logged-in session. Allow individual paired devices below.")
                 .font(.caption2).foregroundStyle(.secondary)

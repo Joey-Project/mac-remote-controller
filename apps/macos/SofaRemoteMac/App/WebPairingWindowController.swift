@@ -1,4 +1,5 @@
 import AppKit
+import MacSupport
 import SwiftUI
 import WebRemoteSupport
 
@@ -41,13 +42,16 @@ private struct WebPairingPromptView: View {
             Text("Enter this code in your browser's Sofa Remote page.").multilineTextAlignment(
                 .center)
             Text(prompt.code).font(.system(size: 48, weight: .semibold, design: .monospaced))
-                .privacySensitive().accessibilityIdentifier("pairing.web.code")
+                .privacySensitive().accessibilityIdentifier(
+                    CompanionControl.webPairingCode.rawValue)
             Text(
                 "\(prompt.remainingAttempts) attempts remaining · Expires \(prompt.expiresAt, style: .relative)"
             )
             .font(.caption).foregroundStyle(.secondary)
-            Button("Cancel pairing", role: .cancel, action: onCancel).keyboardShortcut(
-                .cancelAction)
+            Button("Cancel pairing", role: .cancel, action: onCancel)
+                .accessibilityIdentifier(CompanionControl.webPairingCancel.rawValue)
+                .keyboardShortcut(
+                    .cancelAction)
         }
         .padding(28).frame(width: 420)
     }

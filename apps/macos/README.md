@@ -173,3 +173,8 @@ after the phone connection closes.
 
 For the authenticated Bluetooth protocol and connection benchmark limits, see
 the [wire contract](../../packages/protocol/v1-design.md#bluetooth-le-transport).
+
+For current-user CLI control of setup, pairing, device permissions and Web
+service operations, see [local automation](../../docs/local-automation.md).
+The bundled tool uses a private Unix socket and the existing UI controllers;
+system authorization dialogs remain interactive.

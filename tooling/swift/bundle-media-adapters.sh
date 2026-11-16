@@ -15,6 +15,7 @@ node "$repo_root/apps/iina-plugin/scripts/build.mjs"
 helper_build="$repo_root/.codex-tmp/apple-tools/integration-host"
 read -r -a architectures <<< "${ARCHS:-$(uname -m)}"
 helper_slices=()
+control_slices=()
 for architecture in "${architectures[@]}"; do
     case "$architecture" in
         arm64|x86_64) ;;
@@ -24,8 +25,10 @@ for architecture in "${architectures[@]}"; do
     build_arguments=(--configuration release --package-path "$repo_root/packages/apple-core"
         --scratch-path "$helper_build/$architecture" --triple "$triple")
     swift build --quiet "${build_arguments[@]}" --product SofaRemoteNativeHost
+    swift build --quiet "${build_arguments[@]}" --product SofaRemoteControl
     helper_bin="$(swift build "${build_arguments[@]}" --show-bin-path)"
     helper_slices+=("$helper_bin/SofaRemoteNativeHost")
+    control_slices+=("$helper_bin/SofaRemoteControl")
 done
 
 resources="${TARGET_BUILD_DIR:?}/${UNLOCALIZED_RESOURCES_FOLDER_PATH:?}/MediaAdapters"
@@ -55,3 +58,14 @@ done
 chmod 755 "$helpers/SofaRemoteNativeHost"
 codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none \
     "$helpers/SofaRemoteNativeHost"
+lipo -create "${control_slices[@]}" -output "$helpers/SofaRemoteControl"
+control_architectures="$(lipo -archs "$helpers/SofaRemoteControl")"
+for architecture in "${architectures[@]}"; do
+    if [[ " $control_architectures " != *" $architecture "* ]]; then
+        printf 'Local control tool is missing requested architecture: %s\n' "$architecture" >&2
+        exit 1
+    fi
+done
+chmod 755 "$helpers/SofaRemoteControl"
+codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none \
+    "$helpers/SofaRemoteControl"

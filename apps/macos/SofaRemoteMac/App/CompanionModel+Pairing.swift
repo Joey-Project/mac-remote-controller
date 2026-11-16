@@ -111,6 +111,7 @@ extension CompanionModel {
         numericPairing = coordinator
         coordinator.onChange = { [weak self] request in
             guard let self else { return }
+            self.numericPairingPrompt = request
             self.numericPairingWindow.show(request) { [weak self] in
                 self?.numericPairing?.cancel()
             }

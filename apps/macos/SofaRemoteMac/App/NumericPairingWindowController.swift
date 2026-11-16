@@ -1,5 +1,6 @@
 import AppKit
 import AppleCore
+import MacSupport
 import SwiftUI
 
 @MainActor
@@ -59,13 +60,14 @@ private struct NumericPairingRequestView: View {
                 .font(.system(size: 48, weight: .semibold, design: .monospaced))
                 .accessibilityLabel("Pairing code")
                 .accessibilityValue(request.code)
-                .accessibilityIdentifier("pairing.mac.code")
+                .accessibilityIdentifier(CompanionControl.numericCode.rawValue)
                 .privacySensitive()
             Text(
                 "\(request.remainingAttempts) attempts remaining · Expires \(request.expiresAt, style: .relative)"
             )
             .font(.caption).foregroundStyle(.secondary)
             Button("Cancel pairing", role: .cancel, action: onCancel)
+                .accessibilityIdentifier(CompanionControl.numericCancel.rawValue)
                 .keyboardShortcut(.cancelAction)
         }
         .padding(28)

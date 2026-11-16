@@ -27,6 +27,11 @@ final class PhoneRecoveryController {
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let source = panel.url else { return }
+        configure(from: source)
+    }
+
+    func configure(from source: URL) {
+        guard !isBusy else { return }
         isBusy = true
         let directory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/SofaRemote/Recovery")
@@ -71,8 +76,10 @@ struct PhoneRecoveryView: View {
             Text(controller.message).font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Choose Renewal Setup…") { controller.chooseSetup() }
+                    .accessibilityIdentifier(CompanionControl.recoveryChooseSetup.rawValue)
                 if controller.configured {
                     Button("Re-sign & Reinstall…") { controller.reinstall() }
+                        .accessibilityIdentifier(CompanionControl.recoveryReinstall.rawValue)
                 }
             }
             Text(

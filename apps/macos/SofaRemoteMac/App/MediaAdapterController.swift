@@ -1,3 +1,4 @@
+import AppKit
 import AppleCore
 import Foundation
 import MacSupport
@@ -10,6 +11,7 @@ final class MediaAdapterController {
     private(set) var token: String?
     private(set) var message = "Local media bridge is off."
     private(set) var setupMessage: String?
+    var manualSetupExpanded = false
     let router = MediaRouter()
     var onTargetsChanged: (([MediaTarget]?) -> Void)?
 
@@ -30,6 +32,7 @@ final class MediaAdapterController {
         UserDefaults.standard.set(enabled, forKey: "mediaBridgeEnabled")
         guard enabled != isEnabled else { return }
         if !enabled {
+            manualSetupExpanded = false
             bridge?.stop()
             bridge = nil
             isEnabled = false
@@ -48,6 +51,7 @@ final class MediaAdapterController {
                 guard let self else { return }
                 self.message = message
                 self.isEnabled = false
+                self.manualSetupExpanded = false
                 self.token = nil
                 self.bridge = nil
                 self.removeAllTargets()
@@ -96,6 +100,28 @@ final class MediaAdapterController {
                 + "then select the revealed ChromeExtension folder. Reload an existing extension and video tabs."
             return folder
         } catch { setupMessage = error.localizedDescription; return nil }
+    }
+
+    func setUpIINA() {
+        guard let package = configureIINA() else { return }
+        NSWorkspace.shared.open(package)
+    }
+
+    func setUpChrome() {
+        guard let folder = configureChrome() else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
+        if let chrome = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.google.Chrome"),
+            let page = URL(string: "chrome://extensions")
+        {
+            NSWorkspace.shared.open(
+                [page], withApplicationAt: chrome, configuration: NSWorkspace.OpenConfiguration())
+        }
+    }
+
+    func copyToken() {
+        guard isEnabled, let token else { return }
+        CompanionClipboard.copy(token, concealed: true)
     }
 
     private func integrationInstaller() throws -> MediaIntegrationInstaller {

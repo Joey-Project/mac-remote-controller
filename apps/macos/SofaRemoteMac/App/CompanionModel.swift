@@ -27,6 +27,8 @@ final class CompanionModel {
     let webRemote = WebRemoteController()
     @ObservationIgnored var numericPairing: NumericPairingCoordinator?
     @ObservationIgnored let numericPairingWindow = NumericPairingWindowController()
+    var numericPairingPrompt: NumericPairingRequest?
+    @ObservationIgnored var automationServer: LocalAutomationServer?
 
     private var listener: NWListener?
     @ObservationIgnored private var blePeripheral: MacBLEPeripheral?
@@ -79,6 +81,7 @@ final class CompanionModel {
             summary = "Companion unavailable"
             errorMessage = error.localizedDescription
         }
+        startLocalAutomation()
     }
 
     func prepareForTermination() -> Bool {
@@ -94,6 +97,8 @@ final class CompanionModel {
             return false
         }
         numericPairing?.cancel()
+        automationServer?.stop()
+        automationServer = nil
         webRemote.stop()
         heldPointerOwner = nil
         sessionDisplay.endRemoteControl()
