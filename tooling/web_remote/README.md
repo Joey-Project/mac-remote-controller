@@ -102,6 +102,17 @@ request. Trusted-browser cookies are Secure, HttpOnly and SameSite=Strict;
 JavaScript never receives the native credential. Clearing browser data requires
 pairing again. The Web menu can forget its own pairing and disconnect immediately.
 
+The configured port is persistent: app restarts, LAN address changes and
+certificate renewal do not select a new port. The default is `47625`; changing
+it requires an explicit setup change and a new browser URL (including pairing
+again for that different origin).
+
+Backgrounding an unpaired browser preserves its pairing form and rechecks
+authorization when it returns. Controls stay hidden until the Mac confirms an
+active connection. Pairing requests use a same-origin referrer policy so Safari
+can provide the exact Origin required by the server, even though the document
+suppresses referrers by default. Null or foreign origins remain rejected.
+
 If a router blocks public-DNS answers containing private IPs, allow the exact
 hostname in its DNS-rebinding settings or use a local DNS override. Do not turn
 off browser certificate validation. The certificate authenticates the server,

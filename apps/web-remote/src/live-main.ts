@@ -2,6 +2,7 @@ import './live.css';
 import { RemoteInputBuffer, type RemoteKey } from './remote-input.js';
 import { LiveTouchpad } from './live-touchpad.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
+import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
 
 function element<T extends HTMLElement>(id: string): T {
@@ -33,8 +34,7 @@ const captures = new Set<number>();
 let keyboard = false;
 let connected = false;
 let requestID: string | null = null;
-let resumeOnVisible = false;
-let activeIntent = false;
+const lifecycle = new WebRemoteLifecycle();
 
 const input = new RemoteInputBuffer(
   {
@@ -49,11 +49,11 @@ const connection = new WebRemoteConnection({
   input,
   active: () => !document.hidden,
   onStatus(status) {
-    activeIntent = status === 'connected' || status === 'connecting' || status === 'reconnecting';
+    lifecycle.update(status);
     connected = status === 'connected';
     controls.inert = !connected;
-    pairing.hidden = status !== 'pairing';
-    controls.hidden = status === 'pairing';
+    pairing.hidden = !lifecycle.showPairing;
+    controls.hidden = !lifecycle.showControls;
     statusLabel.textContent = {
       disconnected: 'Disconnected',
       connecting: 'Connecting…',
@@ -270,7 +270,7 @@ element<HTMLButtonElement>('connect').addEventListener('click', () => {
 });
 element<HTMLButtonElement>('disconnect').addEventListener('click', () => {
   menu.open = false;
-  resumeOnVisible = false;
+  lifecycle.stop();
   connection.disconnect();
 });
 element<HTMLButtonElement>('forget').addEventListener('click', () => {
@@ -282,21 +282,19 @@ element<HTMLButtonElement>('forget').addEventListener('click', () => {
 document.addEventListener('visibilitychange', () => {
   cancelPad();
   if (document.hidden) {
-    resumeOnVisible = activeIntent;
+    lifecycle.suspend();
     connection.disconnect();
-  } else if (resumeOnVisible) {
-    resumeOnVisible = false;
+  } else if (lifecycle.resume()) {
     void connection.connect();
   }
 });
 window.addEventListener('pagehide', () => {
   cancelPad();
-  resumeOnVisible ||= activeIntent;
+  lifecycle.suspend();
   connection.disconnect();
 });
 window.addEventListener('pageshow', () => {
-  if (resumeOnVisible && !document.hidden) {
-    resumeOnVisible = false;
+  if (!document.hidden && lifecycle.resume()) {
     void connection.connect();
   }
 });

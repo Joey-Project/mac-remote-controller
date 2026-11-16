@@ -36,6 +36,7 @@ await build({
     resolve(sourceDirectory, 'preview-model.ts'),
     resolve(sourceDirectory, 'remote-input.ts'),
     resolve(sourceDirectory, 'web-connection.ts'),
+    resolve(sourceDirectory, 'web-lifecycle.ts'),
     resolve(sourceDirectory, 'live-touchpad.ts'),
   ],
   format: 'esm',
