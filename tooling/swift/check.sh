@@ -48,10 +48,13 @@ swift format lint \
     "$repo_root/apps/ios/SofaRemoteiOSUITests" \
     "$repo_root/packages/apple-core/Package.swift" \
     "$repo_root/packages/apple-core/Sources" \
-    "$repo_root/packages/apple-core/Tests"
+    "$repo_root/packages/apple-core/Tests" \
+    "$repo_root/packages/web-gateway/Package.swift" \
+    "$repo_root/packages/web-gateway/Sources" \
+    "$repo_root/packages/web-gateway/Tests"
 
 printf '\n==> SwiftLint\n'
-for module in apps/macos apps/ios packages/apple-core; do
+for module in apps/macos apps/ios packages/apple-core packages/web-gateway; do
     (
         cd -- "$repo_root/$module"
         "$swiftlint_bin" lint --strict --quiet --no-cache
@@ -65,6 +68,17 @@ swift test \
     --package-path "$repo_root/packages/apple-core" \
     --scratch-path "$tool_root/apple-core-build" \
     --quiet
+
+printf '\n==> Web gateway package tests\n'
+swift test \
+    --package-path "$repo_root/packages/web-gateway" \
+    --scratch-path "$tool_root/web-gateway-build" \
+    --jobs 2 \
+    --quiet
+node "$repo_root/apps/web-remote/scripts/build.mjs"
+python3 "$repo_root/tooling/web_remote/test_transport.py" \
+    --fixture "$tool_root/web-gateway-build/debug/SofaRemoteWebFixture" \
+    --assets "$repo_root/apps/web-remote/dist/live"
 
 printf '\n==> macOS app builds and incremental signing\n'
 mac_app_bundle="$tool_root/DerivedData/macOS/Build/Products/Debug/SofaRemoteMac.app"

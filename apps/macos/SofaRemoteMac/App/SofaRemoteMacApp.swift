@@ -59,6 +59,7 @@ private struct CompanionView: View {
                 MediaBridgeView(model: model)
                 UnlockSetupView(controller: model.unlockController)
                 PhoneRecoveryView(controller: model.phoneRecovery)
+                WebRemoteView(controller: model.webRemote)
                 Divider()
                 if let invitation = model.invitation {
                     Text("Scan with Sofa Remote on iPhone or iPad.")

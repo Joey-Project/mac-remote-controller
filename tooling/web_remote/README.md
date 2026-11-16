@@ -1,0 +1,153 @@
+# Trusted LAN Web setup
+
+The Mac companion serves the live client over HTTPS and same-origin WSS. A
+browser connects directly to the Mac's private IPv4 address through a DNS-only
+hostname. No relay, router port forwarding, public listener, or installation on
+the phone is required. Native app connections keep their existing transport.
+
+The initial Web client supports pointer movement, clicks, two-finger scrolling
+and right tap, three-finger drag, text/control keys, and system volume. Pairing
+uses the Mac-displayed four-digit code; the Mac must be unlocked for new pairing.
+Existing paired browsers appear in the companion's device list and can be
+revoked there. Session lock/unlock, display controls, BLE, media adapters, and
+native pinch/system gestures remain native-app features.
+
+## Certificate and DNS
+
+Use a hostname you control with a browser-trusted certificate. A Bonjour
+`.local` hostname or a public CNAME pointing at one does not supply public DNS
+validation or a portable browser trust path. With a fixed DHCP reservation, a
+DNS-only A record can simply point to the private LAN address.
+
+For a changing address, the companion can observe an explicit interface such as
+`en0`, rebind to its current private IPv4 address, and update one existing
+Cloudflare DNS-only A record. The publisher verifies the record ID, name, type
+and proxy state before writing, then reads it back. Updates use bounded backoff;
+DNS caches and router DNS-rebinding protection can still delay or block lookup.
+The listener never falls back to a wildcard or public address.
+
+Let's Encrypt DNS-01 works without exposing the Mac to the Internet. Certificate
+issuance and renewal require Internet access to Apple-independent ACME/DNS
+services; ordinary remote control stays on the LAN. Public certificates also
+publish their hostname in Certificate Transparency logs. ACME accounts are local
+key pairs managed by Certbot, not a separate interactive login.
+
+One reproducible toolchain is Certbot 5.10.0 with certbot-dns-cloudflare 5.10.0:
+
+```sh
+web_root="$HOME/Library/Application Support/SofaRemote/Web"
+mkdir -p "$web_root"
+chmod 700 "$web_root"
+uv venv --python 3.14 "$web_root/Runtime"
+uv pip install --python "$web_root/Runtime/bin/python" \
+  certbot==5.10.0 certbot-dns-cloudflare==5.10.0
+```
+
+In this private directory, create `cloudflare-credentials.ini` with only the
+`dns_cloudflare_api_token` setting, and an empty `acme-client.ini`, both mode
+`0600`. Enter credentials locally, never in command arguments, URLs, source
+files, or chat. Grant the token DNS Edit and Zone Read for only the intended
+zone. Cloudflare scopes DNS Edit to a zone; the companion additionally limits
+address updates to the configured record. Certbot creates temporary ACME TXT
+records for the requested hostname.
+
+First validate against the ACME staging service. After accepting the current
+[Let's Encrypt terms](https://letsencrypt.org/repository/), an initial production
+request can use:
+
+```sh
+"$web_root/Runtime/bin/certbot" certonly \
+  --config "$web_root/acme-client.ini" \
+  --config-dir "$web_root/acme-production" \
+  --work-dir "$web_root/acme-production-work" \
+  --logs-dir "$web_root/acme-production-logs" \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials "$web_root/cloudflare-credentials.ini" \
+  --dns-cloudflare-propagation-seconds 30 \
+  --cert-name sofaremote-lan --key-type ecdsa \
+  --agree-tos --register-unsafely-without-email \
+  -d remote.example.com
+```
+
+An email contact can be supplied instead. Keep all ACME state private and
+available locally rather than in an on-demand cloud-storage folder. The private
+key must be owned by the current user and inaccessible to other users. Certbot's
+`live/` symlinks are supported. The server requires TLS 1.3 and a matching key.
+Use a separate staging directory, not staging material in the production paths.
+
+## Configure and enable
+
+From the repository root, substitute the actual hostname, interface and private
+address. The setup command refuses to overwrite existing configuration and
+leaves the endpoint disabled:
+
+```sh
+python3 tooling/web_remote/configure.py \
+  --hostname remote.example.com --address 192.168.1.10 --interface en0 \
+  --certificate-chain "$web_root/acme-production/live/sofaremote-lan/fullchain.pem" \
+  --private-key "$web_root/acme-production/live/sofaremote-lan/privkey.pem"
+```
+
+For Cloudflare address updates also provide `--zone-id` and `--record-id` for
+the already created DNS-only A record. These identifiers are not API tokens.
+The companion reads the token from the private credentials file; it is never
+embedded in `configuration.json` or sent to the browser.
+
+In the Mac menu's **Web remote** section, choose **Reload setup**, then
+**Enable Web remote**.
+Open or copy its HTTPS URL, including port `47625`. On the phone, request a code
+and enter the one shown by the Mac. Three wrong entries rotate the code; rate
+limits and a two-minute deadline still apply. Cancel the Mac prompt to reject a
+request. Trusted-browser cookies are Secure, HttpOnly and SameSite=Strict;
+JavaScript never receives the native credential. Clearing browser data requires
+pairing again. The Web menu can forget its own pairing and disconnect immediately.
+
+If a router blocks public-DNS answers containing private IPs, allow the exact
+hostname in its DNS-rebinding settings or use a local DNS override. Do not turn
+off browser certificate validation. The certificate authenticates the server,
+while same-origin checks and pairing authenticate and constrain input requests.
+
+## Daily certificate check
+
+After initial issuance, install the separate certificate check once:
+
+```sh
+python3 tooling/web_remote/schedule_certificate_check.py
+```
+
+It installs one user LaunchAgent,
+`com.joeyteng.sofaremote.web-certificate`, with RunAtLoad and a 24-hour interval.
+It copies the maintenance script outside the checkout, uses the private Certbot
+runtime, and never replaces an existing job. It renews only when Certbot says
+renewal is due; it does not force daily issuance. It does not alter the iPhone
+renewal automation, wake/unlock either device, or run before user login.
+
+`certificate-status.json` records check time, exit code and whether the leaf
+certificate changed. Private provider logs have a size budget; command output
+is capped at 256 KiB and each attempt at four minutes. If historical logs exceed
+the budget, the next attempt first trims only owned private regular Certbot logs;
+it preserves unrelated files, rejects symlinks, and keeps the separate bounded
+command output. Old verbose failures cannot permanently starve renewal.
+SIGTERM retires the owned
+Certbot process group. A successful check with `certificateChanged: false` is
+not evidence of a renewed expiration date. The companion checks chain content
+once a minute, preloads replacement TLS material, and then reopens its listener.
+Existing browser sessions reconnect without re-pairing after a certificate swap.
+
+To stop checks, boot out only this user job and remove its plist from
+`~/Library/LaunchAgents/`. Keep account keys/certificates if planning to resume.
+
+## Validation boundaries
+
+- `pnpm --filter @mac-remote-controller/web-remote-preview test` covers input
+  ordering, gestures, acknowledgements, reconnect generations and held-input leases.
+- `swift test --package-path packages/web-gateway` covers admission, pairing,
+  DNS publication and private-file policy.
+- Apple CI also runs `test_transport.py` against `SofaRemoteWebFixture`: ephemeral
+  trusted test certificate, real TLS/HTTP/WSS, input acknowledgements, disconnect
+  release and revocation. The fixture never imports AppKit or posts desktop input.
+- Physical iPhone/iPad Safari, touch latency, Mac application effects and a real
+  certificate expiration/renewal cycle remain separate acceptance checks.
+
+See [Certbot's Cloudflare plugin](https://certbot-dns-cloudflare.readthedocs.io/en/stable/)
+and [Let's Encrypt DNS-01](https://letsencrypt.org/docs/challenge-types/#dns-01-challenge).

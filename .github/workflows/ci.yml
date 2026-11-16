@@ -157,3 +157,5 @@ jobs:
         run: python3 -m unittest discover -s tooling/renewal/tests -v
       - name: Test development signing admission without credentials
         run: python3 -m unittest discover -s tooling/swift/tests -v
+      - name: Test Web certificate maintenance without credentials
+        run: python3 -m unittest discover -s tooling/web_remote/tests -v

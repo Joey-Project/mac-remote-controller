@@ -6,6 +6,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A81100000000000000000001 /* WebRemoteController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81100000000000000000002; };
+		A81200000000000000000001 /* WebRemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81200000000000000000002; };
+		A81300000000000000000001 /* WebPairingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81300000000000000000002; };
+		A81400000000000000000001 /* CompanionModel+Web.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81400000000000000000002; };
+		A81500000000000000000001 /* WebRemoteSupport in Frameworks */ = {isa = PBXBuildFile; productRef = A81500000000000000000002; };
 		000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000010 /* SofaRemoteMacApp.swift */; };
 		000000000000000000000013 /* AppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000018 /* AppleCore */; };
 		000000000000000000000024 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000025; };
@@ -25,6 +30,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A81100000000000000000002 /* WebRemoteController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRemoteController.swift; sourceTree = "<group>"; };
+		A81200000000000000000002 /* WebRemoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRemoteView.swift; sourceTree = "<group>"; };
+		A81300000000000000000002 /* WebPairingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebPairingWindowController.swift; sourceTree = "<group>"; };
+		A81400000000000000000002 /* CompanionModel+Web.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionModel+Web.swift"; sourceTree = "<group>"; };
 		E60000000000000000000001 /* DevelopmentSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = DevelopmentSigning.xcconfig; sourceTree = "<group>"; };
 		000000000000000000000010 /* SofaRemoteMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SofaRemoteMacApp.swift; sourceTree = "<group>"; };
 		000000000000000000000011 /* SofaRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SofaRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -50,6 +59,7 @@
 			files = (
 				000000000000000000000013 /* AppleCore in Frameworks */,
 				000000000000000000000028 /* MacSupport in Frameworks */,
+				A81500000000000000000001 /* WebRemoteSupport in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,6 +80,10 @@
 			children = (
 				000000000000000000000010 /* SofaRemoteMacApp.swift */,
 				000000000000000000000025 /* CompanionModel.swift */,
+				A81100000000000000000002 /* WebRemoteController.swift */,
+				A81200000000000000000002 /* WebRemoteView.swift */,
+				A81300000000000000000002 /* WebPairingWindowController.swift */,
+				A81400000000000000000002 /* CompanionModel+Web.swift */,
 				A72100000000000000000002 /* NumericPairingWindowController.swift */,
 				A72000000000000000000002 /* CompanionModel+Pairing.swift */,
 				000000000000000000000027 /* DesktopController.swift */,
@@ -105,6 +119,7 @@
 				000000000000000000000015 /* Frameworks */,
 				C44000000000000000000001 /* Bundle Media Adapters */,
 				D54000000000000000000001 /* Bundle Unlock Runtime */,
+				A81700000000000000000001 /* Bundle Web Remote */,
 				000000000000000000000016 /* Resources */,
 			);
 			buildRules = ();
@@ -113,6 +128,7 @@
 			packageProductDependencies = (
 				000000000000000000000018 /* AppleCore */,
 				000000000000000000000029 /* MacSupport */,
+				A81500000000000000000002 /* WebRemoteSupport */,
 			);
 			productName = SofaRemoteMac;
 			productReference = 000000000000000000000011 /* SofaRemoteMac.app */;
@@ -142,6 +158,7 @@
 			mainGroup = 000000000000000000000007;
 			packageReferences = (
 				000000000000000000000017 /* XCLocalSwiftPackageReference "apple-core" */,
+				A81600000000000000000001 /* XCLocalSwiftPackageReference "web-gateway" */,
 			);
 			productRefGroup = 000000000000000000000009 /* Products */;
 			projectDirPath = "";
@@ -162,6 +179,22 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A81700000000000000000001 /* Bundle Web Remote */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			name = "Bundle Web Remote";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/WebRemote/index.html",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/WebRemote/app.js",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/WebRemote/app.css",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash \"$SRCROOT/../../tooling/swift/bundle-web-remote.sh\"\n";
+		};
 		C44000000000000000000001 /* Bundle Media Adapters */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -209,6 +242,10 @@
 			files = (
 				000000000000000000000012 /* SofaRemoteMacApp.swift in Sources */,
 				000000000000000000000024 /* CompanionModel.swift in Sources */,
+				A81100000000000000000001 /* WebRemoteController.swift in Sources */,
+				A81200000000000000000001 /* WebRemoteView.swift in Sources */,
+				A81300000000000000000001 /* WebPairingWindowController.swift in Sources */,
+				A81400000000000000000001 /* CompanionModel+Web.swift in Sources */,
 				A72100000000000000000001 /* NumericPairingWindowController.swift in Sources */,
 				A72000000000000000000001 /* CompanionModel+Pairing.swift in Sources */,
 				000000000000000000000026 /* DesktopController.swift in Sources */,
@@ -305,6 +342,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		A81600000000000000000001 /* XCLocalSwiftPackageReference "web-gateway" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../packages/web-gateway;
+		};
 		000000000000000000000017 /* XCLocalSwiftPackageReference "apple-core" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../packages/apple-core;
@@ -312,6 +353,11 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A81500000000000000000002 /* WebRemoteSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A81600000000000000000001;
+			productName = WebRemoteSupport;
+		};
 		000000000000000000000018 /* AppleCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 000000000000000000000017 /* XCLocalSwiftPackageReference "apple-core" */;
