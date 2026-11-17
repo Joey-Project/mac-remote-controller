@@ -22,6 +22,9 @@ final class WebPairingWindowController: NSObject, NSWindowDelegate {
                 contentRect: NSRect(x: 0, y: 0, width: 420, height: 300),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
             created.title = "Pair Web browser"; created.isReleasedWhenClosed = false
+            created.level = .floating
+            created.hidesOnDeactivate = false
+            created.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             created.delegate = self; created.center(); window = created
         }
         window?.contentView = NSHostingView(

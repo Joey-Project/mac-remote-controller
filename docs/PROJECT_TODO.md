@@ -38,3 +38,8 @@
   [Web workstream](project_journal/2026/11/2026-11-15-trusted-web-control-01a1464a.md).
 - [pending] Implement actual Android pairing, connection and remote control;
   the current Kotlin/Compose app remains a scaffold.
+- [pending] Web/native feature parity: add missing media/player-volume controls,
+  pinch and desktop actions, richer keyboard/settings and session/display
+  controls in separate slices. Keep browser platform limits and each action's
+  authorization requirements explicit.
+  [Web pairing and acceptance](project_journal/2026/11/2026-11-16-web-pairing-resume-01a1464a.md).

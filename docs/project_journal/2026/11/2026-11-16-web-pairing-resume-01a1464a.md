@@ -3,9 +3,9 @@ id: 20261116-web-pairing-resume-01a1464a
 title: Web Pairing Resume and Safari Requests
 status: completed
 created: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 branch: wip/web-pairing-resume
-pr:
+pr: 40
 supersedes: []
 superseded_by:
 ---
@@ -26,6 +26,10 @@ superseded_by:
   no-referrer policy; the server's exact Host/Origin checks remain unchanged.
 - Explain request rejection separately from an unspecified Mac operation
   failure. Keep the configured endpoint and port unchanged.
+- Float both Web and native numeric pairing-code windows above ordinary
+  windows, keep them visible when the app deactivates, and allow them across
+  Spaces and alongside full-screen applications. Retain the existing Cancel
+  button/Escape action and prompt-driven dismissal after pairing or cancellation.
 
 ## Validation
 
@@ -38,7 +42,25 @@ superseded_by:
 - Physical iPhone Safari pairing and real Mac input are separate acceptance
   checks; passing model/transport tests does not establish either result.
 
+## Runtime Deployment
+
+- Installed signed candidate `4ed5596` at the fixed Mac application path through
+  the normal administrator-authorized helper update. The fixed development
+  certificate, Accessibility approval, unlock enabled state and identical
+  original device grants were verified after activation.
+- Read-only HTTPS checks confirmed the unchanged configured LAN endpoint and
+  compared each served HTML, JavaScript and CSS asset with the signed candidate.
+  The installed resources and actual responses all match the build.
+- The iOS app and daily renewal payload were unchanged by that deployment;
+  physical acceptance is recorded separately below.
+- The user subsequently reported the Safari experience working, and identified
+  the obscured code window as a remaining issue. Window presentation acceptance
+  for the floating-window change remains separate from the deployed `4ed5596`.
+
 ## Next Steps
 
-- Verify the iPhone Safari foreground/pairing sequence against the deployed
-  signed Mac companion, then complete real input acceptance from another device.
+- Verify the updated code window above another app, across Spaces and with a
+  full-screen app; confirm Cancel and successful pairing both dismiss it.
+- Continue physical Web gesture/keyboard acceptance and implement the recorded
+  native feature gaps incrementally; BLE and other platform-dependent features
+  need their own feasibility assessment.
