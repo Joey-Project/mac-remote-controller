@@ -36,11 +36,12 @@ class Socket {
   }
 }
 
-function fixture(t) {
+function fixture(t, { request, active } = {}) {
   const sockets = [];
   const requests = [];
   const statuses = [];
   const results = [];
+  const errors = [];
   const frames = new Map();
   let identifier = 0;
   let now = 0;
@@ -60,6 +61,7 @@ function fixture(t) {
     origin: 'https://remote.example.com:47625',
     now: () => now,
     input,
+    active,
     createSocket(url) {
       assert.equal(url, 'wss://remote.example.com:47625/remote');
       const socket = new Socket();
@@ -68,12 +70,16 @@ function fixture(t) {
     },
     async request(url, options) {
       requests.push({ url, options });
-      return new Response(JSON.stringify({ paired: true }), { status: 200 });
+      return request
+        ? request(url, options)
+        : new Response(JSON.stringify({ paired: true }), { status: 200 });
     },
     onStatus(value) {
       statuses.push(value);
     },
-    onError() {},
+    onError(message) {
+      errors.push(message);
+    },
     onState() {},
     onResult(command, error) {
       results.push({ command, error });
@@ -87,6 +93,7 @@ function fixture(t) {
     requests,
     statuses,
     results,
+    errors,
     advance(milliseconds) {
       now += milliseconds;
     },
@@ -120,6 +127,51 @@ test('HTTPS own-origin requests use cookies and reject redirects without JS cred
   });
   assert.equal(f.results.length, 1);
   assert.equal(f.results[0].error, null);
+});
+
+test('pairing POST preserves the browser Origin under the document no-referrer policy', async (t) => {
+  const f = fixture(t, {
+    request: () => Response.json({ requestId: 'pairing-request', paired: true }),
+  });
+  await f.connection.beginPairing('Test browser');
+  const { url, options } = f.requests[0];
+  const request = new Request(url, options);
+  assert.equal(request.mode, 'same-origin');
+  assert.equal(request.credentials, 'same-origin');
+  assert.equal(request.redirect, 'error');
+  assert.equal(request.referrerPolicy, 'same-origin');
+  assert.equal(request.headers.has('Origin'), false, 'let the browser supply the Origin');
+});
+
+test('request rejection identifies a browser request problem rather than a Mac failure', async (t) => {
+  const f = fixture(t, {
+    request: () => Response.json({ error: 'request_rejected' }, { status: 403 }),
+  });
+  await assert.rejects(f.connection.beginPairing('Test browser'), /browser.*request.*rejected/i);
+});
+
+test('a pairing confirmation finishing in the background waits for foreground reconnect', async (t) => {
+  let active = true;
+  let finish;
+  const f = fixture(t, {
+    active: () => active,
+    request: (url) =>
+      url.pathname === '/api/pairing/confirm'
+        ? new Promise((resolve) => {
+            finish = resolve;
+          })
+        : Response.json({ paired: true }),
+  });
+  const confirmation = f.connection.confirmPairing('pairing-request', '0000');
+  active = false;
+  f.connection.disconnect();
+  finish(Response.json({ paired: true }));
+  await confirmation;
+  assert.equal(f.sockets.length, 0);
+  active = true;
+  await f.connection.connect();
+  f.sockets[0].welcome();
+  assert.equal(f.statuses.at(-1), 'connected');
 });
 
 test('a stationary drag renews the native held-button lease without replay after disconnect', async (t) => {

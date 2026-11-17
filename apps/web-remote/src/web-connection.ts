@@ -5,7 +5,8 @@ export type WebRemoteState = Readonly<{
   deviceName: string;
   systemVolume: number | null;
 }>;
-type Status = 'disconnected' | 'connecting' | 'connected' | 'pairing' | 'reconnecting';
+export type WebRemoteStatus =
+  'disconnected' | 'connecting' | 'connected' | 'pairing' | 'reconnecting';
 type Socket = Pick<
   WebSocket,
   'readyState' | 'bufferedAmount' | 'send' | 'close' | 'addEventListener'
@@ -13,7 +14,7 @@ type Socket = Pick<
 type Options = Readonly<{
   origin: string;
   input: RemoteInputBuffer;
-  onStatus: (status: Status) => void;
+  onStatus: (status: WebRemoteStatus) => void;
   onError: (message: string) => void;
   onState: (state: WebRemoteState) => void;
   onResult?: (command: InputCommand, error: string | null) => void;
@@ -83,7 +84,7 @@ export class WebRemoteConnection {
 
   async confirmPairing(requestId: string, code: string): Promise<void> {
     await this.api('/api/pairing/confirm', { requestId, code });
-    await this.connect();
+    if (this.options.active?.() ?? true) await this.connect();
   }
 
   async forget(): Promise<void> {
@@ -271,6 +272,9 @@ export class WebRemoteConnection {
         method: body ? 'POST' : 'GET',
         credentials: 'same-origin',
         mode: 'same-origin',
+        // A document-wide no-referrer policy otherwise produces Origin: null
+        // for same-origin-mode POSTs in WebKit. Keep strict server Origin checks.
+        referrerPolicy: 'same-origin',
         cache: 'no-store',
         redirect: 'error',
         signal: controller.signal,
@@ -317,6 +321,8 @@ function readState(value: unknown): WebRemoteState {
 
 function errorMessage(code: unknown): string {
   switch (code) {
+    case 'request_rejected':
+      return 'The browser request was rejected. Reload this page and try again.';
     case 'incorrect_code':
       return 'Incorrect code. Check the code shown on your Mac.';
     case 'pairing_code_changed':

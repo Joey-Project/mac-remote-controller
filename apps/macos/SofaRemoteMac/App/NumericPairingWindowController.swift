@@ -28,6 +28,9 @@ final class NumericPairingWindowController: NSObject, NSWindowDelegate {
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.title = "Pair iPhone or iPad"
             window.isReleasedWhenClosed = false
+            window.level = .floating
+            window.hidesOnDeactivate = false
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.delegate = self
             window.center()
             self.window = window
