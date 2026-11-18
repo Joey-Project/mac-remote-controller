@@ -25,6 +25,7 @@
           <div class="menu-panel">
             <label><input id="show-volume" type="checkbox" /> Volume on touchpad</label>
             <label><input id="show-media" type="checkbox" /> Player controls</label>
+            <label><input id="show-desktop" type="checkbox" /> Desktop controls</label>
             <button id="connect">Reconnect</button>
             <button id="disconnect">Disconnect</button>
             <button id="forget" class="destructive">Forget pairing</button>
@@ -87,6 +88,26 @@
               </button>
               <button data-media="next" aria-label="Next media" disabled>⏭</button>
             </div>
+          </section>
+          <section id="desktop" class="overlay-card desktop" hidden aria-label="Desktop controls">
+            <strong>Desktop controls</strong>
+            <div class="desktop-buttons" aria-label="Desktop actions">
+              <button data-desktop="previous-space" aria-label="Previous desktop" disabled>
+                <span aria-hidden="true">←</span>Previous desktop
+              </button>
+              <button data-desktop="mission-control" aria-label="Mission Control" disabled>
+                <span aria-hidden="true">▦</span>Mission Control
+              </button>
+              <button data-desktop="app-expose" aria-label="App windows" disabled>
+                <span aria-hidden="true">▤</span>App windows
+              </button>
+              <button data-desktop="next-space" aria-label="Next desktop" disabled>
+                <span aria-hidden="true">→</span>Next desktop
+              </button>
+            </div>
+            <p id="desktop-availability" role="status">
+              Connect to your Mac to use desktop controls.
+            </p>
           </section>
         </div>
         <section id="touchpad-panel" class="touchpad-panel">

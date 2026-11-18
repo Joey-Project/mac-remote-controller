@@ -39,6 +39,22 @@ function fixture() {
   };
 }
 
+test('desktop actions are immediate ordering barriers and are not repeated on the next frame', () => {
+  const f = fixture();
+  f.input.enqueue({ name: 'pointer.move', x: 12, y: 7 });
+  for (const shortcut of ['previous-space', 'mission-control', 'app-expose', 'next-space'])
+    assert.equal(f.input.enqueue({ name: 'system.shortcut', shortcut }), true);
+  f.frame();
+  assert.deepEqual(
+    f.sent.map((command) => command.name),
+    ['pointer.move', 'system.shortcut', 'system.shortcut', 'system.shortcut', 'system.shortcut'],
+  );
+  assert.deepEqual(
+    f.sent.slice(1).map((command) => command.shortcut),
+    ['previous-space', 'mission-control', 'app-expose', 'next-space'],
+  );
+});
+
 test('gesture cancellation preserves queued media volume but target cancellation drops it', () => {
   const f = fixture();
   const command = {

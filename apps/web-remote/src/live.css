@@ -238,7 +238,8 @@ summary::-webkit-details-marker {
 #volume-scope {
   justify-self: start;
 }
-.media {
+.media,
+.desktop {
   display: grid;
   gap: 8px;
 }
@@ -252,7 +253,8 @@ summary::-webkit-details-marker {
   color: inherit;
   padding: 8px;
 }
-.media p {
+.media p,
+.desktop p {
   margin: 0;
   font-size: 13px;
   color: #c4cad6;
@@ -264,6 +266,23 @@ summary::-webkit-details-marker {
 }
 .media-buttons button {
   padding-inline: 3px;
+}
+.desktop-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+.desktop-buttons button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-height: 64px;
+  padding-inline: 3px;
+  font-size: 12px;
+}
+.desktop-buttons span {
+  font-size: 23px;
 }
 .volume input {
   grid-column: 1 / -1;

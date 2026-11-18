@@ -38,6 +38,7 @@ await build({
     resolve(sourceDirectory, 'web-connection.ts'),
     resolve(sourceDirectory, 'web-lifecycle.ts'),
     resolve(sourceDirectory, 'media-model.ts'),
+    resolve(sourceDirectory, 'desktop-controls.ts'),
     resolve(sourceDirectory, 'live-touchpad.ts'),
   ],
   format: 'esm',

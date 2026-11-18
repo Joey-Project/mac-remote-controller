@@ -67,6 +67,7 @@ private final class Fixture {
     private var state = RemoteState(
         accessibilityGranted: true, systemVolume: 0,
         deviceName: "Web integration fixture — no desktop control",
+        supportsGestures: true,
         mediaTargets: [
             MediaTarget(
                 id: "iina:fixture", name: "Fixture IINA", kind: .iina,
@@ -222,6 +223,7 @@ private final class Fixture {
         var event = ["name": command.name.rawValue]
         if let text = command.text { event["textBytes"] = String(text.utf8.count) }
         if let key = command.key { event["key"] = key.rawValue }
+        if let shortcut = command.shortcut { event["shortcut"] = shortcut.rawValue }
         if let value = command.value { event["value"] = String(value) }
         appendEvent(event)
     }
