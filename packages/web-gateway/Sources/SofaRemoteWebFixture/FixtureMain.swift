@@ -72,7 +72,8 @@ private final class Fixture {
         supportsGestures: true,
         capabilities: [
             WireCapabilities.remoteLock, WireCapabilities.remoteUnlock,
-            WireCapabilities.displayPower, WireCapabilities.simulatedGestures
+            WireCapabilities.displayPower, WireCapabilities.simulatedGestures,
+            WireCapabilities.keyboardControls
         ],
         mediaTargets: [
             MediaTarget(
@@ -267,6 +268,7 @@ private final class Fixture {
         var event = ["name": command.name.rawValue]
         if let text = command.text { event["textBytes"] = String(text.utf8.count) }
         if let key = command.key { event["key"] = key.rawValue }
+        if let shortcut = command.keyboardShortcut { event["keyboardShortcut"] = shortcut.rawValue }
         if let shortcut = command.shortcut { event["shortcut"] = shortcut.rawValue }
         if let value = command.value { event["value"] = String(value) }
         if let gesture = command.gesture {

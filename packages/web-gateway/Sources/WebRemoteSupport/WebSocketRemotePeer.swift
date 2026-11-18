@@ -92,7 +92,8 @@ public final class WebSocketRemotePeer: RemotePeer {
 
     private static let allowed: Set<CommandName> = [
         .pointerMove, .pointerClick, .pointerScroll, .pointerButtonDown, .pointerButtonUp,
-        .keyboardKey, .keyboardText, .systemVolumeSet, .mediaControl, .systemShortcut,
+        .keyboardKey, .keyboardText, .keyboardShortcut, .systemVolumeSet, .mediaControl,
+        .systemShortcut,
         .sessionLock, .sessionUnlock, .displayOff, .displayWake, .sessionLockAndDisplayOff, .gesture
     ]
 }

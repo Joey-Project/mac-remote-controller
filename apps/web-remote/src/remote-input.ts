@@ -2,9 +2,9 @@ import { validMediaRequest, type MediaCommand } from './media-model.js';
 import { isSystemShortcut, type SystemShortcut } from './desktop-controls.js';
 import { isSessionAction, type SessionAction } from './session-controls.js';
 import { validMagnifyFrame, type MagnifyFrame } from './pinch-gesture.js';
+import { isRemoteKey, isKeyboardShortcut, type KeyboardCommand } from './keyboard-controls.js';
 
-export type RemoteKey =
-  'return' | 'escape' | 'backspace' | 'space' | 'left' | 'right' | 'up' | 'down';
+export type { RemoteKey } from './keyboard-controls.js';
 export type PointerButton = 'left' | 'right';
 export type InputCommand =
   | Readonly<{ name: 'pointer.move' | 'pointer.scroll'; x: number; y: number }>
@@ -12,7 +12,7 @@ export type InputCommand =
       name: 'pointer.click' | 'pointer.button.down' | 'pointer.button.up';
       button: PointerButton;
     }>
-  | Readonly<{ name: 'keyboard.key'; key: RemoteKey }>
+  | KeyboardCommand
   | Readonly<{ name: 'keyboard.text'; text: string }>
   | Readonly<{ name: 'system.volume.set'; value: number }>
   | Readonly<{ name: 'system.shortcut'; shortcut: SystemShortcut }>
@@ -25,16 +25,6 @@ export type FrameScheduler = Readonly<{
   cancel: (identifier: number) => void;
 }>;
 
-const KEYS = new Set<RemoteKey>([
-  'return',
-  'escape',
-  'backspace',
-  'space',
-  'left',
-  'right',
-  'up',
-  'down',
-]);
 const MAXIMUM_PACKETS_PER_FLUSH = 32;
 
 /** One frame of coalescing; discrete actions are ordering barriers, never retried. */
@@ -262,7 +252,12 @@ function validCommand(command: InputCommand): boolean {
     case 'pointer.button.up':
       return command.button === 'left' || command.button === 'right';
     case 'keyboard.key':
-      return KEYS.has(command.key);
+      return isRemoteKey(command.key) && Object.keys(command).sort().join(',') === 'key,name';
+    case 'keyboard.shortcut':
+      return (
+        isKeyboardShortcut(command.keyboardShortcut) &&
+        Object.keys(command).sort().join(',') === 'keyboardShortcut,name'
+      );
     case 'keyboard.text': {
       const bytes = new TextEncoder().encode(command.text).length;
       return bytes > 0 && bytes <= 4096;

@@ -1,6 +1,7 @@
 import { RemoteInputBuffer, type InputCommand } from './remote-input.js';
 import { readMediaTargets, type MediaTarget } from './media-model.js';
 import { isSessionAction, type SessionState } from './session-controls.js';
+import { requiresKeyboardControls } from './keyboard-controls.js';
 
 export type WebRemoteState = SessionState &
   Readonly<{
@@ -41,6 +42,7 @@ export class WebRemoteConnection {
   private retries = 0;
   private lastSentAt = 0;
   private lastGestureSentAt = 0;
+  private extendedKeyboardAvailable = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly pending = new Map<string, Pending>();
 
@@ -154,6 +156,8 @@ export class WebRemoteConnection {
         )
           throw new Error();
         const state = readState(value['state']);
+        this.extendedKeyboardAvailable =
+          state.accessibilityGranted && state.capabilities.includes('keyboardControls.v1');
         this.connectionID = value['connectionId'];
         this.retries = 0;
         this.lastSentAt = this.now();
@@ -165,7 +169,10 @@ export class WebRemoteConnection {
       }
       if (!this.connectionID || value['connectionId'] !== this.connectionID) throw new Error();
       if (value['type'] === 'state') {
-        this.options.onState(readState(value['state']));
+        const state = readState(value['state']);
+        this.extendedKeyboardAvailable =
+          state.accessibilityGranted && state.capabilities.includes('keyboardControls.v1');
+        this.options.onState(state);
         return;
       }
       if (value['type'] !== 'result' && value['type'] !== 'pong') throw new Error();
@@ -198,6 +205,13 @@ export class WebRemoteConnection {
   }
 
   private send(type: 'command' | 'ping', command: InputCommand | null): boolean {
+    if (
+      command &&
+      (command.name === 'keyboard.key' || command.name === 'keyboard.shortcut') &&
+      requiresKeyboardControls(command) &&
+      !this.extendedKeyboardAvailable
+    )
+      return false;
     const socket = this.socket;
     if (
       !socket ||
@@ -277,6 +291,7 @@ export class WebRemoteConnection {
     this.options.input.disconnect();
     this.pending.clear();
     this.connectionID = null;
+    this.extendedKeyboardAvailable = false;
     this.sequence = 0;
     const socket = this.socket;
     this.socket = null;

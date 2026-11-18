@@ -378,6 +378,16 @@ summary::-webkit-details-marker {
   min-height: 0;
   padding: var(--overlay-height, 0px) 4px 16px;
 }
+.keyboard-panel h2,
+.keyboard-panel > p {
+  max-width: 560px;
+  margin-inline: auto;
+}
+.keyboard-panel h2 {
+  margin-top: 24px;
+  margin-bottom: 8px;
+  font-size: 17px;
+}
 form {
   display: grid;
   gap: 10px;

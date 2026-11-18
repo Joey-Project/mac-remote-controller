@@ -188,6 +188,35 @@ test('clicks and keyboard actions flush prior motion without a frame delay', () 
   assert.equal(f.callbacks.size, 0);
 });
 
+test('new navigation keys and editing shortcuts stay immediate and never replay', () => {
+  const f = fixture();
+  f.input.enqueue({ name: 'pointer.move', x: 3, y: 7 });
+  assert.equal(f.input.enqueue({ name: 'keyboard.key', key: 'tab' }), true);
+  assert.equal(f.input.enqueue({ name: 'keyboard.shortcut', keyboardShortcut: 'copy' }), true);
+  assert.deepEqual(f.sent, [
+    { name: 'pointer.move', x: 3, y: 7 },
+    { name: 'keyboard.key', key: 'tab' },
+    { name: 'keyboard.shortcut', keyboardShortcut: 'copy' },
+  ]);
+  f.frame();
+  f.input.disconnect();
+  f.input.connect(() => assert.fail('keys and shortcuts must never replay'));
+  f.frame();
+});
+
+test('keyboard actions reject modifier state, key codes and unrelated fields', () => {
+  const f = fixture();
+  for (const command of [
+    { name: 'keyboard.key', key: 'left', modifiers: ['command'] },
+    { name: 'keyboard.key', key: 'tab', keyCode: 48 },
+    { name: 'keyboard.shortcut', keyboardShortcut: 'copy', key: 'tab' },
+    { name: 'keyboard.shortcut', keyboardShortcut: 'command-down' },
+    { name: 'keyboard.shortcut', keyboardShortcut: 'copy', text: 'private' },
+  ])
+    assert.equal(f.input.enqueue(command), false);
+  assert.deepEqual(f.sent, []);
+});
+
 test('volume retains only the latest value and preserves ordering against text', () => {
   const f = fixture();
   f.input.enqueue({ name: 'system.volume.set', value: 0.1 });

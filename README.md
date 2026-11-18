@@ -9,6 +9,8 @@ not yet implement the media adapters.
 
 `apps/web-remote/` includes a separate live LAN client with trusted HTTPS,
 four-digit pairing, touchpad/keyboard controls, system volume, and reconnect.
+Web and iPhone/iPad keyboards include capability-gated navigation and fixed
+editing shortcuts, with no held modifier state or clipboard transfer.
 The original offline interaction preview remains available. See
 [Web setup](tooling/web_remote/README.md) for private DNS and certificate setup.
 

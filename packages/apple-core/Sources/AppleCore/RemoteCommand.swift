@@ -7,6 +7,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     public var value: Double?
     public var text: String?
     public var key: RemoteKey?
+    public var keyboardShortcut: RemoteKeyboardShortcut?
     public var button: PointerButton?
     public var shortcut: SystemShortcut?
     public var mediaRequest: MediaRequest?
@@ -20,6 +21,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         value: Double? = nil,
         text: String? = nil,
         key: RemoteKey? = nil,
+        keyboardShortcut: RemoteKeyboardShortcut? = nil,
         button: PointerButton? = nil,
         shortcut: SystemShortcut? = nil,
         mediaRequest: MediaRequest? = nil,
@@ -32,6 +34,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         self.value = value
         self.text = text
         self.key = key
+        self.keyboardShortcut = keyboardShortcut
         self.button = button
         self.shortcut = shortcut
         self.mediaRequest = mediaRequest
@@ -54,7 +57,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
                     "keyboard.text requires 1...4096 UTF-8 bytes")
             }
             try requireOnly(["text"])
-        case .systemShortcut, .keyboardKey:
+        case .systemShortcut, .keyboardKey, .keyboardShortcut:
             try validateKeyOrShortcut()
         case .systemVolumeSet:
             guard let value, value.isFinite, (0...1).contains(value) else {
@@ -108,6 +111,12 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
                 throw WireProtocolError.invalidCommand("keyboard.key requires an allowlisted key")
             }
             try requireOnly(["key"])
+        case .keyboardShortcut:
+            guard keyboardShortcut != nil else {
+                throw WireProtocolError.invalidCommand(
+                    "keyboard.shortcut requires an allowlisted action")
+            }
+            try requireOnly(["keyboardShortcut"])
         default:
             throw WireProtocolError.invalidCommand("unsupported key action")
         }
@@ -121,6 +130,13 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         try mediaRequest.validate()
     }
 
+    private func requireOnlyKeyboardShortcut(_ allowed: Set<String>) throws {
+        if keyboardShortcut != nil, !allowed.contains("keyboardShortcut") {
+            throw WireProtocolError.invalidCommand(
+                "unexpected keyboard shortcut for \(name.rawValue)")
+        }
+    }
+
     private func requireCoordinates(limit: Double) throws {
         guard let x, let y, x.isFinite, y.isFinite, abs(x) <= limit, abs(y) <= limit else {
             throw WireProtocolError.invalidCommand(
@@ -129,6 +145,7 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
     }
 
     private func requireOnly(_ allowed: Set<String>) throws {
+        try requireOnlyKeyboardShortcut(allowed)
         if gesture != nil, !allowed.contains("gesture") {
             throw WireProtocolError.invalidCommand("unexpected gesture for \(name.rawValue)")
         }
@@ -166,28 +183,15 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
         let name = try container.decode(
             CommandName.self, forKey: MediaDynamicCodingKey("name"))
         let keys = Set(container.allKeys.map(\.stringValue))
-        let allowed: Set<String> = [
-            "name", "x", "y", "value", "text", "key", "button", "shortcut", "mediaRequest",
-            "tapTimestamp", "gesture"
-        ]
-        guard keys.isSubset(of: allowed) else {
-            throw DecodingError.dataCorrupted(
-                .init(
-                    codingPath: container.codingPath,
-                    debugDescription: "command contains an unexpected field"))
-        }
-        if name == .mediaControl, keys != ["name", "mediaRequest"] {
-            throw DecodingError.dataCorrupted(
-                .init(
-                    codingPath: container.codingPath,
-                    debugDescription: "media.control must contain only name and mediaRequest"))
-        }
+        try Self.validateKeys(keys, name: name, codingPath: container.codingPath)
         self.name = name
         x = try container.decodeIfPresent(Double.self, forKey: MediaDynamicCodingKey("x"))
         y = try container.decodeIfPresent(Double.self, forKey: MediaDynamicCodingKey("y"))
         value = try container.decodeIfPresent(Double.self, forKey: MediaDynamicCodingKey("value"))
         text = try container.decodeIfPresent(String.self, forKey: MediaDynamicCodingKey("text"))
         key = try container.decodeIfPresent(RemoteKey.self, forKey: MediaDynamicCodingKey("key"))
+        keyboardShortcut = try container.decodeIfPresent(
+            RemoteKeyboardShortcut.self, forKey: MediaDynamicCodingKey("keyboardShortcut"))
         button = try container.decodeIfPresent(
             PointerButton.self, forKey: MediaDynamicCodingKey("button"))
         shortcut = try container.decodeIfPresent(
@@ -198,5 +202,43 @@ public struct RemoteCommand: Codable, Sendable, Equatable {
             TimeInterval.self, forKey: MediaDynamicCodingKey("tapTimestamp"))
         gesture = try container.decodeIfPresent(
             RemoteGestureFrame.self, forKey: MediaDynamicCodingKey("gesture"))
+    }
+
+    private static func validateKeys(
+        _ keys: Set<String>, name: CommandName, codingPath: [any CodingKey]
+    ) throws {
+        let allowed: Set<String> = [
+            "name", "x", "y", "value", "text", "key", "button", "shortcut", "mediaRequest",
+            "tapTimestamp", "gesture", "keyboardShortcut"
+        ]
+        guard keys.isSubset(of: allowed) else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: codingPath,
+                    debugDescription: "command contains an unexpected field"))
+        }
+        if name == .mediaControl, keys != ["name", "mediaRequest"] {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: codingPath,
+                    debugDescription: "media.control must contain only name and mediaRequest"))
+        }
+        if name == .keyboardKey, keys != ["name", "key"] {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: codingPath,
+                    debugDescription: "keyboard.key must contain only name and key"))
+        }
+        if name == .keyboardShortcut, keys != ["name", "keyboardShortcut"] {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: codingPath,
+                    debugDescription:
+                        "keyboard.shortcut must contain only name and keyboardShortcut"))
+        }
+    }
+
+    public var requiresKeyboardControls: Bool {
+        name == .keyboardShortcut || (name == .keyboardKey && key?.requiresKeyboardControls == true)
     }
 }

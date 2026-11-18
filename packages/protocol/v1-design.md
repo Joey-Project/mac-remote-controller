@@ -175,7 +175,8 @@ not prove that the foreground app accepted the input or completed an action.
 | `system.shortcut`          | `shortcut`                        | `mission-control`, `app-expose`, `previous-space`, or `next-space`                                         |
 | `gesture.frame`            | `gesture`                         | Capability-gated phased magnification or horizontal/vertical Dock swipe; see below                         |
 | `keyboard.text`            | `text`                            | 1–4096 UTF-8 bytes of committed text                                                                       |
-| `keyboard.key`             | `key`                             | `return`, `escape`, `backspace`, `space`, `left`, `right`, `up`, `down`                                    |
+| `keyboard.key`             | `key`                             | Legacy keys plus capability-gated navigation keys; see below                                               |
+| `keyboard.shortcut`        | `keyboardShortcut`                | Fixed one-shot editing/focus actions; requires `keyboardControls.v1`                                       |
 | `system.volume.set`        | `value`                           | Finite scalar in 0...1                                                                                     |
 | `media.control`            | `mediaRequest`                    | Exact target ID, typed action, and optional finite value; see below                                        |
 | `session.unlock`           | None                              | Explicit one-shot unlock; requires `sessionUnlock.v1` and per-device permission                            |
@@ -183,6 +184,31 @@ not prove that the foreground app accepted the input or completed an action.
 | `display.off`              | None                              | Turn displays off and prevent idle system sleep while a remote stays connected; requires `displayPower.v1` |
 | `display.wake`             | None                              | Wake displays without requesting unlock; requires `displayPower.v1`                                        |
 | `session.lock-display-off` | None                              | Confirm session lock, then turn displays off; requires both capabilities                                   |
+
+### Keyboard controls
+
+The eight legacy keys remain `return`, `escape`, `backspace`, `space`, `left`,
+`right`, `up` and `down`. A companion advertising `keyboardControls.v1` also
+accepts `tab`, `forward-delete`, `home`, `end`, `page-up` and `page-down`.
+Clients keep legacy keys/text available on older companions and disable only
+the new controls. Keyboard input still requires Mac Accessibility permission.
+
+`keyboard.shortcut` accepts exactly `name` and `keyboardShortcut`. Its action is
+one of `copy`, `cut`, `paste`, `select-all`, `undo`, `redo`, `find` or
+`previous-field`. The Mac maps these to Command-C/X/V/A/Z, Command-Shift-Z,
+Command-F and Shift-Tab respectively. They apply to the foreground Mac app;
+custom app bindings and keyboard layouts may change the effect. No clipboard
+content is transferred, and browser editing shortcuts remain local.
+
+Each key/shortcut is an immediate ordering barrier and receives one correlated
+result. The Mac creates both native events before posting a complete key
+down/up pair, uses a private event source and explicitly clears remote flags
+on key-up. It does not post modifier-key down events or retain remote modifier
+state. The protocol exposes no modifier hold/release, arbitrary key code or
+arbitrary combination. Unknown actions and extra fields, including null extra
+fields on key/shortcut commands, are rejected. Disconnect never replays a key.
+
+### Pointer timestamps and state
 
 New iOS clients send `tapTimestamp` from `UITouch.timestamp`. The Mac compares
 successive client timestamps only within that client's authenticated session,
