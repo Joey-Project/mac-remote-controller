@@ -54,7 +54,9 @@ public final class WebSocketRemotePeer: RemotePeer {
             let message = try WireCodec.decode(data)
             switch message.type {
             case .command:
-                guard let command = message.command, Self.allowed.contains(command.name) else {
+                guard let command = message.command, Self.allowed.contains(command.name),
+                    command.name != .gesture || command.gesture?.kind == .magnify
+                else {
                     close(); return
                 }
             case .ping, .disconnect: break
@@ -91,6 +93,6 @@ public final class WebSocketRemotePeer: RemotePeer {
     private static let allowed: Set<CommandName> = [
         .pointerMove, .pointerClick, .pointerScroll, .pointerButtonDown, .pointerButtonUp,
         .keyboardKey, .keyboardText, .systemVolumeSet, .mediaControl, .systemShortcut,
-        .sessionLock, .sessionUnlock, .displayOff, .displayWake, .sessionLockAndDisplayOff
+        .sessionLock, .sessionUnlock, .displayOff, .displayWake, .sessionLockAndDisplayOff, .gesture
     ]
 }

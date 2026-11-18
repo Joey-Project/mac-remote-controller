@@ -446,6 +446,89 @@ test('a stationary drag renews the native held-button lease without replay after
   assert.equal(socket.sent.at(-1).command.name, 'pointer.button.up');
 });
 
+test('stationary pinch renews its lease without advancing a queued sample timestamp or replaying', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  socket.welcome();
+  const gesture = {
+    id: crypto.randomUUID(),
+    kind: 'magnify',
+    phase: 'began',
+    value: 0,
+    timestamp: 0,
+  };
+  f.input.enqueue({ name: 'gesture.frame', gesture });
+  const begin = socket.sent[0];
+  socket.message({
+    protocolVersion: 1,
+    type: 'result',
+    connectionId: begin.connectionId,
+    requestId: begin.requestId,
+    sequence: begin.sequence,
+  });
+  f.input.enqueue({
+    name: 'gesture.frame',
+    gesture: { ...gesture, phase: 'changed', value: 0.2, timestamp: 1 },
+  });
+  f.advance(1500);
+  t.mock.timers.tick(1500);
+  assert.deepEqual(socket.sent.at(-1).command.gesture, { ...gesture, phase: 'changed' });
+  f.frame();
+  assert.equal(
+    socket.sent.at(-1).command.gesture.timestamp,
+    1,
+    'lease renewal must not make a pending frame stale',
+  );
+  f.connection.disconnect();
+  assert.equal(socket.sent.at(-1).command.gesture.phase, 'cancelled');
+  assert.equal(f.input.activeGesture, null);
+  await f.connection.connect();
+  const fresh = f.sockets.at(-1);
+  fresh.welcome('fresh-pinch-connection');
+  f.advance(20_000);
+  t.mock.timers.tick(1500);
+  assert(
+    fresh.sent.every((message) => message.type === 'ping'),
+    'no gesture survives reconnect',
+  );
+});
+
+test('a rejected pinch terminal retires the session even after local gesture state ended', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  socket.welcome();
+  const gesture = {
+    id: crypto.randomUUID(),
+    kind: 'magnify',
+    phase: 'began',
+    value: 0,
+    timestamp: 0,
+  };
+  f.input.enqueue({ name: 'gesture.frame', gesture });
+  f.input.enqueue({
+    name: 'gesture.frame',
+    gesture: { ...gesture, phase: 'ended', value: 0.2, timestamp: 1 },
+  });
+  assert.equal(f.input.activeGesture, null);
+  const ended = socket.sent.at(-1);
+  socket.message({
+    protocolVersion: 1,
+    type: 'result',
+    connectionId: ended.connectionId,
+    requestId: ended.requestId,
+    sequence: ended.sequence,
+    error: { code: 'input_failed', message: 'Fixture terminal rejected.' },
+  });
+  assert.equal(socket.readyState, 3);
+  assert.equal(f.statuses.at(-1), 'reconnecting');
+  await f.connection.connect();
+  f.sockets.at(-1).welcome('after-pinch-rejection');
+  assert.deepEqual(f.sockets.at(-1).sent, []);
+});
+
 test('reconnect drops queued movement, resets sequences, and ignores old socket callbacks', async (t) => {
   const f = fixture(t);
   await f.connection.connect();

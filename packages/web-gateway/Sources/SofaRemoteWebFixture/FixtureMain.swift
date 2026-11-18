@@ -72,7 +72,7 @@ private final class Fixture {
         supportsGestures: true,
         capabilities: [
             WireCapabilities.remoteLock, WireCapabilities.remoteUnlock,
-            WireCapabilities.displayPower
+            WireCapabilities.displayPower, WireCapabilities.simulatedGestures
         ],
         mediaTargets: [
             MediaTarget(
@@ -269,6 +269,13 @@ private final class Fixture {
         if let key = command.key { event["key"] = key.rawValue }
         if let shortcut = command.shortcut { event["shortcut"] = shortcut.rawValue }
         if let value = command.value { event["value"] = String(value) }
+        if let gesture = command.gesture {
+            event["gestureID"] = gesture.id.uuidString.lowercased()
+            event["kind"] = gesture.kind.rawValue
+            event["phase"] = gesture.phase.rawValue
+            event["value"] = String(gesture.value)
+            event["timestamp"] = String(gesture.timestamp)
+        }
         appendEvent(event)
     }
 

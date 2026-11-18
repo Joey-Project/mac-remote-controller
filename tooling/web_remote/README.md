@@ -6,12 +6,39 @@ hostname. No relay, router port forwarding, public listener, or installation on
 the phone is required. Native app connections keep their existing transport.
 
 The initial Web client supports pointer movement, clicks, two-finger scrolling
-and right tap, three-finger drag, text/control keys, system/player volume and
+and right tap, two-finger pinch, three-finger drag, text/control keys, system/player volume and
 IINA/Chrome media control through the existing Mac adapters, and fixed desktop
 action buttons and session/display controls. Pairing
 uses the Mac-displayed four-digit code; the Mac must be unlocked for new pairing.
 Existing paired browsers appear in the companion's device list and can be
-revoked there. BLE and phased pinch gestures remain native-app features.
+revoked there. BLE remains a native-app feature.
+
+## Pinch and scrolling
+
+On the touch surface, two fingers moving together scroll; fingers moving apart
+or together magnify at the Mac cursor through the same phased native events as
+the iOS app. The first unambiguous movement selects scrolling or magnification
+until lift. The client samples both contacts within its existing input animation
+frame, so separate per-contact pointer events do not introduce a second frame
+of buffering or change the single-finger pointer path. A stationary short
+two-finger tap still right-clicks, and three fingers still drag.
+
+Pinch requires the companion's `simulatedGestures.v1` capability, gesture support
+and Accessibility permission. Older companions keep scrolling and right tap.
+The Web gateway accepts magnify frames only; raw Dock swipes and arbitrary
+gesture kinds remain blocked. Cumulative changes coalesce per frame, while
+begin/end/cancel preserve order with other input. A stationary pinch renews
+its native lease, and cancellation, capability loss or a changing touch count
+cannot turn its remaining fingers into a click or drag. Page backgrounding,
+mode changes and disconnect cancel local input; reconnect never replays it.
+As in the native client, a rejected gesture frame retires its connection so a
+failed terminal frame cannot leave native input ownership active.
+
+Browser page zoom is suppressed only on the touch surface through its existing
+`touch-action` policy. This slice handles touchscreen pinch, not desktop browser
+Ctrl-wheel zoom. Actual magnification depends on the target Mac app accepting
+native magnify events. Physical Safari touch feel and target-app effects still
+require separate acceptance after deployment.
 
 ## Media controls
 
@@ -219,14 +246,17 @@ To stop checks, boot out only this user job and remove its plist from
 - `pnpm --filter @mac-remote-controller/web-remote-preview test` covers input
   ordering, gestures, acknowledgements, reconnect generations, held-input leases,
   media capabilities/selection, player-volume bounds, snapping and stale acks,
-  desktop capability gating, session permission/state policy, native session
+  phased pinch/scroll discrimination, one-frame contact sampling, cumulative
+  coalescing, stationary gesture leases and cancellation, desktop capability
+  gating, session permission/state policy, native session
   deadlines, one-operation busy state, action ordering and held-drag release.
 - `swift test --package-path packages/web-gateway` covers admission, pairing,
   DNS publication and private-file policy.
 - Apple CI also runs `test_transport.py` against `SofaRemoteWebFixture`: ephemeral
   trusted test certificate, real TLS/HTTP/WSS, input acknowledgements, disconnect
   release, media delivery/rejection, fixed desktop and session/display actions,
-  denied browser unlock, restricted command scope and revocation.
+  denied browser unlock, phased magnify delivery, restricted gesture/command
+  scope and revocation.
   Mock players include a 400% volume range and unsupported controls. The fixture
   never imports AppKit, posts desktop input or plays audio.
 - Physical iPhone/iPad Safari, touch latency, Mac application effects and a real

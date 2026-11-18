@@ -280,7 +280,7 @@ def exercise(fixture, assets, root, unlock_allowed):
             {"name": "system.shortcut", "shortcut": "control+up"},
             {"name": "system.shortcut", "shortcut": "mission-control", "key": "up"},
             {"name": "gesture.frame", "gesture": {
-                "id": str(uuid.uuid4()), "kind": "magnify", "phase": "began", "value": 0,
+                "id": str(uuid.uuid4()), "kind": "horizontalSwipe", "phase": "began", "value": 0,
                 "timestamp": 1,
             }},
         ]:
@@ -289,6 +289,47 @@ def exercise(fixture, assets, root, unlock_allowed):
             client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
                          "requestId": str(uuid.uuid4()), "sequence": 1, "command": command})
             assert client.receive()[0] == 8, "Browser escaped the fixed desktop-action allowlist"
+            client.close()
+        client = SocketClient(context, port, authority, origin, cookie)
+        welcome = client.message()
+        assert "simulatedGestures.v1" in welcome["state"]["capabilities"]
+        session = welcome["connectionId"]
+        gesture_id = str(uuid.uuid4())
+        for sequence, (phase, value) in enumerate([
+            ("began", 0), ("changed", 0.2), ("ended", 0.4),
+            ("began", 0), ("changed", -0.2), ("cancelled", -0.2),
+        ], 1):
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": sequence,
+                         "command": {"name": "gesture.frame", "gesture": {
+                             "id": gesture_id, "kind": "magnify", "phase": phase,
+                             "value": value, "timestamp": sequence,
+                         }}})
+            result = client.message()
+            assert result["type"] == "result" and result["sequence"] == sequence
+            assert "error" not in result
+        client.close()
+
+        def completed_pinch_events():
+            events = [event for event in state()["events"] if event["name"] == "gesture.frame"]
+            return events if len(events) == 6 else None
+
+        pinch_events = wait_for(completed_pinch_events)
+        assert [event["phase"] for event in pinch_events] == [
+            "began", "changed", "ended", "began", "changed", "cancelled"]
+        assert all(event["gestureID"] == gesture_id and event["kind"] == "magnify" for event in pinch_events)
+        assert [float(event["value"]) for event in pinch_events] == [0, 0.2, 0.4, 0, -0.2, -0.2]
+        for invalid in [
+            {"id": gesture_id, "kind": "magnify", "phase": "began", "value": 0.2, "timestamp": 1},
+            {"id": gesture_id, "kind": "magnify", "phase": "changed", "value": 4.1, "timestamp": 2},
+            {"id": gesture_id, "kind": "magnify", "phase": "changed", "value": 0.2, "timestamp": 2, "key": "up"},
+        ]:
+            client = SocketClient(context, port, authority, origin, cookie)
+            session = client.message()["connectionId"]
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": 1,
+                         "command": {"name": "gesture.frame", "gesture": invalid}})
+            assert client.receive()[0] == 8, "Invalid phased magnification escaped validation"
             client.close()
         client = SocketClient(context, port, authority, origin, cookie)
         welcome = client.message()
