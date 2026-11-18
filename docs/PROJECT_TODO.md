@@ -38,27 +38,10 @@
   [Web workstream](project_journal/2026/11/2026-11-15-trusted-web-control-01a1464a.md).
 - [pending] Implement actual Android pairing, connection and remote control;
   the current Kotlin/Compose app remains a scaffold.
-- [in_progress] Web/native feature parity: media/player-volume controls are
-  implemented; complete real-player/browser acceptance. Fixed desktop buttons
-  are implemented with independent panel visibility; validate their actual Mac
-  effects after deployment. Session lock/unlock and display controls are
-  implemented using the existing native authorization; complete physical Safari
-  acceptance after deployment. Phased touchscreen pinch is implemented; validate
-  physical Safari scrolling/pinch discrimination and target-app magnification.
-  A local Settings page provides the native skip intervals and three-finger-drag
-  preference; validate physical Safari navigation and persistence after deployment.
-  Web and iPhone/iPad keyboards include navigation keys and fixed one-shot
-  editing shortcuts with old-companion fallback; accept their actual Mac effects
-  after deployment. Connection details and a native-equivalent authenticated RTT
-  benchmark are implemented; accept physical Safari measurements after deployment.
-  Complete remaining preference, feedback and entry-point parity and keep
-  browser platform limits and each action's
-  authorization requirements explicit.
-  [Web pairing and acceptance](project_journal/2026/11/2026-11-16-web-pairing-resume-01a1464a.md).
-  [Web media controls](project_journal/2026/11/2026-11-18-web-media-controls-01a1464a.md).
-  [Web desktop controls](project_journal/2026/11/2026-11-18-web-desktop-controls-01a1464a.md).
-  [Web session/display controls](project_journal/2026/11/2026-11-18-web-session-controls-01a1464a.md).
-  [Web pinch](project_journal/2026/11/2026-11-18-web-pinch-01a1464a.md).
-  [Web settings](project_journal/2026/11/2026-11-18-web-settings-01a1464a.md).
-  [Keyboard controls](project_journal/2026/11/2026-11-18-keyboard-controls-01a1464a.md).
-  [Connection details](project_journal/2026/11/2026-11-18-web-connection-details-01a1464a.md).
+- [in_progress] Web/native feature parity: browser-feasible remote controls,
+  connection benchmark, persistent floating groups, feedback preferences and
+  mode-specific entry links are implemented. Complete physical Safari,
+  Home Screen, accessibility and actual Mac-effect acceptance after deployment.
+  Keep native-only enrollment, BLE and system-entry differences explicit.
+  [Feature comparison and evidence](WEB_APP_PARITY.md).
+  [Parity workstream](project_journal/2026/11/2026-11-18-web-feature-parity-01a1464a.md).

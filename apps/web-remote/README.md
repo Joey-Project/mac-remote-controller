@@ -14,6 +14,17 @@ the browser-to-Mac connection, including browser scheduling and clock precision;
 it does not measure input-to-display latency. Leaving the page cancels the run,
 and reconnect never resumes it. Bluetooth LE remains a native App transport.
 
+The floating groups can all be hidden in either remote mode, and their choices
+persist alongside the local gesture/feedback and seek preferences. Pressure
+click needs reported touch/pen pressure; vibration is opt-in and best-effort,
+with plain availability guidance. Clicks preserve their source event timestamp.
+
+Use `/#touchpad` or `/#keyboard` for a mode-specific bookmark, Home Screen entry
+or system Open URL shortcut. Settings explains the Home Screen steps. Launch
+only selects a mode; pairing/permissions and the Mac's reachability still apply.
+See [Web/App parity](../../docs/WEB_APP_PARITY.md) for implemented controls,
+native-only transport/system features and remaining physical acceptance.
+
 The following describes the separate original `index.html` preview. Its
 offline boundary tests still apply only to that entry point.
 

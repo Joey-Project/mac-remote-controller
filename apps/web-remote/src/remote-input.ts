@@ -8,8 +8,9 @@ export type { RemoteKey } from './keyboard-controls.js';
 export type PointerButton = 'left' | 'right';
 export type InputCommand =
   | Readonly<{ name: 'pointer.move' | 'pointer.scroll'; x: number; y: number }>
+  | Readonly<{ name: 'pointer.click'; button: PointerButton; tapTimestamp?: number }>
   | Readonly<{
-      name: 'pointer.click' | 'pointer.button.down' | 'pointer.button.up';
+      name: 'pointer.button.down' | 'pointer.button.up';
       button: PointerButton;
     }>
   | KeyboardCommand
@@ -248,9 +249,21 @@ function validCommand(command: InputCommand): boolean {
       );
     }
     case 'pointer.click':
+      return (
+        (command.button === 'left' || command.button === 'right') &&
+        (Object.keys(command).sort().join(',') === 'button,name' ||
+          (Object.keys(command).sort().join(',') === 'button,name,tapTimestamp' &&
+            typeof command.tapTimestamp === 'number' &&
+            Number.isFinite(command.tapTimestamp) &&
+            command.tapTimestamp >= 0 &&
+            command.tapTimestamp <= 1_000_000_000))
+      );
     case 'pointer.button.down':
     case 'pointer.button.up':
-      return command.button === 'left' || command.button === 'right';
+      return (
+        (command.button === 'left' || command.button === 'right') &&
+        Object.keys(command).sort().join(',') === 'button,name'
+      );
     case 'keyboard.key':
       return isRemoteKey(command.key) && Object.keys(command).sort().join(',') === 'key,name';
     case 'keyboard.shortcut':

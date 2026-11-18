@@ -45,6 +45,8 @@ await build({
     resolve(sourceDirectory, 'keyboard-controls.ts'),
     resolve(sourceDirectory, 'live-touchpad.ts'),
     resolve(sourceDirectory, 'connection-benchmark.ts'),
+    resolve(sourceDirectory, 'touch-feedback.ts'),
+    resolve(sourceDirectory, 'entry-points.ts'),
   ],
   format: 'esm',
   outdir: outputDirectory,

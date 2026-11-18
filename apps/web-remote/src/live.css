@@ -250,6 +250,25 @@ summary::-webkit-details-marker {
 .settings-panel .settings-note {
   margin-top: 12px;
 }
+.entry-links {
+  display: grid;
+  gap: 8px;
+}
+.entry-links a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #565c69;
+  background: #24272e;
+  color: #d0deff;
+  text-decoration: none;
+}
+.entry-links a:focus-visible {
+  outline: 3px solid #9dbbff;
+  outline-offset: 2px;
+}
 .connection-facts {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

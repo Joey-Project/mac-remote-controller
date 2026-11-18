@@ -222,6 +222,7 @@ def exercise(fixture, assets, root, unlock_allowed):
         ]
         for sequence, command in enumerate([
             {"name": "pointer.move", "x": 3, "y": -2},
+            {"name": "pointer.click", "button": "left", "tapTimestamp": 0.321},
             {"name": "keyboard.key", "key": "left"},
             {"name": "keyboard.text", "text": "transport fixture"},
             *keyboard_commands,

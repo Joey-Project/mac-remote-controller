@@ -1,5 +1,6 @@
-import type { InputCommand } from './remote-input.js';
+import type { InputCommand, PointerButton } from './remote-input.js';
 import type { MagnifyFrame } from './pinch-gesture.js';
+import { clientTapTimestamp, reportsPressure, type FeedbackKind } from './touch-feedback.js';
 
 type Point = Readonly<{ x: number; y: number }>;
 type Touch = { start: Point; last: Point };
@@ -22,11 +23,21 @@ export class LiveTouchpad {
   private initialCenter: Point = { x: 0, y: 0 };
   private previousCenter: Point = { x: 0, y: 0 };
   private at = 0;
+  private forceClickEnabled = true;
+  private pressureKnown = false;
 
   constructor(
     private readonly emit: (command: InputCommand) => boolean,
     private readonly requestFrame: () => void = () => {},
+    private readonly feedback: (kind: FeedbackKind) => void = () => {},
+    private readonly pressureDetected: () => void = () => {},
   ) {}
+
+  setForceClickEnabled(enabled: boolean): void {
+    if (enabled === this.forceClickEnabled) return;
+    this.forceClickEnabled = enabled;
+    if (this.points.size) this.cancel();
+  }
 
   setMagnificationEnabled(enabled: boolean): void {
     if (enabled === this.magnificationEnabled) return;
@@ -102,13 +113,30 @@ export class LiveTouchpad {
     return true;
   }
 
-  move(id: number, point: Point, at = performance.now()): boolean {
+  move(id: number, point: Point, at = performance.now(), pressure?: number): boolean {
     const touch = this.points.get(id);
     if (!touch || !validPoint(point) || !Number.isFinite(at) || at < 0) return false;
     this.at = Math.max(this.at, at);
     const x = point.x - touch.last.x;
     const y = point.y - touch.last.y;
     touch.last = point;
+    if (reportsPressure(pressure)) {
+      if (!this.pressureKnown) {
+        this.pressureKnown = true;
+        this.pressureDetected();
+      }
+      if (
+        this.forceClickEnabled &&
+        this.phase === 'point' &&
+        this.points.size === 1 &&
+        pressure >= 0.78
+      ) {
+        this.tapPossible = false;
+        this.phase = 'settling';
+        if ((x || y) && !this.emit({ name: 'pointer.move', x: x * 1.5, y: y * 1.5 })) return false;
+        return this.emitTap('left', at, 'pressure');
+      }
+    }
     if (Math.hypot(point.x - touch.start.x, point.y - touch.start.y) > 8) this.tapPossible = false;
     switch (this.phase) {
       case 'point':
@@ -125,6 +153,7 @@ export class LiveTouchpad {
         this.dragY += y / 2;
         if (Math.hypot(this.dragX, this.dragY) < 4) return true;
         this.dragging = this.emit({ name: 'pointer.button.down', button: 'left' });
+        if (this.dragging) this.feedback('drag');
         return this.dragging && this.emit({ name: 'pointer.move', x: this.dragX, y: this.dragY });
       case 'settling':
         return true;
@@ -196,7 +225,7 @@ export class LiveTouchpad {
     this.phase = 'settling';
     if (this.points.size !== 0) return;
     if (this.tapPossible && Number.isFinite(at) && at >= this.beganAt && at - this.beganAt <= 500) {
-      this.emit({ name: 'pointer.click', button: this.maximumTouches === 2 ? 'right' : 'left' });
+      this.emitTap(this.maximumTouches === 2 ? 'right' : 'left', at, 'tap');
     }
     this.tapPossible = false;
   }
@@ -217,6 +246,20 @@ export class LiveTouchpad {
       span: Math.hypot(b.last.x - a.last.x, b.last.y - a.last.y),
       center: { x: a.last.x / 2 + b.last.x / 2, y: a.last.y / 2 + b.last.y / 2 },
     };
+  }
+
+  private emitTap(button: PointerButton, at: number, feedback: FeedbackKind): boolean {
+    const timestamp = clientTapTimestamp(at);
+    if (
+      !this.emit({
+        name: 'pointer.click',
+        button,
+        ...(timestamp === null ? {} : { tapTimestamp: timestamp }),
+      })
+    )
+      return false;
+    this.feedback(feedback);
+    return true;
   }
 
   private magnification(span: number): number {
