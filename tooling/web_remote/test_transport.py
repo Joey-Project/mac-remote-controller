@@ -199,6 +199,21 @@ def exercise(fixture, assets, root, unlock_allowed):
         assert "keyboardControls.v1" in welcome["state"]["capabilities"]
         assert welcome["state"]["mediaTargets"][0]["capabilities"]["playerVolumeMaximum"] == 4
         session = welcome["connectionId"]
+        # The Web benchmark uses the companion's authenticated no-op protocol,
+        # not a local JavaScript echo or unauthenticated HTTP timing request.
+        events_before_probes = state()["events"]
+        for sequence in range(1, 94):
+            request_id = str(uuid.uuid4())
+            client.send({"protocolVersion": 1, "type": "ping", "connectionId": session,
+                         "requestId": request_id, "sequence": sequence})
+            assert client.message() == {
+                "protocolVersion": 1, "type": "pong", "connectionId": session,
+                "requestId": request_id, "sequence": sequence,
+            }, "Probe reply must match its authenticated session, request and sequence"
+        assert state()["events"] == events_before_probes, "Benchmark produced input or audio events"
+        client.close()
+        client = SocketClient(context, port, authority, origin, cookie)
+        session = client.message()["connectionId"]
         keyboard_commands = [
             *({"name": "keyboard.key", "key": key}
               for key in ["tab", "forward-delete", "home", "end", "page-up", "page-down"]),

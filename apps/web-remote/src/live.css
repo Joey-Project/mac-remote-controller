@@ -83,6 +83,10 @@ label {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+  padding: 4px;
 }
 .identity strong {
   overflow: hidden;
@@ -245,6 +249,30 @@ summary::-webkit-details-marker {
 }
 .settings-panel .settings-note {
   margin-top: 12px;
+}
+.connection-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  margin: 0;
+}
+#connection-panel {
+  padding-top: 0;
+}
+.connection-facts dt {
+  color: #c5cbd5;
+}
+.connection-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+#benchmark-progress {
+  width: 100%;
+  height: 20px;
+}
+.benchmark-result {
+  font-variant-numeric: tabular-nums;
+  user-select: text;
 }
 .touchpad-panel {
   display: flex;

@@ -12,10 +12,15 @@
   <body>
     <main class="remote">
       <header class="topbar">
-        <div class="identity">
+        <button
+          id="open-connection"
+          class="identity"
+          aria-label="Connection details"
+          aria-describedby="status"
+        >
           <strong id="mac-name">Sofa Remote</strong
           ><span id="status" role="status">Connecting…</span>
-        </div>
+        </button>
         <nav aria-label="Control mode">
           <button id="touchpad-mode" class="selected" aria-pressed="true">Touchpad</button>
           <button id="keyboard-mode" aria-pressed="false">Keyboard</button>
@@ -49,6 +54,61 @@
         </details>
       </header>
       <p id="error" role="alert" hidden></p>
+      <section
+        id="connection-panel"
+        class="settings-panel"
+        aria-labelledby="connection-title"
+        hidden
+      >
+        <div class="settings-heading">
+          <h1 id="connection-title" tabindex="-1">Connection</h1>
+          <button id="close-connection">Back</button>
+        </div>
+        <fieldset>
+          <legend>Connected Mac</legend>
+          <dl class="connection-facts">
+            <dt>Mac</dt>
+            <dd id="connection-name">—</dd>
+            <dt>Status</dt>
+            <dd id="connection-status">Connecting…</dd>
+            <dt>Connection</dt>
+            <dd>Local network</dd>
+            <dt>Address</dt>
+            <dd id="connection-address">—</dd>
+          </dl>
+          <p>
+            This browser connects directly to your Mac over HTTPS. Use the native App for Bluetooth
+            LE.
+          </p>
+        </fieldset>
+        <fieldset>
+          <legend>Connection benchmark</legend>
+          <p>
+            Measure 3 groups of 30 sequential authenticated round trips, after 3 warmups. No pointer
+            or audio commands are sent.
+          </p>
+          <p>
+            This measures the browser-to-Mac connection, including browser scheduling. It does not
+            measure screen or input latency.
+          </p>
+          <progress
+            id="benchmark-progress"
+            max="90"
+            value="0"
+            aria-label="Benchmark progress"
+            hidden
+          ></progress>
+          <p id="benchmark-progress-text" hidden></p>
+          <p id="benchmark-result" class="benchmark-result" role="status" hidden></p>
+          <p id="benchmark-error" role="alert" hidden></p>
+          <button id="benchmark-start" disabled>Run benchmark</button>
+          <p id="benchmark-availability" role="status">Connect to your Mac to run the benchmark.</p>
+          <p>
+            Keep this page open. Leaving it cancels the benchmark; reconnecting never restarts it.
+          </p>
+        </fieldset>
+        <button id="connection-disconnect" class="destructive">Disconnect</button>
+      </section>
       <section id="settings-panel" class="settings-panel" aria-labelledby="settings-title" hidden>
         <div class="settings-heading">
           <h1 id="settings-title" tabindex="-1">Settings</h1>

@@ -5,6 +5,7 @@ import { LiveControlPanels } from './live-controls.js';
 import { LiveSessionControls } from './live-session.js';
 import { LiveSettings } from './live-settings.js';
 import { LiveKeyboardControls } from './live-keyboard.js';
+import { LiveConnectionDetails } from './live-connection.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
 import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
@@ -31,10 +32,12 @@ const confirmForm = element<HTMLFormElement>('confirm-pairing');
 const codeInput = element<HTMLInputElement>('pairing-code');
 const menu = element<HTMLDetailsElement>('menu');
 const settingsPanel = element<HTMLElement>('settings-panel');
+const connectionPanel = element<HTMLElement>('connection-panel');
 const captures = new Set<number>();
 let keyboard = false;
 let connected = false;
 let settingsOpen = false;
+let connectionOpen = false;
 let magnificationAvailable = false;
 let threeFingerDragEnabled = true;
 let requestID: string | null = null;
@@ -55,6 +58,7 @@ const pad = new LiveTouchpad(
 const panels = new LiveControlPanels(input, cancelPad);
 const sessionControls = new LiveSessionControls(input, cancelPad, menu);
 const keyboardControls = new LiveKeyboardControls((command) => input.enqueue(command), cancelPad);
+const connectionDetails = new LiveConnectionDetails((signal) => connection.probe(signal));
 new LiveSettings((value) => {
   threeFingerDragEnabled = value.threeFingerDrag;
   pad.setThreeFingerDragEnabled(value.threeFingerDrag);
@@ -71,6 +75,7 @@ const connection = new WebRemoteConnection({
     panels.setConnected(connected);
     sessionControls.setConnected(connected);
     keyboardControls.setConnected(connected);
+    connectionDetails.updateStatus(status);
     renderScreen();
     statusLabel.textContent = {
       disconnected: 'Disconnected',
@@ -115,15 +120,22 @@ function clearError(): void {
 }
 function renderScreen(): void {
   settingsPanel.hidden = !settingsOpen;
-  controls.inert = !connected || settingsOpen;
-  pairing.hidden = settingsOpen || !lifecycle.showPairing;
-  controls.hidden = settingsOpen || !lifecycle.showControls;
+  connectionPanel.hidden = !connectionOpen;
+  const pageOpen = settingsOpen || connectionOpen;
+  controls.inert = !connected || pageOpen;
+  pairing.hidden = pageOpen || !lifecycle.showPairing;
+  controls.hidden = pageOpen || !lifecycle.showControls;
 }
 function renderState(state: WebRemoteState): void {
   nameLabel.textContent = state.deviceName;
+  element<HTMLElement>('open-connection').setAttribute(
+    'aria-label',
+    `Connection details for ${state.deviceName}`,
+  );
   panels.update(state);
   sessionControls.update(state);
   keyboardControls.update(state);
+  connectionDetails.update(state);
   const canMagnify =
     state.accessibilityGranted &&
     state.supportsGestures &&
@@ -158,6 +170,8 @@ function cancelPad(): void {
 function selectMode(value: boolean): void {
   cancelPad();
   settingsOpen = false;
+  connectionOpen = false;
+  connectionDetails.leave();
   renderScreen();
   keyboard = value;
   keyboardPanel.hidden = !keyboard;
@@ -175,8 +189,31 @@ element<HTMLButtonElement>('open-settings').addEventListener('click', () => {
   menu.open = false;
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   settingsOpen = true;
+  connectionOpen = false;
+  connectionDetails.leave();
   renderScreen();
   element<HTMLElement>('settings-title').focus({ preventScroll: true });
+});
+element<HTMLButtonElement>('open-connection').addEventListener('click', () => {
+  cancelPad();
+  menu.open = false;
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  settingsOpen = false;
+  connectionOpen = true;
+  renderScreen();
+  element<HTMLElement>('connection-title').focus({ preventScroll: true });
+});
+element<HTMLButtonElement>('close-connection').addEventListener('click', () => {
+  connectionOpen = false;
+  connectionDetails.leave();
+  renderScreen();
+  element<HTMLElement>('open-connection').focus({ preventScroll: true });
+});
+element<HTMLButtonElement>('connection-disconnect').addEventListener('click', () => {
+  connectionDetails.leave();
+  connectionOpen = false;
+  lifecycle.stop();
+  connection.disconnect();
 });
 element<HTMLButtonElement>('close-settings').addEventListener('click', () => {
   settingsOpen = false;
@@ -258,6 +295,7 @@ window.addEventListener('keydown', (event) => {
   if (
     !connected ||
     settingsOpen ||
+    connectionOpen ||
     !shouldHandleWindowShortcut(event.key, target ? 'control' : 'page', event) ||
     event.repeat
   )
