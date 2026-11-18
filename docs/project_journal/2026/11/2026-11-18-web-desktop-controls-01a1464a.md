@@ -20,7 +20,8 @@ superseded_by:
   unchanged. Preserve the separate keyboard page and existing volume behavior.
 - Use only the four existing protocol actions and native Mac executor. The Web
   peer admits `system.shortcut`; arbitrary shortcut values, extra keyboard
-  fields, gesture frames and session/display commands remain outside its scope.
+  fields and gesture frames remain outside its scope. Session/display controls
+  are covered by the separate [Web session workstream](2026-11-18-web-session-controls-01a1464a.md).
 - Enable controls only while connected to a gesture-capable companion with
   Accessibility. Clear stale capability state on disconnect and require a fresh
   snapshot on reconnect. Provide permission/update guidance when unavailable.
@@ -35,7 +36,7 @@ superseded_by:
   actions, drag-release ordering, disconnect/no replay and failed-release safety.
 - All 25 gateway package tests and the real TLS/WSS transport test pass. The
   desktop-free fixture checks the exact four action payloads and rejects
-  arbitrary shortcuts, extra key fields and session/display commands.
+  arbitrary shortcuts and extra key fields.
 - Isolated headless Chrome exercises the built client at 390x844, 1024x768 and
   932x430. It checks all eight panel combinations and an unchanged touchpad
   frame, actual button hit testing, capability/permission changes, disconnect

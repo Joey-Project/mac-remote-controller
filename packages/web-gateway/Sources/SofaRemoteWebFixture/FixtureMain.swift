@@ -45,6 +45,7 @@ private struct FixtureConfiguration: Decodable {
     let evidenceFile: String
     var loopbackOnly: Bool?
     var restartOnce: Bool?
+    var unlockAllowed: Bool?
 }
 
 @MainActor
@@ -56,6 +57,7 @@ private final class Fixture {
     private var gateway: WebGateway?
     private var prompt: WebPairingPrompt?
     private var releasedOnClose = 0
+    private var deniedSessionCommands = 0
     private var ready = false
     private lazy var pairing = WebPairingCoordinator(
         isUnlocked: { true }, canPair: { self.credentials.count < 8 },
@@ -68,6 +70,10 @@ private final class Fixture {
         accessibilityGranted: true, systemVolume: 0,
         deviceName: "Web integration fixture — no desktop control",
         supportsGestures: true,
+        capabilities: [
+            WireCapabilities.remoteLock, WireCapabilities.remoteUnlock,
+            WireCapabilities.displayPower
+        ],
         mediaTargets: [
             MediaTarget(
                 id: "iina:fixture", name: "Fixture IINA", kind: .iina,
@@ -78,7 +84,7 @@ private final class Fixture {
                 id: "chrome:fixture", name: "Fixture browser", kind: .youtube,
                 capabilities: MediaCapabilities(
                     playPause: true, seek: true, next: false, previous: false))
-        ])
+        ], sessionLocked: false, unlockAvailable: false, displayAsleep: false)
 
     private final class Client {
         let peer: WebSocketRemotePeer
@@ -88,7 +94,10 @@ private final class Fixture {
         init(peer: WebSocketRemotePeer) { self.peer = peer }
     }
 
-    init(configuration: FixtureConfiguration) { self.configuration = configuration }
+    init(configuration: FixtureConfiguration) {
+        self.configuration = configuration
+        state.unlockAvailable = configuration.unlockAllowed == true
+    }
 
     func start() async throws {
         var assets: [String: WebAsset] = [:]
@@ -175,6 +184,12 @@ private final class Fixture {
                 client.session = session
                 client.held.apply(accepted.command)
                 client.held.refresh()
+                if accepted.command.name == .sessionUnlock
+                    || SessionControlPolicy.isControl(accepted.command.name)
+                {
+                    replySession(accepted, session: session, client: client)
+                    return
+                }
                 if accepted.command.name == .mediaControl {
                     let failure = applyMedia(accepted.command.mediaRequest)
                     client.peer.send(session.makeResult(for: accepted, error: failure))
@@ -193,6 +208,35 @@ private final class Fixture {
                 writeEvidence()
             } catch { client.peer.close() }
         }
+    }
+
+    private func replySession(_ accepted: AcceptedCommand, session: ServerSession, client: Client) {
+        let failure = applySession(accepted.command.name)
+        client.peer.send(session.makeResult(for: accepted, error: failure))
+        client.peer.send(
+            WireMessage(type: .state, connectionID: session.connectionID, state: state))
+        writeEvidence()
+    }
+
+    /// Changes fixture memory only. Native Mac/helper actions are never called.
+    private func applySession(_ action: CommandName) -> RemoteError? {
+        guard SessionControlPolicy.allows(action, state: state) else {
+            deniedSessionCommands += 1
+            return RemoteError(
+                code: "session_unavailable",
+                message: "Fixture browser permission or session state does not allow this action.")
+        }
+        switch action {
+        case .sessionLock: state.sessionLocked = true
+        case .sessionUnlock: state.sessionLocked = false; state.displayAsleep = false
+        case .displayOff: state.displayAsleep = true
+        case .displayWake: state.displayAsleep = false
+        case .sessionLockAndDisplayOff: state.sessionLocked = true; state.displayAsleep = true
+        default:
+            return RemoteError(code: "session_unavailable", message: "Unsupported fixture action.")
+        }
+        appendEvent(["name": action.rawValue])
+        return nil
     }
 
     private func applyMedia(_ request: MediaRequest?) -> RemoteError? {
@@ -239,6 +283,9 @@ private final class Fixture {
             "origin": configuration.endpoint.origin, "connections": clients.count,
             "pairedBrowsers": credentials.count, "events": events,
             "releasedButtonsOnClose": releasedOnClose,
+            "deniedSessionCommands": deniedSessionCommands,
+            "sessionLocked": state.sessionLocked ?? false,
+            "displayAsleep": state.displayAsleep ?? false,
             "heldButtons": clients.values.reduce(0) { $0 + $1.held.buttons.count }
         ]
         if let prompt {

@@ -26,6 +26,21 @@
             <label><input id="show-volume" type="checkbox" /> Volume on touchpad</label>
             <label><input id="show-media" type="checkbox" /> Player controls</label>
             <label><input id="show-desktop" type="checkbox" /> Desktop controls</label>
+            <section
+              id="session-controls"
+              class="session-controls"
+              aria-label="Mac session and display"
+              hidden
+            >
+              <button data-session="session.lock" hidden disabled>Lock Mac</button>
+              <button data-session="session.unlock" hidden disabled>Unlock Mac</button>
+              <button data-session="display.off" hidden disabled>Turn Display Off</button>
+              <button data-session="display.wake" hidden disabled>Wake Display</button>
+              <button data-session="session.lock-display-off" hidden disabled>
+                Lock &amp; Turn Display Off
+              </button>
+              <p id="session-availability" role="status" hidden></p>
+            </section>
             <button id="connect">Reconnect</button>
             <button id="disconnect">Disconnect</button>
             <button id="forget" class="destructive">Forget pairing</button>

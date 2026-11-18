@@ -1,5 +1,6 @@
 import { validMediaRequest, type MediaCommand } from './media-model.js';
 import { isSystemShortcut, type SystemShortcut } from './desktop-controls.js';
+import { isSessionAction, type SessionAction } from './session-controls.js';
 
 export type RemoteKey =
   'return' | 'escape' | 'backspace' | 'space' | 'left' | 'right' | 'up' | 'down';
@@ -14,6 +15,7 @@ export type InputCommand =
   | Readonly<{ name: 'keyboard.text'; text: string }>
   | Readonly<{ name: 'system.volume.set'; value: number }>
   | Readonly<{ name: 'system.shortcut'; shortcut: SystemShortcut }>
+  | Readonly<{ name: SessionAction }>
   | MediaCommand;
 
 export type FrameScheduler = Readonly<{
@@ -210,6 +212,6 @@ function validCommand(command: InputCommand): boolean {
         Object.keys(command).sort().join(',') === 'name,shortcut'
       );
     default:
-      return false;
+      return isSessionAction(command.name) && Object.keys(command).length === 1;
   }
 }

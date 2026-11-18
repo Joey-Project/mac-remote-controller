@@ -2,6 +2,7 @@ import './live.css';
 import { RemoteInputBuffer, type RemoteKey } from './remote-input.js';
 import { LiveTouchpad } from './live-touchpad.js';
 import { LiveControlPanels } from './live-controls.js';
+import { LiveSessionControls } from './live-session.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
 import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
@@ -42,6 +43,7 @@ const input = new RemoteInputBuffer(
 );
 const pad = new LiveTouchpad((command) => input.enqueue(command));
 const panels = new LiveControlPanels(input, cancelPad);
+const sessionControls = new LiveSessionControls(input, cancelPad, menu);
 const connection = new WebRemoteConnection({
   origin: location.origin,
   input,
@@ -50,6 +52,7 @@ const connection = new WebRemoteConnection({
     lifecycle.update(status);
     connected = status === 'connected';
     panels.setConnected(connected);
+    sessionControls.setConnected(connected);
     controls.inert = !connected;
     pairing.hidden = !lifecycle.showPairing;
     controls.hidden = !lifecycle.showControls;
@@ -78,6 +81,7 @@ const connection = new WebRemoteConnection({
   },
   onResult(command, error) {
     panels.complete(command, error);
+    sessionControls.complete(command);
     if (error && command.name.startsWith('pointer.')) cancelPad();
     if (command.name !== 'keyboard.text') return;
     sendText.disabled = false;
@@ -96,6 +100,7 @@ function clearError(): void {
 function renderState(state: WebRemoteState): void {
   nameLabel.textContent = state.deviceName;
   panels.update(state);
+  sessionControls.update(state);
   surface.setAttribute('aria-disabled', String(!state.accessibilityGranted));
   if (!state.accessibilityGranted)
     showError('Allow Accessibility in the Mac companion for pointer and keyboard control.');

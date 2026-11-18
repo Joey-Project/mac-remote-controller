@@ -99,7 +99,7 @@ def wait_for(predicate, seconds=5):
     raise AssertionError("Fixture condition timed out")
 
 
-def exercise(fixture, assets, root):
+def exercise(fixture, assets, root, unlock_allowed):
     certificate = root / "certificate.pem"
     key = root / "key.pem"
     subprocess.run([
@@ -122,6 +122,7 @@ def exercise(fixture, assets, root):
                      "privateKey": str(key)},
         "assetsDirectory": str(assets), "evidenceFile": str(evidence),
         "loopbackOnly": True, "restartOnce": True,
+        "unlockAllowed": unlock_allowed,
     }))
     context = ssl.create_default_context(cafile=str(certificate))
     context.minimum_version = ssl.TLSVersion.TLSv1_3
@@ -289,13 +290,53 @@ def exercise(fixture, assets, root):
                          "requestId": str(uuid.uuid4()), "sequence": 1, "command": command})
             assert client.receive()[0] == 8, "Browser escaped the fixed desktop-action allowlist"
             client.close()
-        for name in ["session.unlock", "session.lock", "display.off", "display.wake",
-                     "session.lock-display-off"]:
+        client = SocketClient(context, port, authority, origin, cookie)
+        welcome = client.message()
+        assert welcome["state"]["unlockAvailable"] is unlock_allowed
+        session = welcome["connectionId"]
+        session_actions = ["session.lock", "display.off", "display.wake",
+                           "session.lock-display-off", "session.unlock"]
+        snapshots = [(True, False), (True, True), (True, False), (True, True),
+                     (not unlock_allowed, not unlock_allowed)]
+        for sequence, (name, expected) in enumerate(zip(session_actions, snapshots), 1):
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": sequence, "command": {"name": name}})
+            result = client.message()
+            assert result["type"] == "result" and result["sequence"] == sequence
+            rejected = name == "session.unlock" and not unlock_allowed
+            assert ("error" in result) is rejected
+            snapshot = client.message()
+            assert snapshot["type"] == "state"
+            assert (snapshot["state"]["sessionLocked"], snapshot["state"]["displayAsleep"]) == expected
+        # A permission rejection leaves the authenticated connection usable.
+        client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                     "requestId": str(uuid.uuid4()), "sequence": 6,
+                     "command": {"name": "keyboard.key", "key": "escape"}})
+        assert "error" not in client.message()
+        client.close()
+        expected_events = [{"name": name} for name in session_actions
+                           if unlock_allowed or name != "session.unlock"]
+
+        def completed_session_events():
+            current = state()
+            events = [event for event in current["events"] if event["name"] in session_actions]
+            return events if len(events) >= len(expected_events) and current["deniedSessionCommands"] == int(not unlock_allowed) else None
+
+        assert wait_for(completed_session_events) == expected_events, "A denied or duplicate session action executed"
+        for name in session_actions:
+            client = SocketClient(context, port, authority, origin, cookie)
+            session = client.message()["connectionId"]
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": 1,
+                         "command": {"name": name, "value": 1}})
+            assert client.receive()[0] == 8, "A parameterized session action escaped validation"
+            client.close()
+        for name in ["system.sleep", "session.login", "display.shell"]:
             client = SocketClient(context, port, authority, origin, cookie)
             session = client.message()["connectionId"]
             client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
                          "requestId": str(uuid.uuid4()), "sequence": 1, "command": {"name": name}})
-            assert client.receive()[0] == 8, "Browser escaped the command scope"
+            assert client.receive()[0] == 8, "An arbitrary power command escaped the scope"
             client.close()
         client = SocketClient(context, port, authority, origin, cookie)
         client.message()
@@ -306,7 +347,7 @@ def exercise(fixture, assets, root):
         assert not rejected.upgraded, "Revoked cookie reconnected"
         rejected.close()
         assert state()["desktopEvents"] == 0
-        print("TLS, origin admission, PIN ownership, WSS input/media/desktop, scope, release and revocation passed.")
+        print(f"TLS, PIN, WSS input/media/desktop/session, scope and revocation passed; unlock allowed={unlock_allowed}.")
     finally:
         if child.poll() is None:
             child.send_signal(signal.SIGTERM)
@@ -324,7 +365,10 @@ def main():
     parser.add_argument("--assets", type=Path, required=True)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="sofa-web-transport-") as directory:
-        exercise(args.fixture.resolve(), args.assets.resolve(), Path(directory))
+        for allowed in [False, True]:
+            root = Path(directory) / str(allowed)
+            root.mkdir()
+            exercise(args.fixture.resolve(), args.assets.resolve(), root, allowed)
 
 
 if __name__ == "__main__":
