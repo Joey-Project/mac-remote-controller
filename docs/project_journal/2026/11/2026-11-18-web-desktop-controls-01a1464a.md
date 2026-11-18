@@ -43,6 +43,13 @@ superseded_by:
   acknowledgement. Existing media/volume/keyboard checks stay in the run.
 - These fixtures never emit desktop input or play audio; native animation and
   real cross-Space navigation remain physical acceptance work.
+- The existing local-automation idle-client test observes actual peer closure
+  within its deadline, allows only a rejection frame before EOF and verifies
+  that only the normal request reaches its handler. This avoids confusing a
+  client read timeout with server expiry or assuming EOF is the only valid
+  rejection. Two deterministic observer checks cover an open socket and a
+  rejection frame followed by closure; all 12 socket tests pass. Production
+  automation deadlines and behavior are unchanged.
 
 ## Next Steps
 
