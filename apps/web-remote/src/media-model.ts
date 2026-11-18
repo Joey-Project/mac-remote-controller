@@ -120,6 +120,39 @@ export function snapPlayerVolume(proposed: number, maximum: number): number | nu
   return Math.min(maximum, Math.round(bounded / step) * step);
 }
 
+/** One outstanding player-volume request; slow adapters retain only the latest intent. */
+export class PlayerVolumeSender {
+  private active: MediaCommand | null = null;
+  private pending: MediaCommand | null = null;
+
+  constructor(private readonly send: (command: MediaCommand) => boolean) {}
+
+  enqueue(command: MediaCommand): boolean {
+    if (command.mediaRequest.action !== 'setVolume' || !validMediaRequest(command.mediaRequest))
+      return false;
+    if (this.active) {
+      if (this.active.mediaRequest.targetId !== command.mediaRequest.targetId) return false;
+      this.pending = command;
+      return true;
+    }
+    this.active = command;
+    if (this.send(command)) return true;
+    this.cancel();
+    return false;
+  }
+  complete(command: MediaCommand): void {
+    if (command.mediaRequest !== this.active?.mediaRequest) return;
+    this.active = null;
+    const pending = this.pending;
+    this.pending = null;
+    if (pending) this.enqueue(pending);
+  }
+  cancel(): void {
+    this.active = null;
+    this.pending = null;
+  }
+}
+
 /** Explicit source selection; a disappearing player never silently retargets a click. */
 export class MediaControlsModel {
   targets: readonly MediaTarget[] | null = null;

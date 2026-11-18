@@ -33,6 +33,9 @@ endpoints. Seek duration is fixed at 10 seconds in this slice.
 
 Media commands use the existing authenticated same-origin connection and Mac
 media router. No additional bridge token or adapter setup is sent to the browser.
+While a player-volume request is awaiting acknowledgement, only the latest
+unsent slider value is retained. Pointer/keyboard input does not wait for the
+player, and intermediate slider values cannot fill the shared request queue.
 
 ## Certificate and DNS
 

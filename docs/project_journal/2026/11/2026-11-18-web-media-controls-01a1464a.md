@@ -22,7 +22,9 @@ superseded_by:
   ranges above 100%. Keep the keyboard page and touchpad layout.
 - Bound and validate incoming media state. Coalesce slider commands only for the
   same target; preserve ordering with motion, text and discrete actions. Never
-  replay a media action after an ambiguous delivery failure. Ignore acknowledgements
+  replay a media action after an ambiguous delivery failure. Wait for each player
+  volume acknowledgement while retaining only the latest unsent slider intent;
+  pointer and keyboard commands continue immediately. Ignore acknowledgements
   for old targets or replaced volume requests.
 - Admit media control through the existing authenticated WebSocket peer and Mac
   media router. Keep session/display and native gesture commands outside the Web
@@ -31,11 +33,13 @@ superseded_by:
 ## Validation
 
 - The previous buffer rejects the two new media-ordering regressions; the
-  updated Web suite passes 68 tests. Coverage includes target disappearance,
+  updated Web suite passes 72 tests. Coverage includes target disappearance,
   capability/range changes, stale acknowledgements and disconnect/reconnect.
 - Isolated headless Chrome checks the built live client at 390x844, 1024x768
   and 932x430: four overlay combinations, one five-button row, fixed seeks,
-  percentage snapping/range, rejection rollback and keyboard clearance. Mock
+  percentage snapping/range, rejection rollback and keyboard clearance. A delayed
+  acknowledgement regression fails before volume backpressure and passes after:
+  one outstanding volume request, one latest follow-up and immediate pointer clicks. Mock
   transport never emits desktop input or plays audio.
 - All 25 gateway package tests and the real TLS/WSS transport test pass. The
   transport test covers accepted media requests, unsupported capabilities,

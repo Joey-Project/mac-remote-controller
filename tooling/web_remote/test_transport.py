@@ -240,10 +240,20 @@ def exercise(fixture, assets, root):
             if action == "setVolume" and not rejected:
                 assert snapshot["state"]["mediaTargets"][0]["playerVolume"] == value
         client.close()
-        events = wait_for(lambda: [event for event in state()["events"]
-                                  if event["name"] == "media.control"])
-        assert len(events) == 8, "Rejected actions were executed or accepted media was lost"
-        assert events[1]["value"] == "-10.0" and events[3]["value"] == "10.0"
+        def completed_media_events():
+            events = [event for event in state()["events"] if event["name"] == "media.control"]
+            # The socket acknowledgement can arrive before the atomic evidence-file write.
+            # Wait for the final accepted action, not merely a nonempty partial history.
+            return events if events and (events[-1]["targetId"], events[-1]["action"]) == (
+                "chrome:fixture", "playPause") else None
+
+        events = wait_for(completed_media_events)
+        expected = [("iina:fixture", action) for action in [
+            "previous", "seek", "playPause", "seek", "next", "setVolume", "setVolume"
+        ]] + [("chrome:fixture", "playPause")]
+        assert [(event["targetId"], event["action"]) for event in events] == expected, (
+            f"Rejected actions were executed or accepted media was lost: {len(events)} events")
+        assert float(events[1]["value"]) == -10 and float(events[3]["value"]) == 10
         for name in ["session.unlock", "session.lock", "display.off", "display.wake",
                      "session.lock-display-off"]:
             client = SocketClient(context, port, authority, origin, cookie)

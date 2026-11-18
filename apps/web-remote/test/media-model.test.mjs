@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MediaControlsModel,
+  PlayerVolumeSender,
   readMediaTargets,
   snapPlayerVolume,
   validMediaRequest,
@@ -212,4 +213,75 @@ test('media requests reject unexpected fields and invalid seek or gain values', 
     { targetId: '', action: 'previous' },
   ])
     assert.equal(validMediaRequest(request), false);
+});
+
+function gain(value, targetId = 'iina:fixture') {
+  return { name: 'media.control', mediaRequest: { targetId, action: 'setVolume', value } };
+}
+
+test('slow player acknowledgements retain only the latest unsent slider value', () => {
+  const sent = [];
+  const sender = new PlayerVolumeSender((command) => {
+    sent.push(command);
+    return true;
+  });
+  const first = gain(0.1);
+  sender.enqueue(first);
+  for (let value = 2; value <= 40; value++) assert.equal(sender.enqueue(gain(value / 10)), true);
+  assert.deepEqual(sent, [first]);
+  sender.complete(first);
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].mediaRequest.value, 4);
+  sender.complete(first);
+  assert.equal(sent.length, 2);
+  sender.complete(sent[1]);
+  assert.equal(sent.length, 2);
+});
+
+test('cancelled volume queues ignore old acknowledgements after reconnect or selection', () => {
+  const sent = [];
+  const sender = new PlayerVolumeSender((command) => {
+    sent.push(command);
+    return true;
+  });
+  const old = gain(1.2);
+  sender.enqueue(old);
+  sender.enqueue(gain(2));
+  sender.cancel();
+  const fresh = gain(1.2);
+  sender.enqueue(fresh);
+  sender.enqueue(gain(3));
+  sender.complete(old);
+  assert.deepEqual(sent, [old, fresh]);
+  sender.complete(fresh);
+  assert.equal(sent.at(-1).mediaRequest.value, 3);
+});
+
+test('ambiguous volume send failure drops queued intent without replay', () => {
+  const sent = [];
+  const sender = new PlayerVolumeSender((command) => {
+    sent.push(command);
+    return sent.length === 1;
+  });
+  const first = gain(1.2);
+  const latest = gain(2);
+  sender.enqueue(first);
+  sender.enqueue(latest);
+  sender.complete(first);
+  sender.complete(latest);
+  sender.complete(first);
+  assert.deepEqual(sent, [first, latest]);
+});
+
+test('a volume queue does not accept another target or discrete media actions', () => {
+  const sender = new PlayerVolumeSender(() => true);
+  sender.enqueue(gain(1.2));
+  assert.equal(sender.enqueue(gain(2, 'chrome:other')), false);
+  assert.equal(
+    sender.enqueue({
+      name: 'media.control',
+      mediaRequest: { targetId: 'iina:fixture', action: 'next' },
+    }),
+    false,
+  );
 });

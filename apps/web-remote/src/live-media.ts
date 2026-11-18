@@ -1,4 +1,4 @@
-import { MediaControlsModel, type MediaAction } from './media-model.js';
+import { MediaControlsModel, PlayerVolumeSender, type MediaAction } from './media-model.js';
 import { type InputCommand, RemoteInputBuffer } from './remote-input.js';
 import type { WebRemoteState } from './web-connection.js';
 
@@ -11,6 +11,7 @@ function element<T extends HTMLElement>(id: string): T {
 /** Media UI updates only on snapshots and deliberate actions, never pointer movement. */
 export class LiveMediaControls {
   private readonly model = new MediaControlsModel();
+  private readonly volumes = new PlayerVolumeSender((command) => this.input.enqueue(command));
   private readonly overlays = element<HTMLElement>('overlays');
   private readonly controls = element<HTMLElement>('controls');
   private readonly volume = element<HTMLElement>('volume');
@@ -49,6 +50,7 @@ export class LiveMediaControls {
       });
     }
     this.target.addEventListener('change', () => {
+      this.volumes.cancel();
       this.input.cancelMediaVolume();
       this.model.select(this.target.value);
       this.render();
@@ -94,6 +96,7 @@ export class LiveMediaControls {
   setConnected(connected: boolean): void {
     this.connected = connected;
     if (!connected) {
+      this.volumes.cancel();
       this.systemVolume = null;
       this.model.disconnect();
     }
@@ -101,7 +104,10 @@ export class LiveMediaControls {
   }
   update(state: WebRemoteState): void {
     this.systemVolume = state.systemVolume;
-    if (this.model.update(state.mediaTargets)) this.input.cancelMediaVolume();
+    if (this.model.update(state.mediaTargets)) {
+      this.volumes.cancel();
+      this.input.cancelMediaVolume();
+    }
     this.render();
   }
   setKeyboard(keyboard: boolean): void {
@@ -111,13 +117,14 @@ export class LiveMediaControls {
   complete(command: InputCommand, error: string | null): void {
     if (command.name !== 'media.control') return;
     this.model.complete(command, error);
+    this.volumes.complete(command);
     this.render();
   }
   private setVolume(percent: number): void {
     if (!this.connected) return;
     if (this.playerVolume) {
       const command = this.model.volume(percent);
-      if (command && this.input.enqueue(command)) this.model.requested(command);
+      if (command && this.volumes.enqueue(command)) this.model.requested(command);
     } else if (this.systemVolume !== null) {
       if (this.input.enqueue({ name: 'system.volume.set', value: percent / 100 }))
         this.systemVolume = percent / 100;
