@@ -1,6 +1,7 @@
 import './live.css';
 import { RemoteInputBuffer, type RemoteKey } from './remote-input.js';
 import { LiveTouchpad } from './live-touchpad.js';
+import { LiveMediaControls } from './live-media.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
 import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
@@ -16,10 +17,6 @@ const controls = element<HTMLElement>('controls');
 const statusLabel = element<HTMLElement>('status');
 const errorLabel = element<HTMLElement>('error');
 const nameLabel = element<HTMLElement>('mac-name');
-const volume = element<HTMLElement>('volume');
-const volumeRange = element<HTMLInputElement>('volume-range');
-const volumeValue = element<HTMLOutputElement>('volume-value');
-const showVolume = element<HTMLInputElement>('show-volume');
 const touchpadPanel = element<HTMLElement>('touchpad-panel');
 const keyboardPanel = element<HTMLElement>('keyboard-panel');
 const touchpadMode = element<HTMLButtonElement>('touchpad-mode');
@@ -44,6 +41,7 @@ const input = new RemoteInputBuffer(
   () => connection.fail(),
 );
 const pad = new LiveTouchpad((command) => input.enqueue(command));
+const media = new LiveMediaControls(input, cancelPad);
 const connection = new WebRemoteConnection({
   origin: location.origin,
   input,
@@ -51,6 +49,7 @@ const connection = new WebRemoteConnection({
   onStatus(status) {
     lifecycle.update(status);
     connected = status === 'connected';
+    media.setConnected(connected);
     controls.inert = !connected;
     pairing.hidden = !lifecycle.showPairing;
     controls.hidden = !lifecycle.showControls;
@@ -78,6 +77,7 @@ const connection = new WebRemoteConnection({
     showError(message);
   },
   onResult(command, error) {
+    media.complete(command, error);
     if (error && command.name.startsWith('pointer.')) cancelPad();
     if (command.name !== 'keyboard.text') return;
     sendText.disabled = false;
@@ -95,11 +95,7 @@ function clearError(): void {
 }
 function renderState(state: WebRemoteState): void {
   nameLabel.textContent = state.deviceName;
-  volumeRange.disabled = state.systemVolume === null;
-  if (state.systemVolume !== null) {
-    volumeRange.value = String(Math.round(state.systemVolume * 100));
-    volumeValue.value = `${Math.round(state.systemVolume * 100)}%`;
-  } else volumeValue.value = 'Unavailable';
+  media.update(state);
   surface.setAttribute('aria-disabled', String(!state.accessibilityGranted));
   if (!state.accessibilityGranted)
     showError('Allow Accessibility in the Mac companion for pointer and keyboard control.');
@@ -121,14 +117,10 @@ function selectMode(value: boolean): void {
   keyboardMode.setAttribute('aria-pressed', String(keyboard));
   touchpadMode.classList.toggle('selected', !keyboard);
   keyboardMode.classList.toggle('selected', keyboard);
-  volume.hidden = !keyboard && !showVolume.checked;
+  media.setKeyboard(keyboard);
 }
 touchpadMode.addEventListener('click', () => selectMode(false));
 keyboardMode.addEventListener('click', () => selectMode(true));
-showVolume.addEventListener('change', () => {
-  volume.hidden = !keyboard && !showVolume.checked;
-  menu.open = false;
-});
 
 surface.addEventListener('pointerdown', (event) => {
   if (
@@ -206,7 +198,7 @@ const keys: Readonly<Record<string, RemoteKey>> = {
 window.addEventListener('keydown', (event) => {
   const target =
     event.target instanceof Element &&
-    event.target.closest('button, input, textarea, summary, a, [contenteditable]');
+    event.target.closest('button, input, select, textarea, summary, a, [contenteditable]');
   if (
     !connected ||
     !shouldHandleWindowShortcut(event.key, target ? 'control' : 'page', event) ||
@@ -215,10 +207,6 @@ window.addEventListener('keydown', (event) => {
     return;
   const key = keys[event.key];
   if (key && input.enqueue({ name: 'keyboard.key', key })) event.preventDefault();
-});
-volumeRange.addEventListener('input', () => {
-  volumeValue.value = `${volumeRange.value}%`;
-  input.enqueue({ name: 'system.volume.set', value: Number(volumeRange.value) / 100 });
 });
 element<HTMLFormElement>('send-text').addEventListener('submit', (event) => {
   event.preventDefault();

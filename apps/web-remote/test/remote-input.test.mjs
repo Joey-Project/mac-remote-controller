@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RemoteInputBuffer } from '../dist/remote-input.js';
+import { MediaControlsModel, readMediaTargets } from '../dist/media-model.js';
 
 function fixture() {
   let next = 0;
@@ -37,6 +38,62 @@ function fixture() {
     },
   };
 }
+
+test('gesture cancellation preserves queued media volume but target cancellation drops it', () => {
+  const f = fixture();
+  const command = {
+    name: 'media.control',
+    mediaRequest: { targetId: 'iina:test', action: 'setVolume', value: 1.2 },
+  };
+  f.input.enqueue(command);
+  f.input.cancelGesture();
+  f.frame();
+  assert.equal(f.sent[0].mediaRequest, command.mediaRequest);
+  f.input.enqueue(command);
+  f.input.cancelMediaVolume();
+  f.frame();
+  assert.equal(f.sent.length, 1);
+  f.input.enqueue({ name: 'pointer.move', x: 10, y: 5 });
+  f.input.cancelMediaVolume();
+  f.frame();
+  assert.equal(f.sent.at(-1).name, 'pointer.move');
+});
+
+test('coalesced volume ack retains request identity and disconnect never replays it', () => {
+  const f = fixture();
+  const model = new MediaControlsModel();
+  model.update(
+    readMediaTargets([
+      {
+        id: 'iina:test',
+        name: 'Fixture',
+        kind: 'iina',
+        capabilities: {
+          playPause: true,
+          seek: true,
+          next: true,
+          previous: true,
+          playerVolumeMaximum: 4,
+        },
+        playerVolume: 0.6,
+      },
+    ]),
+  );
+  model.select('iina:test');
+  const command = model.volume(120);
+  f.input.enqueue(command);
+  model.requested(command);
+  f.frame();
+  model.complete(f.sent[0], 'fixture error');
+  assert.equal(model.volumePercent, 60);
+  f.input.enqueue(command);
+  f.input.disconnect();
+  f.input.connect(() => {
+    throw new Error('Must not replay');
+  });
+  f.frame();
+  assert.equal(f.failures(), 0);
+});
 
 test('adjacent movement waits at most one frame and preserves total displacement', () => {
   const f = fixture();
@@ -85,6 +142,36 @@ test('volume retains only the latest value and preserves ordering against text',
   assert.deepEqual(f.sent, [
     { name: 'system.volume.set', value: 0.3 },
     { name: 'keyboard.text', text: '你好' },
+  ]);
+});
+
+test('media buttons flush prior motion and deliver one target-specific action', () => {
+  const f = fixture();
+  f.input.enqueue({ name: 'pointer.move', x: 12, y: 7 });
+  const command = {
+    name: 'media.control',
+    mediaRequest: { targetId: 'iina:player', action: 'seek', value: -10 },
+  };
+  assert.equal(f.input.enqueue(command), true);
+  assert.deepEqual(f.sent, [{ name: 'pointer.move', x: 12, y: 7 }, command]);
+  f.frame();
+  assert.equal(f.sent.length, 2);
+});
+
+test('player volume coalesces only for the same target and remains an ordering barrier', () => {
+  const f = fixture();
+  const volume = (targetId, value) => ({
+    name: 'media.control',
+    mediaRequest: { targetId, action: 'setVolume', value },
+  });
+  assert.equal(f.input.enqueue(volume('iina:first', 1.2)), true);
+  f.input.enqueue(volume('iina:first', 1.5));
+  f.input.enqueue(volume('chrome:other', 0.6));
+  f.input.enqueue({ name: 'keyboard.key', key: 'left' });
+  assert.deepEqual(f.sent, [
+    volume('iina:first', 1.5),
+    volume('chrome:other', 0.6),
+    { name: 'keyboard.key', key: 'left' },
   ]);
 });
 

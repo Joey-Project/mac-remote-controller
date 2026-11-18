@@ -26,12 +26,12 @@ class Socket {
   message(value) {
     this.emit('message', { data: JSON.stringify(value) });
   }
-  welcome(id = 'test-connection') {
+  welcome(id = 'test-connection', mediaTargets = undefined) {
     this.message({
       protocolVersion: 1,
       type: 'welcome',
       connectionId: id,
-      state: { accessibilityGranted: true, deviceName: 'Test Mac', systemVolume: 0 },
+      state: { accessibilityGranted: true, deviceName: 'Test Mac', systemVolume: 0, mediaTargets },
     });
   }
 }
@@ -42,6 +42,7 @@ function fixture(t, { request, active } = {}) {
   const statuses = [];
   const results = [];
   const errors = [];
+  const states = [];
   const frames = new Map();
   let identifier = 0;
   let now = 0;
@@ -80,7 +81,9 @@ function fixture(t, { request, active } = {}) {
     onError(message) {
       errors.push(message);
     },
-    onState() {},
+    onState(state) {
+      states.push(state);
+    },
     onResult(command, error) {
       results.push({ command, error });
     },
@@ -94,6 +97,7 @@ function fixture(t, { request, active } = {}) {
     statuses,
     results,
     errors,
+    states,
     advance(milliseconds) {
       now += milliseconds;
     },
@@ -104,6 +108,65 @@ function fixture(t, { request, active } = {}) {
     },
   };
 }
+
+test('welcome and live state carry media targets including volume above 100%', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const player = {
+    id: 'iina:fixture',
+    name: 'Fixture',
+    kind: 'iina',
+    capabilities: {
+      playPause: true,
+      seek: true,
+      next: false,
+      previous: false,
+      playerVolumeMaximum: 4,
+    },
+    playerVolume: 1.2,
+  };
+  f.sockets[0].welcome('test-connection', [player]);
+  assert.deepEqual(f.states.at(-1).mediaTargets, [player]);
+  f.sockets[0].message({
+    protocolVersion: 1,
+    type: 'state',
+    connectionId: 'test-connection',
+    state: { accessibilityGranted: true, deviceName: 'Fixture', systemVolume: 0, mediaTargets: [] },
+  });
+  assert.deepEqual(f.states.at(-1).mediaTargets, []);
+});
+
+test('media rejection reports the original request without replaying or disconnecting', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  socket.welcome();
+  const mediaRequest = { targetId: 'iina:fixture', action: 'setVolume', value: 1.2 };
+  f.input.enqueue({ name: 'media.control', mediaRequest });
+  f.frame();
+  const sent = socket.sent[0];
+  socket.message({
+    protocolVersion: 1,
+    type: 'result',
+    connectionId: sent.connectionId,
+    requestId: sent.requestId,
+    sequence: sent.sequence,
+    error: { code: 'media_unavailable', message: 'Fixture player closed.' },
+  });
+  assert.equal(f.results[0].command.mediaRequest, mediaRequest);
+  assert.equal(f.results[0].error, 'Fixture player closed.');
+  assert.equal(socket.readyState, 1);
+  f.frame();
+  assert.equal(socket.sent.length, 1);
+});
+
+test('invalid media state terminates the stream rather than advertising unsafe capabilities', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  f.sockets[0].welcome('fixture', [{ id: 'iina:bad' }]);
+  assert.equal(f.states.length, 0);
+  assert.equal(f.sockets[0].readyState, 3);
+});
 
 test('HTTPS own-origin requests use cookies and reject redirects without JS credentials', async (t) => {
   const f = fixture(t);

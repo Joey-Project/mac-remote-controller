@@ -1,9 +1,11 @@
 import { RemoteInputBuffer, type InputCommand } from './remote-input.js';
+import { readMediaTargets, type MediaTarget } from './media-model.js';
 
 export type WebRemoteState = Readonly<{
   accessibilityGranted: boolean;
   deviceName: string;
   systemVolume: number | null;
+  mediaTargets: readonly MediaTarget[] | null;
 }>;
 export type WebRemoteStatus =
   'disconnected' | 'connecting' | 'connected' | 'pairing' | 'reconnecting';
@@ -316,6 +318,7 @@ function readState(value: unknown): WebRemoteState {
     accessibilityGranted: value['accessibilityGranted'],
     deviceName: value['deviceName'],
     systemVolume: typeof volume === 'number' ? volume : null,
+    mediaTargets: readMediaTargets(value['mediaTargets']),
   };
 }
 
