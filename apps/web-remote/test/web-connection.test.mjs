@@ -109,6 +109,218 @@ function fixture(t, { request, active } = {}) {
   };
 }
 
+function probeWelcome(
+  socket,
+  connectionId = 'benchmark-session',
+  capabilities = ['roundTripProbe.v1'],
+) {
+  socket.message({
+    protocolVersion: 1,
+    type: 'welcome',
+    connectionId,
+    state: { accessibilityGranted: false, deviceName: 'Benchmark Mac', capabilities },
+  });
+}
+
+function pong(socket, request, overrides = {}) {
+  socket.message({
+    protocolVersion: 1,
+    type: 'pong',
+    connectionId: request.connectionId,
+    requestId: request.requestId,
+    sequence: request.sequence,
+    ...overrides,
+  });
+}
+
+test('authenticated benchmark measures only a matching Mac pong without Accessibility', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  const pending = f.connection.probe(new AbortController().signal);
+  assert.equal(socket.sent.length, 1);
+  assert.equal(socket.sent[0].type, 'ping');
+  assert.equal('command' in socket.sent[0], false);
+  assert.equal('authToken' in socket.sent[0], false);
+  f.advance(1.25);
+  pong(socket, socket.sent[0]);
+  assert.equal(await pending, 1.25);
+  assert.equal(socket.readyState, 1);
+  assert.deepEqual(f.results, []);
+});
+
+test('benchmark requires the current capability and foreground connection', async (t) => {
+  let active = true;
+  const f = fixture(t, { active: () => active });
+  await assert.rejects(f.connection.probe(new AbortController().signal), /connect/i);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  socket.welcome();
+  await assert.rejects(f.connection.probe(new AbortController().signal), /support|update/i);
+  socket.message({
+    protocolVersion: 1,
+    type: 'state',
+    connectionId: 'test-connection',
+    state: { accessibilityGranted: false, deviceName: 'Mac', capabilities: ['roundTripProbe.v1'] },
+  });
+  active = false;
+  await assert.rejects(f.connection.probe(new AbortController().signal), /foreground/i);
+  assert.equal(socket.sent.length, 0);
+});
+
+test('benchmark shares sequence ordering with input and permits only one active probe', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  f.input.enqueue({ name: 'keyboard.key', key: 'escape' });
+  const pending = f.connection.probe(new AbortController().signal);
+  await assert.rejects(f.connection.probe(new AbortController().signal), /already|progress/i);
+  f.input.enqueue({ name: 'pointer.click', button: 'left' });
+  assert.deepEqual(
+    socket.sent.map(({ sequence }) => sequence),
+    [1, 2, 3],
+  );
+  f.advance(3);
+  pong(socket, socket.sent[1]);
+  assert.equal(await pending, 3);
+});
+
+test('cancelled benchmark retires its exact reply and lets the next probe finish', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  const controller = new AbortController();
+  const rejected = assert.rejects(f.connection.probe(controller.signal), /cancel/i);
+  const retired = socket.sent[0];
+  controller.abort();
+  await rejected;
+  const pending = f.connection.probe(new AbortController().signal);
+  pong(socket, retired);
+  assert.equal(socket.readyState, 1);
+  f.advance(7);
+  pong(socket, socket.sent[1]);
+  assert.equal(await pending, 7);
+});
+
+test('benchmark timeout records loss without disconnecting or accepting its late pong as a new sample', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  const pending = f.connection.probe(new AbortController().signal);
+  f.advance(2001);
+  t.mock.timers.tick(2000);
+  assert.equal(await pending, null);
+  assert.equal(socket.readyState, 1);
+  const next = f.connection.probe(new AbortController().signal);
+  pong(socket, socket.sent[0]);
+  f.advance(0.5);
+  pong(socket, socket.sent[1]);
+  assert.equal(await next, 0.5);
+});
+
+test('a pong arriving beyond the deadline is loss even before a delayed timeout callback', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  const pending = f.connection.probe(new AbortController().signal);
+  f.advance(2001);
+  pong(socket, socket.sent[0]);
+  assert.equal(await pending, null);
+  assert.equal(socket.readyState, 1);
+});
+
+test('disconnect rejects an active benchmark and reconnect never resumes it', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const old = f.sockets[0];
+  probeWelcome(old);
+  const rejected = assert.rejects(
+    f.connection.probe(new AbortController().signal),
+    /connection|connect/i,
+  );
+  f.connection.disconnect();
+  await rejected;
+  await f.connection.connect();
+  const socket = f.sockets[1];
+  probeWelcome(socket, 'fresh-benchmark');
+  pong(old, old.sent[0]);
+  assert.deepEqual(socket.sent, []);
+  assert.equal(socket.readyState, 1);
+});
+
+test('capability loss cancels the active benchmark and retires its reply', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  const rejected = assert.rejects(
+    f.connection.probe(new AbortController().signal),
+    /support|capability/i,
+  );
+  socket.message({
+    protocolVersion: 1,
+    type: 'state',
+    connectionId: 'benchmark-session',
+    state: { accessibilityGranted: false, deviceName: 'Mac', capabilities: [] },
+  });
+  await rejected;
+  pong(socket, socket.sent[0]);
+  assert.equal(socket.readyState, 1);
+  await assert.rejects(f.connection.probe(new AbortController().signal), /support|update/i);
+});
+
+test('retired probe storage is bounded and a valid late reply frees capacity', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  for (let index = 0; index < 128; index += 1) {
+    const controller = new AbortController();
+    const rejected = assert.rejects(f.connection.probe(controller.signal), /cancel/i);
+    controller.abort();
+    await rejected;
+  }
+  await assert.rejects(f.connection.probe(new AbortController().signal), /reconnect/i);
+  assert.equal(socket.sent.length, 128);
+  pong(socket, socket.sent[0]);
+  const pending = f.connection.probe(new AbortController().signal);
+  pong(socket, socket.sent.at(-1));
+  assert.equal(await pending, 0);
+});
+
+test('an incorrect retired sequence remains a protocol failure', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  const controller = new AbortController();
+  const rejected = assert.rejects(f.connection.probe(controller.signal), /cancel/i);
+  controller.abort();
+  await rejected;
+  pong(socket, socket.sent[0], { sequence: socket.sent[0].sequence + 1 });
+  assert.equal(socket.readyState, 3);
+});
+
+test('an unknown pong with no sequence is never mistaken for a retired probe', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  probeWelcome(socket);
+  socket.message({
+    protocolVersion: 1,
+    type: 'pong',
+    connectionId: 'benchmark-session',
+    requestId: 'unknown',
+  });
+  assert.equal(socket.readyState, 3);
+});
+
 test('welcome and live state carry media targets including volume above 100%', async (t) => {
   const f = fixture(t);
   await f.connection.connect();

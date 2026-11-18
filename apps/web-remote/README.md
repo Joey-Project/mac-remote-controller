@@ -7,6 +7,13 @@ acknowledged text, revocation and reconnect. See
 [private Web setup](../../tooling/web_remote/README.md). Credentials stay in
 Secure HttpOnly cookies; offline input is discarded rather than replayed.
 
+Tap the Mac name for Connection details and a cancellable authenticated RTT
+benchmark. It matches the App's three warmups and three groups of 30 no-op
+probes, displaying minimum/p50/p95/maximum, jitter and timeout loss. It measures
+the browser-to-Mac connection, including browser scheduling and clock precision;
+it does not measure input-to-display latency. Leaving the page cancels the run,
+and reconnect never resumes it. Bluetooth LE remains a native App transport.
+
 The following describes the separate original `index.html` preview. Its
 offline boundary tests still apply only to that entry point.
 

@@ -29,7 +29,14 @@ type Options = Readonly<{
   active?: () => boolean;
   now?: () => number;
 }>;
-type Pending = { sequence: number; at: number; timeout: number; command: InputCommand | null };
+type Probe = { id: string; complete: (value: number | null | Error) => void };
+type Pending = {
+  sequence: number;
+  at: number;
+  timeout: number;
+  command: InputCommand | null;
+  probe?: Probe;
+};
 
 /** The only endpoint is the page's own HTTPS origin. No JS bearer-token storage. */
 export class WebRemoteConnection {
@@ -43,6 +50,9 @@ export class WebRemoteConnection {
   private lastSentAt = 0;
   private lastGestureSentAt = 0;
   private extendedKeyboardAvailable = false;
+  private roundTripAvailable = false;
+  private activeProbe: string | null = null;
+  private readonly retiredProbes = new Map<string, number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly pending = new Map<string, Pending>();
 
@@ -66,6 +76,45 @@ export class WebRemoteConnection {
     this.options.input.cancelGesture();
     this.clear();
     this.options.onStatus('disconnected');
+  }
+
+  /** One authenticated native-companion round trip, independent of input and audio. */
+  async probe(signal: AbortSignal): Promise<number | null> {
+    if (!this.connectionID || !this.wanted) throw new Error('Connect to your Mac first.');
+    if (!this.roundTripAvailable) throw new Error('Update the Mac for benchmark support.');
+    if (!(this.options.active?.() ?? true)) throw new Error('Keep the page in the foreground.');
+    if (signal.aborted) throw new Error('Benchmark cancelled.');
+    if (this.activeProbe) throw new Error('A benchmark probe is already in progress.');
+    if (this.retiredProbes.size >= 128)
+      throw new Error('Reconnect before running more probes to clear retired requests.');
+    return new Promise((resolve, reject) => {
+      const id = crypto.randomUUID();
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const abort = () => this.retireProbe(id, new Error('Benchmark cancelled.'));
+      const complete = (value: number | null | Error) => {
+        if (timer !== null) clearTimeout(timer);
+        signal.removeEventListener('abort', abort);
+        if (this.activeProbe === id) this.activeProbe = null;
+        if (value instanceof Error) reject(value);
+        else resolve(value);
+      };
+      this.activeProbe = id;
+      if (!this.send('ping', null, { id, complete })) {
+        complete(new Error('The connection cannot send a benchmark probe.'));
+        return;
+      }
+      signal.addEventListener('abort', abort, { once: true });
+      timer = setTimeout(() => this.retireProbe(id, null), 2000);
+    });
+  }
+
+  private retireProbe(id: string, value: number | null | Error): void {
+    const pending = this.pending.get(id);
+    if (!pending?.probe) return;
+    this.pending.delete(id);
+    // At most one active probe and admission below 128 bound the retired set.
+    this.retiredProbes.set(id, pending.sequence);
+    pending.probe.complete(value);
   }
 
   fail(): void {
@@ -158,6 +207,7 @@ export class WebRemoteConnection {
         const state = readState(value['state']);
         this.extendedKeyboardAvailable =
           state.accessibilityGranted && state.capabilities.includes('keyboardControls.v1');
+        this.roundTripAvailable = state.capabilities.includes('roundTripProbe.v1');
         this.connectionID = value['connectionId'];
         this.retries = 0;
         this.lastSentAt = this.now();
@@ -172,6 +222,12 @@ export class WebRemoteConnection {
         const state = readState(value['state']);
         this.extendedKeyboardAvailable =
           state.accessibilityGranted && state.capabilities.includes('keyboardControls.v1');
+        this.roundTripAvailable = state.capabilities.includes('roundTripProbe.v1');
+        if (!this.roundTripAvailable && this.activeProbe)
+          this.retireProbe(
+            this.activeProbe,
+            new Error('The Mac no longer supports benchmark probes.'),
+          );
         this.options.onState(state);
         return;
       }
@@ -179,12 +235,20 @@ export class WebRemoteConnection {
       if (typeof value['requestId'] !== 'string') throw new Error();
       const pending = this.pending.get(value['requestId']);
       if (
+        !pending &&
+        value['type'] === 'pong' &&
+        this.retiredProbes.has(value['requestId']) &&
+        this.retiredProbes.get(value['requestId']) === value['sequence']
+      ) {
+        this.retiredProbes.delete(value['requestId']);
+        return;
+      }
+      if (
         !pending ||
         pending.sequence !== value['sequence'] ||
         (pending.command === null) !== (value['type'] === 'pong')
       )
         throw new Error();
-      this.pending.delete(value['requestId']);
       const failure = value['error'];
       if (
         failure !== undefined &&
@@ -194,6 +258,10 @@ export class WebRemoteConnection {
       )
         throw new Error();
       const message = record(failure) ? String(failure['message']) : null;
+      const elapsed = pending.probe ? this.now() - pending.at : 0;
+      if (pending.probe && (!Number.isFinite(elapsed) || elapsed < 0)) throw new Error();
+      this.pending.delete(value['requestId']);
+      pending.probe?.complete(message ? new Error(message) : elapsed > 2000 ? null : elapsed);
       if (pending.command) this.options.onResult?.(pending.command, message);
       if (message) this.options.onError(message);
       // Match native PendingCommandMetadata: a rejected gesture retires input ownership,
@@ -204,7 +272,7 @@ export class WebRemoteConnection {
     }
   }
 
-  private send(type: 'command' | 'ping', command: InputCommand | null): boolean {
+  private send(type: 'command' | 'ping', command: InputCommand | null, probe?: Probe): boolean {
     if (
       command &&
       (command.name === 'keyboard.key' || command.name === 'keyboard.shortcut') &&
@@ -222,7 +290,7 @@ export class WebRemoteConnection {
       this.sequence >= Number.MAX_SAFE_INTEGER
     )
       return false;
-    const requestId = crypto.randomUUID();
+    const requestId = probe?.id ?? crypto.randomUUID();
     const sequence = ++this.sequence;
     const envelope = {
       protocolVersion: 1,
@@ -233,6 +301,7 @@ export class WebRemoteConnection {
       ...(command ? { command } : {}),
     };
     try {
+      const at = this.now();
       socket.send(JSON.stringify(envelope));
       // Match native PendingCommandMetadata without extending ordinary input deadlines.
       const timeout =
@@ -241,7 +310,7 @@ export class WebRemoteConnection {
           : command && isSessionAction(command.name)
             ? 10_000
             : 3000;
-      this.pending.set(requestId, { sequence, at: this.now(), timeout, command });
+      this.pending.set(requestId, { sequence, at, timeout, command, ...(probe ? { probe } : {}) });
       this.lastSentAt = this.now();
       if (command?.name === 'gesture.frame') this.lastGestureSentAt = this.lastSentAt;
       return true;
@@ -254,7 +323,11 @@ export class WebRemoteConnection {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       const now = this.now();
-      if (Array.from(this.pending.values()).some((item) => now - item.at > item.timeout)) {
+      if (
+        Array.from(this.pending.values()).some(
+          (item) => !item.probe && now - item.at > item.timeout,
+        )
+      ) {
         this.fail();
         return;
       }
@@ -289,9 +362,14 @@ export class WebRemoteConnection {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     this.options.input.disconnect();
+    for (const pending of this.pending.values())
+      pending.probe?.complete(new Error('The connection ended during the benchmark.'));
     this.pending.clear();
+    this.retiredProbes.clear();
+    this.activeProbe = null;
     this.connectionID = null;
     this.extendedKeyboardAvailable = false;
+    this.roundTripAvailable = false;
     this.sequence = 0;
     const socket = this.socket;
     this.socket = null;

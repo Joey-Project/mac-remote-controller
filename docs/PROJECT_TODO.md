@@ -49,7 +49,10 @@
   preference; validate physical Safari navigation and persistence after deployment.
   Web and iPhone/iPad keyboards include navigation keys and fixed one-shot
   editing shortcuts with old-companion fallback; accept their actual Mac effects
-  after deployment. Keep browser platform limits and each action's
+  after deployment. Connection details and a native-equivalent authenticated RTT
+  benchmark are implemented; accept physical Safari measurements after deployment.
+  Complete remaining preference, feedback and entry-point parity and keep
+  browser platform limits and each action's
   authorization requirements explicit.
   [Web pairing and acceptance](project_journal/2026/11/2026-11-16-web-pairing-resume-01a1464a.md).
   [Web media controls](project_journal/2026/11/2026-11-18-web-media-controls-01a1464a.md).
@@ -58,3 +61,4 @@
   [Web pinch](project_journal/2026/11/2026-11-18-web-pinch-01a1464a.md).
   [Web settings](project_journal/2026/11/2026-11-18-web-settings-01a1464a.md).
   [Keyboard controls](project_journal/2026/11/2026-11-18-keyboard-controls-01a1464a.md).
+  [Connection details](project_journal/2026/11/2026-11-18-web-connection-details-01a1464a.md).
