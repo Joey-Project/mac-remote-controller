@@ -40,6 +40,7 @@ await build({
     resolve(sourceDirectory, 'media-model.ts'),
     resolve(sourceDirectory, 'desktop-controls.ts'),
     resolve(sourceDirectory, 'session-controls.ts'),
+    resolve(sourceDirectory, 'pinch-gesture.ts'),
     resolve(sourceDirectory, 'live-touchpad.ts'),
   ],
   format: 'esm',

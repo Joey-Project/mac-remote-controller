@@ -1,6 +1,7 @@
 import { validMediaRequest, type MediaCommand } from './media-model.js';
 import { isSystemShortcut, type SystemShortcut } from './desktop-controls.js';
 import { isSessionAction, type SessionAction } from './session-controls.js';
+import { validMagnifyFrame, type MagnifyFrame } from './pinch-gesture.js';
 
 export type RemoteKey =
   'return' | 'escape' | 'backspace' | 'space' | 'left' | 'right' | 'up' | 'down';
@@ -16,6 +17,7 @@ export type InputCommand =
   | Readonly<{ name: 'system.volume.set'; value: number }>
   | Readonly<{ name: 'system.shortcut'; shortcut: SystemShortcut }>
   | Readonly<{ name: SessionAction }>
+  | Readonly<{ name: 'gesture.frame'; gesture: MagnifyFrame }>
   | MediaCommand;
 
 export type FrameScheduler = Readonly<{
@@ -41,14 +43,26 @@ export class RemoteInputBuffer {
   private pending: InputCommand | null = null;
   private frame: number | null = null;
   private readonly held = new Set<PointerButton>();
+  private gesture: MagnifyFrame | null = null;
+  private sampling = false;
 
   constructor(
     private readonly scheduler: FrameScheduler,
     private readonly onFailure: () => void,
+    private readonly beforeFlush: () => void = () => {},
   ) {}
 
   get heldButtons(): readonly PointerButton[] {
     return Array.from(this.held);
+  }
+
+  get activeGesture(): MagnifyFrame | null {
+    return this.gesture ? { ...this.gesture } : null;
+  }
+
+  /** Sample contacts in the existing transmission frame, without a second RAF. */
+  requestFlush(): void {
+    if (this.sender) this.schedule();
   }
 
   connect(sender: (command: InputCommand) => boolean): void {
@@ -59,11 +73,13 @@ export class RemoteInputBuffer {
   disconnect(): void {
     this.discardPending();
     this.held.clear();
+    this.gesture = null;
     this.sender = null;
   }
 
   enqueue(command: InputCommand): boolean {
     if (!this.sender || !validCommand(command)) return false;
+    if (command.name === 'gesture.frame') return this.enqueueGesture(command.gesture);
     if (command.name === 'pointer.move' || command.name === 'pointer.scroll') {
       const previous = this.pending;
       if (previous?.name === command.name) {
@@ -110,12 +126,45 @@ export class RemoteInputBuffer {
 
   /** Cancel a gesture without delivering stale movement, then release held input. */
   cancelGesture(): void {
-    if (this.pending?.name === 'pointer.move' || this.pending?.name === 'pointer.scroll')
+    if (
+      !this.pending ||
+      this.pending.name === 'pointer.move' ||
+      this.pending.name === 'pointer.scroll' ||
+      this.pending.name === 'gesture.frame'
+    )
       this.discardPending();
+    if (this.gesture) {
+      this.deliver({ name: 'gesture.frame', gesture: { ...this.gesture, phase: 'cancelled' } });
+    }
     for (const button of Array.from(this.held)) {
       if (!this.deliver({ name: 'pointer.button.up', button })) break;
       this.held.delete(button);
     }
+  }
+
+  private enqueueGesture(frame: MagnifyFrame): boolean {
+    const previous = this.gesture;
+    if (frame.phase === 'began') {
+      if (previous || !this.flush()) return false;
+      return this.deliver({ name: 'gesture.frame', gesture: { ...frame } });
+    }
+    const pending = this.pending?.name === 'gesture.frame' ? this.pending.gesture : null;
+    if (
+      !previous ||
+      previous.id !== frame.id ||
+      frame.timestamp < Math.max(previous.timestamp, pending?.timestamp ?? 0)
+    )
+      return false;
+    if (frame.phase === 'changed') {
+      if (this.pending?.name !== 'gesture.frame' && !this.flush()) return false;
+      this.pending = { name: 'gesture.frame', gesture: { ...frame } };
+      this.schedule();
+      return true;
+    }
+    // Terminal values are cumulative. Discard the unsent change, and send once.
+    if (this.pending?.name === 'gesture.frame') this.discardPending();
+    if (!this.flush()) return false;
+    return this.deliver({ name: 'gesture.frame', gesture: { ...frame } });
   }
 
   cancelMediaVolume(): void {
@@ -124,6 +173,14 @@ export class RemoteInputBuffer {
   }
 
   flush(): boolean {
+    if (this.sender && !this.sampling) {
+      this.sampling = true;
+      try {
+        this.beforeFlush();
+      } finally {
+        this.sampling = false;
+      }
+    }
     const command = this.pending;
     this.discardPending();
     if (!this.sender) return false;
@@ -166,7 +223,15 @@ export class RemoteInputBuffer {
   private deliver(command: InputCommand): boolean {
     if (!this.sender) return false;
     try {
-      if (this.sender(command)) return true;
+      if (this.sender(command)) {
+        if (command.name === 'gesture.frame') {
+          this.gesture =
+            command.gesture.phase === 'ended' || command.gesture.phase === 'cancelled'
+              ? null
+              : { ...command.gesture };
+        }
+        return true;
+      }
     } catch {
       // Delivery is ambiguous after a failure; never replay a command.
     }
@@ -210,6 +275,11 @@ function validCommand(command: InputCommand): boolean {
       return (
         isSystemShortcut(command.shortcut) &&
         Object.keys(command).sort().join(',') === 'name,shortcut'
+      );
+    case 'gesture.frame':
+      return (
+        Object.keys(command).sort().join(',') === 'gesture,name' &&
+        validMagnifyFrame(command.gesture)
       );
     default:
       return isSessionAction(command.name) && Object.keys(command).length === 1;

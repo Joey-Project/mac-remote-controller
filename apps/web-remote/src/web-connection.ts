@@ -40,6 +40,7 @@ export class WebRemoteConnection {
   private wanted = false;
   private retries = 0;
   private lastSentAt = 0;
+  private lastGestureSentAt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly pending = new Map<string, Pending>();
 
@@ -188,6 +189,9 @@ export class WebRemoteConnection {
       const message = record(failure) ? String(failure['message']) : null;
       if (pending.command) this.options.onResult?.(pending.command, message);
       if (message) this.options.onError(message);
+      // Match native PendingCommandMetadata: a rejected gesture retires input ownership,
+      // including a failed terminal frame whose local gesture has already ended.
+      if (message && pending.command?.name === 'gesture.frame') this.fail();
     } catch {
       this.fail();
     }
@@ -225,6 +229,7 @@ export class WebRemoteConnection {
             : 3000;
       this.pending.set(requestId, { sequence, at: this.now(), timeout, command });
       this.lastSentAt = this.now();
+      if (command?.name === 'gesture.frame') this.lastGestureSentAt = this.lastSentAt;
       return true;
     } catch {
       return false;
@@ -247,6 +252,15 @@ export class WebRemoteConnection {
             return;
           }
         }
+      }
+      const gesture = this.options.input.activeGesture;
+      if (
+        gesture &&
+        now - this.lastGestureSentAt >= 1000 &&
+        !this.send('command', { name: 'gesture.frame', gesture: { ...gesture, phase: 'changed' } })
+      ) {
+        this.fail();
+        return;
       }
       if (this.pending.size === 0 && now - this.lastSentAt >= 15_000 && !this.send('ping', null)) {
         this.fail();

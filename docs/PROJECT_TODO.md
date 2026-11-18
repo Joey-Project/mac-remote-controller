@@ -43,10 +43,12 @@
   are implemented with independent panel visibility; validate their actual Mac
   effects after deployment. Session lock/unlock and display controls are
   implemented using the existing native authorization; complete physical Safari
-  acceptance after deployment. Add pinch and richer keyboard/settings in
-  separate slices. Keep browser platform limits and each action's
+  acceptance after deployment. Phased touchscreen pinch is implemented; validate
+  physical Safari scrolling/pinch discrimination and target-app magnification.
+  Add richer keyboard/settings in separate slices. Keep browser platform limits and each action's
   authorization requirements explicit.
   [Web pairing and acceptance](project_journal/2026/11/2026-11-16-web-pairing-resume-01a1464a.md).
   [Web media controls](project_journal/2026/11/2026-11-18-web-media-controls-01a1464a.md).
   [Web desktop controls](project_journal/2026/11/2026-11-18-web-desktop-controls-01a1464a.md).
   [Web session/display controls](project_journal/2026/11/2026-11-18-web-session-controls-01a1464a.md).
+  [Web pinch](project_journal/2026/11/2026-11-18-web-pinch-01a1464a.md).

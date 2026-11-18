@@ -40,8 +40,12 @@ const input = new RemoteInputBuffer(
     cancel: (id) => cancelAnimationFrame(id),
   },
   () => connection.fail(),
+  () => pad.flush(),
 );
-const pad = new LiveTouchpad((command) => input.enqueue(command));
+const pad = new LiveTouchpad(
+  (command) => input.enqueue(command),
+  () => input.requestFlush(),
+);
 const panels = new LiveControlPanels(input, cancelPad);
 const sessionControls = new LiveSessionControls(input, cancelPad, menu);
 const connection = new WebRemoteConnection({
@@ -101,6 +105,20 @@ function renderState(state: WebRemoteState): void {
   nameLabel.textContent = state.deviceName;
   panels.update(state);
   sessionControls.update(state);
+  const canMagnify =
+    state.accessibilityGranted &&
+    state.supportsGestures &&
+    state.capabilities.includes('simulatedGestures.v1');
+  pad.setMagnificationEnabled(canMagnify);
+  element<HTMLElement>('two-finger-hint').textContent = canMagnify
+    ? 'Two fingers to scroll, pinch or right-click'
+    : 'Two fingers to scroll or tap for right click';
+  surface.setAttribute(
+    'aria-label',
+    canMagnify
+      ? 'Mac touchpad: one finger moves, two fingers scroll, pinch or tap for right click, three fingers drag'
+      : 'Mac touchpad: one finger moves, two fingers scroll or tap for right click, three fingers drag',
+  );
   surface.setAttribute('aria-disabled', String(!state.accessibilityGranted));
   if (!state.accessibilityGranted)
     showError('Allow Accessibility in the Mac companion for pointer and keyboard control.');
@@ -140,11 +158,10 @@ surface.addEventListener('pointerdown', (event) => {
   captures.add(event.pointerId);
 });
 surface.addEventListener('pointermove', (event) => {
-  pad.move(event.pointerId, { x: event.clientX, y: event.clientY });
+  pad.move(event.pointerId, { x: event.clientX, y: event.clientY }, event.timeStamp);
 });
 surface.addEventListener('pointerup', (event) => {
-  pad.move(event.pointerId, { x: event.clientX, y: event.clientY });
-  pad.end(event.pointerId, event.timeStamp);
+  pad.end(event.pointerId, event.timeStamp, { x: event.clientX, y: event.clientY });
   captures.delete(event.pointerId);
   if (surface.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
 });
