@@ -6,11 +6,36 @@ hostname. No relay, router port forwarding, public listener, or installation on
 the phone is required. Native app connections keep their existing transport.
 
 The initial Web client supports pointer movement, clicks, two-finger scrolling
-and right tap, three-finger drag, text/control keys, and system volume. Pairing
+and right tap, three-finger drag, text/control keys, system/player volume and
+IINA/Chrome media control through the existing Mac adapters. Pairing
 uses the Mac-displayed four-digit code; the Mac must be unlocked for new pairing.
 Existing paired browsers appear in the companion's device list and can be
-revoked there. Session lock/unlock, display controls, BLE, media adapters, and
+revoked there. Session lock/unlock, display controls, BLE, and
 native pinch/system gestures remain native-app features.
+
+## Media controls
+
+Set up the existing IINA plugin or Chrome extension on the Mac first. In the
+Web menu, enable **Player controls**, then explicitly choose an available player.
+The five-button row provides previous media, back 10 seconds, play/pause,
+forward 10 seconds and next media. Buttons follow the selected player's
+reported capabilities. A closed player clears selection rather than sending
+its commands to a different source.
+
+**Volume on touchpad** and **Player controls** can be shown independently or
+together; both can be hidden to keep the touchpad clear. Volume stays visible
+in keyboard mode. Tap the volume heading to switch between system volume and
+the selected player's volume. Player volume requires a reported range and
+current value, uses 10-percentage-point increments with a strong 100% detent,
+and displays the full supported range, including values such as 120% or 400%.
+Arrow keys adjust player volume by 10 percentage points; Home/End reach its
+endpoints. Seek duration is fixed at 10 seconds in this slice.
+
+Media commands use the existing authenticated same-origin connection and Mac
+media router. No additional bridge token or adapter setup is sent to the browser.
+While a player-volume request is awaiting acknowledgement, only the latest
+unsent slider value is retained. Pointer/keyboard input does not wait for the
+player, and intermediate slider values cannot fill the shared request queue.
 
 ## Certificate and DNS
 
@@ -150,12 +175,15 @@ To stop checks, boot out only this user job and remove its plist from
 ## Validation boundaries
 
 - `pnpm --filter @mac-remote-controller/web-remote-preview test` covers input
-  ordering, gestures, acknowledgements, reconnect generations and held-input leases.
+  ordering, gestures, acknowledgements, reconnect generations, held-input leases,
+  media capabilities/selection and player-volume bounds, snapping and stale acks.
 - `swift test --package-path packages/web-gateway` covers admission, pairing,
   DNS publication and private-file policy.
 - Apple CI also runs `test_transport.py` against `SofaRemoteWebFixture`: ephemeral
   trusted test certificate, real TLS/HTTP/WSS, input acknowledgements, disconnect
-  release and revocation. The fixture never imports AppKit or posts desktop input.
+  release, media delivery/rejection, restricted command scope and revocation.
+  Mock players include a 400% volume range and unsupported controls. The fixture
+  never imports AppKit, posts desktop input or plays audio.
 - Physical iPhone/iPad Safari, touch latency, Mac application effects and a real
   certificate expiration/renewal cycle remain separate acceptance checks.
 

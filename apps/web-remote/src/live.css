@@ -17,6 +17,7 @@ body {
 button,
 input,
 textarea,
+select,
 summary {
   font: inherit;
 }
@@ -42,6 +43,7 @@ button:focus-visible,
 summary:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
+select:focus-visible,
 [tabindex]:focus-visible {
   outline: 3px solid #9dbbff;
   outline-offset: 2px;
@@ -201,16 +203,21 @@ summary::-webkit-details-marker {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-.volume {
+.overlays {
   position: absolute;
   z-index: 2;
   top: 10px;
   left: 10px;
   right: 10px;
+  max-height: 70%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  pointer-events: none;
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+.overlay-card {
+  pointer-events: auto;
   padding: 12px 14px;
   border: 1px solid #4a5364;
   background: #232936f2;
@@ -218,9 +225,45 @@ summary::-webkit-details-marker {
   border-radius: 16px;
   box-shadow: 0 8px 20px #0005;
 }
-.volume label,
+.volume {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+#volume-scope,
 .volume output {
   font-size: 14px;
+}
+#volume-scope {
+  justify-self: start;
+}
+.media {
+  display: grid;
+  gap: 8px;
+}
+.media select {
+  min-height: 44px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #565c69;
+  border-radius: 10px;
+  background: #1b1e24;
+  color: inherit;
+  padding: 8px;
+}
+.media p {
+  margin: 0;
+  font-size: 13px;
+  color: #c4cad6;
+}
+.media-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+.media-buttons button {
+  padding-inline: 3px;
 }
 .volume input {
   grid-column: 1 / -1;
@@ -233,7 +276,7 @@ summary::-webkit-details-marker {
   overflow: auto;
   flex: 1;
   min-height: 0;
-  padding: 116px 4px 16px;
+  padding: var(--overlay-height, 0px) 4px 16px;
 }
 form {
   display: grid;
@@ -301,7 +344,7 @@ form {
     padding-inline: 20px;
     font-size: 15px;
   }
-  .volume {
+  .overlays {
     max-width: 480px;
     margin-inline: auto;
   }

@@ -195,6 +195,7 @@ def exercise(fixture, assets, root):
         assert client.upgraded
         welcome = client.message()
         assert welcome["type"] == "welcome"
+        assert welcome["state"]["mediaTargets"][0]["capabilities"]["playerVolumeMaximum"] == 4
         session = welcome["connectionId"]
         for sequence, command in enumerate([
             {"name": "pointer.move", "x": 3, "y": -2},
@@ -211,11 +212,56 @@ def exercise(fixture, assets, root):
         wait_for(lambda: state()["releasedButtonsOnClose"] == 1)
         client = SocketClient(context, port, authority, origin, cookie)
         session = client.message()["connectionId"]
-        client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
-                     "requestId": str(uuid.uuid4()), "sequence": 1,
-                     "command": {"name": "session.unlock"}})
-        assert client.receive()[0] == 8, "Browser escaped the command scope"
+        for sequence, (target, action, value, rejected) in enumerate([
+            ("iina:fixture", "previous", None, False),
+            ("iina:fixture", "seek", -10, False),
+            ("iina:fixture", "playPause", None, False),
+            ("iina:fixture", "seek", 10, False),
+            ("iina:fixture", "next", None, False),
+            ("iina:fixture", "setVolume", 1.2, False),
+            ("iina:fixture", "setVolume", 4, False),
+            ("iina:fixture", "setVolume", 4.1, True),
+            ("iina:closed", "playPause", None, True),
+            ("chrome:fixture", "next", None, True),
+            ("chrome:fixture", "setVolume", 1, True),
+            ("chrome:fixture", "playPause", None, False),
+        ], 1):
+            media = {"targetId": target, "action": action}
+            if value is not None:
+                media["value"] = value
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": sequence,
+                         "command": {"name": "media.control", "mediaRequest": media}})
+            result = client.message()
+            assert result["type"] == "result" and result["sequence"] == sequence
+            assert (result.get("error", {}).get("code") == "media_unavailable") == rejected
+            snapshot = client.message()
+            assert snapshot["type"] == "state"
+            if action == "setVolume" and not rejected:
+                assert snapshot["state"]["mediaTargets"][0]["playerVolume"] == value
         client.close()
+        def completed_media_events():
+            events = [event for event in state()["events"] if event["name"] == "media.control"]
+            # The socket acknowledgement can arrive before the atomic evidence-file write.
+            # Wait for the final accepted action, not merely a nonempty partial history.
+            return events if events and (events[-1]["targetId"], events[-1]["action"]) == (
+                "chrome:fixture", "playPause") else None
+
+        events = wait_for(completed_media_events)
+        expected = [("iina:fixture", action) for action in [
+            "previous", "seek", "playPause", "seek", "next", "setVolume", "setVolume"
+        ]] + [("chrome:fixture", "playPause")]
+        assert [(event["targetId"], event["action"]) for event in events] == expected, (
+            f"Rejected actions were executed or accepted media was lost: {len(events)} events")
+        assert float(events[1]["value"]) == -10 and float(events[3]["value"]) == 10
+        for name in ["session.unlock", "session.lock", "display.off", "display.wake",
+                     "session.lock-display-off"]:
+            client = SocketClient(context, port, authority, origin, cookie)
+            session = client.message()["connectionId"]
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": 1, "command": {"name": name}})
+            assert client.receive()[0] == 8, "Browser escaped the command scope"
+            client.close()
         client = SocketClient(context, port, authority, origin, cookie)
         client.message()
         assert request("POST", "/api/pairing/forget", {}, cookie=cookie)[0] == 200
@@ -225,7 +271,7 @@ def exercise(fixture, assets, root):
         assert not rejected.upgraded, "Revoked cookie reconnected"
         rejected.close()
         assert state()["desktopEvents"] == 0
-        print("TLS, origin admission, PIN ownership, WSS input, release and revocation passed.")
+        print("TLS, origin admission, PIN ownership, WSS input/media, scope, release and revocation passed.")
     finally:
         if child.poll() is None:
             child.send_signal(signal.SIGTERM)

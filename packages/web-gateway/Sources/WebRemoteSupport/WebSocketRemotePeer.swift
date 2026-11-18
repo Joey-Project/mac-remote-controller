@@ -3,7 +3,7 @@ import Foundation
 import NIOCore
 import NIOWebSocket
 
-/// An HTTP-cookie-authenticated peer restricted to the initial browser input scope.
+/// An HTTP-cookie-authenticated peer restricted to browser input and media control.
 @MainActor
 public final class WebSocketRemotePeer: RemotePeer {
     public var onReady: (() -> Void)?
@@ -90,6 +90,6 @@ public final class WebSocketRemotePeer: RemotePeer {
 
     private static let allowed: Set<CommandName> = [
         .pointerMove, .pointerClick, .pointerScroll, .pointerButtonDown, .pointerButtonUp,
-        .keyboardKey, .keyboardText, .systemVolumeSet
+        .keyboardKey, .keyboardText, .systemVolumeSet, .mediaControl
     ]
 }

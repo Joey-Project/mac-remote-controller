@@ -1,3 +1,5 @@
+import { validMediaRequest, type MediaCommand } from './media-model.js';
+
 export type RemoteKey =
   'return' | 'escape' | 'backspace' | 'space' | 'left' | 'right' | 'up' | 'down';
 export type PointerButton = 'left' | 'right';
@@ -9,7 +11,8 @@ export type InputCommand =
     }>
   | Readonly<{ name: 'keyboard.key'; key: RemoteKey }>
   | Readonly<{ name: 'keyboard.text'; text: string }>
-  | Readonly<{ name: 'system.volume.set'; value: number }>;
+  | Readonly<{ name: 'system.volume.set'; value: number }>
+  | MediaCommand;
 
 export type FrameScheduler = Readonly<{
   request: (callback: () => void) => number;
@@ -81,6 +84,17 @@ export class RemoteInputBuffer {
       this.schedule();
       return true;
     }
+    if (command.name === 'media.control' && command.mediaRequest.action === 'setVolume') {
+      const previous = this.pending;
+      const sameTarget =
+        previous?.name === 'media.control' &&
+        previous.mediaRequest.action === 'setVolume' &&
+        previous.mediaRequest.targetId === command.mediaRequest.targetId;
+      if (!sameTarget && !this.flush()) return false;
+      this.pending = { ...command };
+      this.schedule();
+      return true;
+    }
     if (!this.flush()) return false;
     if (command.name === 'pointer.button.down' && this.held.has(command.button)) return true;
     if (command.name === 'pointer.button.up' && !this.held.has(command.button)) return true;
@@ -92,11 +106,17 @@ export class RemoteInputBuffer {
 
   /** Cancel a gesture without delivering stale movement, then release held input. */
   cancelGesture(): void {
-    this.discardPending();
+    if (this.pending?.name === 'pointer.move' || this.pending?.name === 'pointer.scroll')
+      this.discardPending();
     for (const button of Array.from(this.held)) {
       if (!this.deliver({ name: 'pointer.button.up', button })) break;
       this.held.delete(button);
     }
+  }
+
+  cancelMediaVolume(): void {
+    if (this.pending?.name === 'media.control' && this.pending.mediaRequest.action === 'setVolume')
+      this.discardPending();
   }
 
   flush(): boolean {
@@ -180,6 +200,8 @@ function validCommand(command: InputCommand): boolean {
     }
     case 'system.volume.set':
       return Number.isFinite(command.value) && command.value >= 0 && command.value <= 1;
+    case 'media.control':
+      return validMediaRequest(command.mediaRequest);
     default:
       return false;
   }

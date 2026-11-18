@@ -66,7 +66,18 @@ private final class Fixture {
         })
     private var state = RemoteState(
         accessibilityGranted: true, systemVolume: 0,
-        deviceName: "Web integration fixture — no desktop control")
+        deviceName: "Web integration fixture — no desktop control",
+        mediaTargets: [
+            MediaTarget(
+                id: "iina:fixture", name: "Fixture IINA", kind: .iina,
+                capabilities: MediaCapabilities(
+                    playPause: true, seek: true, next: true, previous: true,
+                    playerVolumeMaximum: 4), playerVolume: 0.6),
+            MediaTarget(
+                id: "chrome:fixture", name: "Fixture browser", kind: .youtube,
+                capabilities: MediaCapabilities(
+                    playPause: true, seek: true, next: false, previous: false))
+        ])
 
     private final class Client {
         let peer: WebSocketRemotePeer
@@ -163,6 +174,14 @@ private final class Fixture {
                 client.session = session
                 client.held.apply(accepted.command)
                 client.held.refresh()
+                if accepted.command.name == .mediaControl {
+                    let failure = applyMedia(accepted.command.mediaRequest)
+                    client.peer.send(session.makeResult(for: accepted, error: failure))
+                    client.peer.send(
+                        WireMessage(type: .state, connectionID: session.connectionID, state: state))
+                    writeEvidence()
+                    return
+                }
                 record(accepted.command)
                 client.peer.send(session.makeResult(for: accepted))
                 if accepted.command.name == .systemVolumeSet {
@@ -175,11 +194,39 @@ private final class Fixture {
         }
     }
 
+    private func applyMedia(_ request: MediaRequest?) -> RemoteError? {
+        guard let request,
+            let index = state.mediaTargets?.firstIndex(where: { $0.id == request.targetID }),
+            let target = state.mediaTargets?[index], target.capabilities.supports(request.action)
+        else {
+            return RemoteError(code: "media_unavailable", message: "Fixture source unavailable.")
+        }
+        if request.action == .setVolume {
+            guard let value = request.value,
+                let maximum = target.capabilities.playerVolumeMaximum, value <= maximum
+            else {
+                return RemoteError(
+                    code: "media_unavailable", message: "Fixture volume out of range.")
+            }
+            state.mediaTargets?[index].playerVolume = value
+        }
+        var event = [
+            "name": "media.control", "targetId": request.targetID, "action": request.action.rawValue
+        ]
+        if let value = request.value { event["value"] = String(value) }
+        appendEvent(event)
+        return nil
+    }
+
     private func record(_ command: RemoteCommand) {
         var event = ["name": command.name.rawValue]
         if let text = command.text { event["textBytes"] = String(text.utf8.count) }
         if let key = command.key { event["key"] = key.rawValue }
         if let value = command.value { event["value"] = String(value) }
+        appendEvent(event)
+    }
+
+    private func appendEvent(_ event: [String: String]) {
         if events.count >= 128 { events.removeFirst() }
         events.append(event)
     }
