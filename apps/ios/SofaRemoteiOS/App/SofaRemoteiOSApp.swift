@@ -96,7 +96,7 @@ struct SofaRemoteiOSApp: App {
             let known = scenario != .sessionControlsUnknown
             let gestureCapabilities =
                 scenario == .legacyCompanion
-                ? [] : [WireCapabilities.simulatedGestures]
+                ? [] : [WireCapabilities.simulatedGestures, WireCapabilities.keyboardControls]
             let locked: Bool? =
                 controls
                 ? (known

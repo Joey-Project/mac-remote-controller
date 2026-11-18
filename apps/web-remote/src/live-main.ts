@@ -4,6 +4,7 @@ import { LiveTouchpad } from './live-touchpad.js';
 import { LiveControlPanels } from './live-controls.js';
 import { LiveSessionControls } from './live-session.js';
 import { LiveSettings } from './live-settings.js';
+import { LiveKeyboardControls } from './live-keyboard.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
 import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
@@ -53,6 +54,7 @@ const pad = new LiveTouchpad(
 );
 const panels = new LiveControlPanels(input, cancelPad);
 const sessionControls = new LiveSessionControls(input, cancelPad, menu);
+const keyboardControls = new LiveKeyboardControls((command) => input.enqueue(command), cancelPad);
 new LiveSettings((value) => {
   threeFingerDragEnabled = value.threeFingerDrag;
   pad.setThreeFingerDragEnabled(value.threeFingerDrag);
@@ -68,6 +70,7 @@ const connection = new WebRemoteConnection({
     connected = status === 'connected';
     panels.setConnected(connected);
     sessionControls.setConnected(connected);
+    keyboardControls.setConnected(connected);
     renderScreen();
     statusLabel.textContent = {
       disconnected: 'Disconnected',
@@ -120,6 +123,7 @@ function renderState(state: WebRemoteState): void {
   nameLabel.textContent = state.deviceName;
   panels.update(state);
   sessionControls.update(state);
+  keyboardControls.update(state);
   const canMagnify =
     state.accessibilityGranted &&
     state.supportsGestures &&
@@ -236,11 +240,6 @@ document.querySelectorAll<HTMLButtonElement>('[data-button]').forEach((button) =
     if (value === 'left' || value === 'right')
       input.enqueue({ name: 'pointer.click', button: value });
   });
-});
-document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach((button) => {
-  button.addEventListener('click', () =>
-    input.enqueue({ name: 'keyboard.key', key: button.dataset['key'] as RemoteKey }),
-  );
 });
 const keys: Readonly<Record<string, RemoteKey>> = {
   ArrowLeft: 'left',

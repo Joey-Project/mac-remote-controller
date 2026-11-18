@@ -335,9 +335,9 @@ private extension RemoteView {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            RemoteKeyboardControls(isEnabled: remoteEnabled) { key in
-                model.send(RemoteCommand(name: .keyboardKey, key: key))
-            }
+            RemoteKeyboardControls(
+                isEnabled: remoteEnabled, supportsExtendedKeyboard: model.supportsKeyboardControls,
+                onKey: model.sendKeyboardKey, onShortcut: model.sendKeyboardShortcut)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)

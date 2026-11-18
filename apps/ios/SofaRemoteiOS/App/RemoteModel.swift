@@ -108,6 +108,18 @@ final class RemoteModel {
         remoteState?.capabilities?.contains(WireCapabilities.roundTripProbe) == true
     }
 
+    var supportsKeyboardControls: Bool {
+        remoteState?.capabilities?.contains(WireCapabilities.keyboardControls) == true
+    }
+
+    func sendKeyboardKey(_ key: RemoteKey) {
+        send(RemoteCommand(name: .keyboardKey, key: key))
+    }
+
+    func sendKeyboardShortcut(_ shortcut: RemoteKeyboardShortcut) {
+        send(RemoteCommand(name: .keyboardShortcut, keyboardShortcut: shortcut))
+    }
+
     init() {
         #if DEBUG && targetEnvironment(simulator)
             if isUITesting {
@@ -290,6 +302,7 @@ extension RemoteModel {
     @discardableResult
     func send(_ command: RemoteCommand, orderedDragInput: Bool = false) -> Bool {
         guard isConnected else { return false }
+        guard !command.requiresKeyboardControls || supportsKeyboardControls else { return false }
         #if DEBUG && targetEnvironment(simulator)
             if isUITesting {
                 let accepted = uiTestFixture.send(

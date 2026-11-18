@@ -196,12 +196,20 @@ def exercise(fixture, assets, root, unlock_allowed):
         assert client.upgraded
         welcome = client.message()
         assert welcome["type"] == "welcome"
+        assert "keyboardControls.v1" in welcome["state"]["capabilities"]
         assert welcome["state"]["mediaTargets"][0]["capabilities"]["playerVolumeMaximum"] == 4
         session = welcome["connectionId"]
+        keyboard_commands = [
+            *({"name": "keyboard.key", "key": key}
+              for key in ["tab", "forward-delete", "home", "end", "page-up", "page-down"]),
+            *({"name": "keyboard.shortcut", "keyboardShortcut": shortcut}
+              for shortcut in ["copy", "cut", "paste", "select-all", "undo", "redo", "find", "previous-field"]),
+        ]
         for sequence, command in enumerate([
             {"name": "pointer.move", "x": 3, "y": -2},
             {"name": "keyboard.key", "key": "left"},
             {"name": "keyboard.text", "text": "transport fixture"},
+            *keyboard_commands,
             {"name": "pointer.button.down", "button": "left"},
         ], 1):
             client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
@@ -209,6 +217,10 @@ def exercise(fixture, assets, root, unlock_allowed):
             result = client.message()
             assert result["type"] == "result" and result["sequence"] == sequence
         wait_for(lambda: state()["heldButtons"] == 1)
+        recorded_keyboard = [event for event in state()["events"]
+                             if event["name"] == "keyboard.shortcut"
+                             or event["name"] == "keyboard.key" and event["key"] != "left"]
+        assert recorded_keyboard == keyboard_commands, "Keyboard controls changed or repeated"
         client.close()
         wait_for(lambda: state()["releasedButtonsOnClose"] == 1)
         client = SocketClient(context, port, authority, origin, cookie)
@@ -279,6 +291,9 @@ def exercise(fixture, assets, root, unlock_allowed):
         for command in [
             {"name": "system.shortcut", "shortcut": "control+up"},
             {"name": "system.shortcut", "shortcut": "mission-control", "key": "up"},
+            {"name": "keyboard.shortcut", "keyboardShortcut": "command-down"},
+            {"name": "keyboard.shortcut", "keyboardShortcut": "copy", "keyCode": 8},
+            {"name": "keyboard.shortcut", "keyboardShortcut": "paste", "text": None},
             {"name": "gesture.frame", "gesture": {
                 "id": str(uuid.uuid4()), "kind": "horizontalSwipe", "phase": "began", "value": 0,
                 "timestamp": 1,

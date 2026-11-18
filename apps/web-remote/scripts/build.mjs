@@ -42,6 +42,7 @@ await build({
     resolve(sourceDirectory, 'session-controls.ts'),
     resolve(sourceDirectory, 'pinch-gesture.ts'),
     resolve(sourceDirectory, 'preferences.ts'),
+    resolve(sourceDirectory, 'keyboard-controls.ts'),
     resolve(sourceDirectory, 'live-touchpad.ts'),
   ],
   format: 'esm',

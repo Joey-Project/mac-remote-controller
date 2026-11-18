@@ -64,7 +64,7 @@ final class DesktopController {
             try executePointer(
                 command, source: source, location: location,
                 input: &input)
-        case .keyboardText, .keyboardKey:
+        case .keyboardText, .keyboardKey, .keyboardShortcut:
             try executeKeyboard(command, source: source)
         case .systemShortcut, .systemVolumeSet, .gesture:
             break
@@ -119,8 +119,15 @@ final class DesktopController {
         case .keyboardText:
             try type(require(command.text), source: source)
         case .keyboardKey:
-            let key = try require(command.key)
-            try emitKeyboardPair(key: key.code, source: source)
+            let stroke = RemoteKeyboardStroke(key: try require(command.key))
+            guard stroke.emit(post: { $0.post(tap: .cghidEventTap) }) else {
+                throw ControlError.eventUnavailable
+            }
+        case .keyboardShortcut:
+            let stroke = RemoteKeyboardStroke(shortcut: try require(command.keyboardShortcut))
+            guard stroke.emit(post: { $0.post(tap: .cghidEventTap) }) else {
+                throw ControlError.eventUnavailable
+            }
         default:
             throw ControlError.invalidCommand
         }
@@ -263,21 +270,6 @@ final class DesktopController {
     private func post(_ event: CGEvent?) throws {
         guard let event else { throw ControlError.eventUnavailable }
         event.post(tap: .cghidEventTap)
-    }
-}
-
-private extension RemoteKey {
-    var code: CGKeyCode {
-        switch self {
-        case .returnKey: 36
-        case .escape: 53
-        case .backspace: 51
-        case .space: 49
-        case .left: 123
-        case .right: 124
-        case .down: 125
-        case .up: 126
-        }
     }
 }
 

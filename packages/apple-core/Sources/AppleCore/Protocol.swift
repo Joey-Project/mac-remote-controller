@@ -22,6 +22,7 @@ public enum CommandName: String, Codable, Sendable, Equatable {
     case gesture = "gesture.frame"
     case keyboardText = "keyboard.text"
     case keyboardKey = "keyboard.key"
+    case keyboardShortcut = "keyboard.shortcut"
     case systemVolumeSet = "system.volume.set"
     case mediaControl = "media.control"
     case sessionUnlock = "session.unlock"
@@ -31,7 +32,7 @@ public enum CommandName: String, Codable, Sendable, Equatable {
     case sessionLockAndDisplayOff = "session.lock-display-off"
 }
 
-public enum RemoteKey: String, Codable, Sendable, Equatable {
+public enum RemoteKey: String, Codable, Sendable, Equatable, CaseIterable {
     case returnKey = "return"
     case escape
     case backspace
@@ -40,6 +41,31 @@ public enum RemoteKey: String, Codable, Sendable, Equatable {
     case right
     case up
     case down
+    case tab
+    case forwardDelete = "forward-delete"
+    case home
+    case end
+    case pageUp = "page-up"
+    case pageDown = "page-down"
+
+    public var requiresKeyboardControls: Bool {
+        switch self {
+        case .returnKey, .escape, .backspace, .space, .left, .right, .up, .down: false
+        case .tab, .forwardDelete, .home, .end, .pageUp, .pageDown: true
+        }
+    }
+}
+
+/// Complete one-shot actions, never requests to hold a modifier or arbitrary key code.
+public enum RemoteKeyboardShortcut: String, Codable, Sendable, Equatable, CaseIterable {
+    case copy
+    case cut
+    case paste
+    case selectAll = "select-all"
+    case undo
+    case redo
+    case find
+    case previousField = "previous-field"
 }
 
 public enum PointerButton: String, Codable, Sendable, Equatable {
@@ -56,6 +82,7 @@ public enum SystemShortcut: String, Codable, Sendable, Equatable {
 }
 
 public enum WireCapabilities {
+    public static let keyboardControls = "keyboardControls.v1"
     public static let simulatedGestures = "simulatedGestures.v1"
     public static let roundTripProbe = "roundTripProbe.v1"
     public static let remoteUnlock = "sessionUnlock.v1"

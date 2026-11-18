@@ -136,6 +136,53 @@ test('welcome and live state carry media targets including volume above 100%', a
   assert.deepEqual(f.states.at(-1).mediaTargets, []);
 });
 
+test('transport gates new keyboard controls on current capability and Accessibility', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  socket.welcome();
+  const snapshot = (capabilities, accessibilityGranted = true) =>
+    socket.message({
+      protocolVersion: 1,
+      type: 'state',
+      connectionId: 'test-connection',
+      state: { accessibilityGranted, deviceName: 'Test Mac', capabilities },
+    });
+  assert.equal(f.input.enqueue({ name: 'keyboard.key', key: 'left' }), true);
+  snapshot(['keyboardControls.v1']);
+  assert.equal(f.input.enqueue({ name: 'keyboard.key', key: 'tab' }), true);
+  assert.equal(f.input.enqueue({ name: 'keyboard.shortcut', keyboardShortcut: 'copy' }), true);
+  assert.deepEqual(
+    socket.sent.map((value) => value.command),
+    [
+      { name: 'keyboard.key', key: 'left' },
+      { name: 'keyboard.key', key: 'tab' },
+      { name: 'keyboard.shortcut', keyboardShortcut: 'copy' },
+    ],
+  );
+  snapshot(['keyboardControls.v1'], false);
+  assert.equal(f.input.enqueue({ name: 'keyboard.shortcut', keyboardShortcut: 'paste' }), false);
+  assert.equal(socket.sent.length, 3);
+});
+
+test('legacy welcome cannot inherit capability from a prior keyboard session', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  f.sockets[0].message({
+    protocolVersion: 1,
+    type: 'welcome',
+    connectionId: 'capable',
+    state: { accessibilityGranted: true, deviceName: 'Mac', capabilities: ['keyboardControls.v1'] },
+  });
+  assert.equal(f.input.enqueue({ name: 'keyboard.shortcut', keyboardShortcut: 'undo' }), true);
+  f.connection.disconnect();
+  await f.connection.connect();
+  f.sockets[1].welcome();
+  assert.equal(f.sockets[1].sent.length, 0, 'reconnect never replays the shortcut');
+  assert.equal(f.input.enqueue({ name: 'keyboard.key', key: 'page-down' }), false);
+  assert.equal(f.sockets[1].sent.length, 0);
+});
+
 test('media rejection reports the original request without replaying or disconnecting', async (t) => {
   const f = fixture(t);
   await f.connection.connect();

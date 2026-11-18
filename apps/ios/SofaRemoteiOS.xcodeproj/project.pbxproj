@@ -11,6 +11,7 @@
         CA110000000000000000000E = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = CA1100000000000000000014; remoteInfo = SofaRemoteWidgets; };
 /* End PBXContainerItemProxy section */
 /* Begin PBXBuildFile section */
+		E80000000000000000000001 /* KeyboardControlsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E80000000000000000000002 /* KeyboardControlsUITests.swift */; };
 		E70000000000000000000001 /* DesktopControlsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E70000000000000000000002 /* DesktopControlsCard.swift */; };
 		E70000000000000000000003 /* DesktopControlsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E70000000000000000000004 /* DesktopControlsUITests.swift */; };
 		E60000000000000000000009 /* RemoteKeyboardControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6000000000000000000000A /* RemoteKeyboardControls.swift */; };
@@ -57,6 +58,7 @@
         CA1100000000000000000018 /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (CA1100000000000000000005,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXCopyFilesBuildPhase section */
 /* Begin PBXFileReference section */
+		E80000000000000000000002 /* KeyboardControlsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardControlsUITests.swift; sourceTree = "<group>"; };
 		E70000000000000000000002 /* DesktopControlsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopControlsCard.swift; sourceTree = "<group>"; };
 		E70000000000000000000004 /* DesktopControlsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopControlsUITests.swift; sourceTree = "<group>"; };
 		E6000000000000000000000A /* RemoteKeyboardControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteKeyboardControls.swift; sourceTree = "<group>"; };
@@ -158,6 +160,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000036 /* SofaRemoteiOSUITests.swift */,
+				E80000000000000000000002 /* KeyboardControlsUITests.swift */,
 				E70000000000000000000004 /* DesktopControlsUITests.swift */,
                 CA110000000000000000000D /* EntryPointUITests.swift */,
 				A72600000000000000000002 /* NumericPairingUITests.swift */,
@@ -313,7 +316,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CA1100000000000000000006 /* EntryPointUITests.swift in Sources */, 100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, E70000000000000000000003 /* DesktopControlsUITests.swift in Sources */, A72600000000000000000001 /* NumericPairingUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */, F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CA1100000000000000000006 /* EntryPointUITests.swift in Sources */, 100000000000000000000037 /* SofaRemoteiOSUITests.swift in Sources */, E80000000000000000000001 /* KeyboardControlsUITests.swift in Sources */, E70000000000000000000003 /* DesktopControlsUITests.swift in Sources */, A72600000000000000000001 /* NumericPairingUITests.swift in Sources */, C45000000000000000000001 /* LiveMediaUITests.swift in Sources */, D55000000000000000000001 /* UnlockMenuUITests.swift in Sources */, E60000000000000000000007 /* SettingsUITests.swift in Sources */, F71000000000000000000001 /* TouchpadGestureUITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
         CA1100000000000000000015 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CA1100000000000000000002, CA1100000000000000000003,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

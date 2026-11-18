@@ -27,7 +27,10 @@ extension CompanionModel {
 
     func stateForClient(_ state: RemoteState, client: ClientConnection) -> RemoteState {
         var state = state
-        state.capabilities = [WireCapabilities.roundTripProbe, WireCapabilities.remoteUnlock]
+        state.capabilities = [
+            WireCapabilities.roundTripProbe, WireCapabilities.remoteUnlock,
+            WireCapabilities.keyboardControls
+        ]
         if desktop.supportsSimulatedGestures {
             state.capabilities?.append(WireCapabilities.simulatedGestures)
         }

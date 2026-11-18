@@ -38,6 +38,23 @@ back to native defaults. Other open tabs retain their current choices until
 reloaded. The store never saves pairing credentials, keyboard drafts or
 Mac/helper permissions.
 
+## Keyboard
+
+The separate **Keyboard** page keeps committed text, Return/Escape/Backspace,
+Space and the arrow pad. Navigation adds Tab/Shift-Tab, forward Delete,
+Home/End and Page Up/Down. Editing buttons send Copy, Cut, Paste, Select all,
+Undo, Redo or Find to the active Mac app. They preserve the unsent text draft
+and never read or write the browser clipboard. The browser's own Tab and
+Command/Control shortcuts remain local.
+
+The new buttons require a companion advertising `keyboardControls.v1`; old
+companions retain the original keys/text and show update guidance. Connection
+or Accessibility loss disables remote key buttons. Each shortcut sends one
+fixed action using a complete native down/up pair, with no held modifier state
+or retry after reconnect. The result acknowledges submission, not application
+acceptance; custom Mac bindings may differ. Scroll the keyboard page to reach
+all buttons on short screens; the touchpad remains a separate page.
+
 ## Pinch and scrolling
 
 On the touch surface, two fingers moving together scroll; fingers moving apart

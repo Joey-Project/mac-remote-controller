@@ -47,8 +47,9 @@
   physical Safari scrolling/pinch discrimination and target-app magnification.
   A local Settings page provides the native skip intervals and three-finger-drag
   preference; validate physical Safari navigation and persistence after deployment.
-  Richer keys/modifier shortcuts remain a separate coordinated protocol/native
-  slice; both current clients share the same eight control keys. Keep browser platform limits and each action's
+  Web and iPhone/iPad keyboards include navigation keys and fixed one-shot
+  editing shortcuts with old-companion fallback; accept their actual Mac effects
+  after deployment. Keep browser platform limits and each action's
   authorization requirements explicit.
   [Web pairing and acceptance](project_journal/2026/11/2026-11-16-web-pairing-resume-01a1464a.md).
   [Web media controls](project_journal/2026/11/2026-11-18-web-media-controls-01a1464a.md).
@@ -56,3 +57,4 @@
   [Web session/display controls](project_journal/2026/11/2026-11-18-web-session-controls-01a1464a.md).
   [Web pinch](project_journal/2026/11/2026-11-18-web-pinch-01a1464a.md).
   [Web settings](project_journal/2026/11/2026-11-18-web-settings-01a1464a.md).
+  [Keyboard controls](project_journal/2026/11/2026-11-18-keyboard-controls-01a1464a.md).
