@@ -3,6 +3,7 @@ import { readMediaTargets, type MediaTarget } from './media-model.js';
 
 export type WebRemoteState = Readonly<{
   accessibilityGranted: boolean;
+  supportsGestures: boolean;
   deviceName: string;
   systemVolume: number | null;
   mediaTargets: readonly MediaTarget[] | null;
@@ -308,6 +309,13 @@ function readState(value: unknown): WebRemoteState {
   )
     throw new Error();
   const volume = value['systemVolume'];
+  const supportsGestures = value['supportsGestures'];
+  if (
+    supportsGestures !== undefined &&
+    supportsGestures !== null &&
+    typeof supportsGestures !== 'boolean'
+  )
+    throw new Error();
   if (
     volume !== undefined &&
     volume !== null &&
@@ -316,6 +324,7 @@ function readState(value: unknown): WebRemoteState {
     throw new Error();
   return {
     accessibilityGranted: value['accessibilityGranted'],
+    supportsGestures: supportsGestures === true,
     deviceName: value['deviceName'],
     systemVolume: typeof volume === 'number' ? volume : null,
     mediaTargets: readMediaTargets(value['mediaTargets']),

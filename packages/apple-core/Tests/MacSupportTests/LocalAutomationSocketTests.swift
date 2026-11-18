@@ -121,7 +121,14 @@
 
         func testIdleClientsExpireAndDoNotBlockNewRequests() throws {
             let url = try endpoint()
-            let server = server(url)
+            let served = expectation(
+                description: "Only the explicit status request reaches the handler")
+            served.assertForOverFulfill = true
+            let server = LocalAutomationServer(url: url) { request, _ in
+                served.fulfill()
+                return LocalAutomationResponse(
+                    .success, values: ["operation": request.operation.rawValue])
+            }
             try server.start()
             defer { server.stop() }
             let deadline = ContinuousClock.now + .seconds(5)
@@ -129,8 +136,70 @@
             defer { close(descriptor) }
             XCTAssertEqual(
                 try LocalAutomationClient.send(.init(.status), to: url).outcome, .success)
+            wait(for: [served], timeout: 1)
+            let terminal = try readUntilClosed(descriptor, deadline: deadline)
+            if !terminal.isEmpty {
+                // An incomplete request may be rejected before the timeout closes its peer.
+                let response = try JSONDecoder().decode(
+                    LocalAutomationResponse.self, from: terminal)
+                XCTAssertEqual(response.outcome, .invalidRequest)
+                XCTAssertNil(response.values)
+            }
+        }
+
+        func testClosureObservationDoesNotAcceptAnOpenIdleSocket() throws {
+            let pair = try socketPair()
             XCTAssertThrowsError(
-                try LocalAutomationSocket.readFrame(descriptor, limit: 65536, deadline: deadline))
+                try readUntilClosed(pair[0], deadline: .now + .milliseconds(50))
+            ) {
+                XCTAssertEqual($0 as? LocalAutomationFailure, .timedOut)
+            }
+        }
+
+        func testClosureObservationPreservesARejectionFrameBeforeEOF() throws {
+            let pair = try socketPair()
+            let frame =
+                try JSONEncoder().encode(LocalAutomationResponse(.invalidRequest)) + Data([10])
+            try LocalAutomationSocket.writeFrame(
+                frame.dropLast(), to: pair[1], deadline: .now + .seconds(1))
+            XCTAssertEqual(shutdown(pair[1], SHUT_WR), 0)
+            XCTAssertEqual(try readUntilClosed(pair[0], deadline: .now + .seconds(1)), frame)
+        }
+
+        private func socketPair() throws -> [Int32] {
+            var pair: [Int32] = [-1, -1]
+            guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else {
+                throw LocalAutomationFailure.unavailable
+            }
+            let owned = pair
+            addTeardownBlock { for descriptor in owned { close(descriptor) } }
+            return pair
+        }
+
+        /// Observe actual peer closure, rather than mistaking the client's read timeout for expiry.
+        private func readUntilClosed(
+            _ descriptor: Int32, deadline: ContinuousClock.Instant
+        ) throws -> Data {
+            var data = Data()
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while ContinuousClock.now < deadline {
+                var item = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
+                let result = poll(&item, 1, 100)
+                if result == 0 { continue }
+                if result < 0 {
+                    if errno == EINTR { continue }
+                    throw LocalAutomationFailure.unavailable
+                }
+                let count = Darwin.read(descriptor, &buffer, buffer.count)
+                if count == 0 || (count < 0 && errno == ECONNRESET) { return data }
+                if count < 0 {
+                    if errno == EINTR || errno == EAGAIN { continue }
+                    throw LocalAutomationFailure.unavailable
+                }
+                data.append(contentsOf: buffer.prefix(count))
+                guard data.count <= 65536 else { throw LocalAutomationFailure.invalidFrame }
+            }
+            throw LocalAutomationFailure.timedOut
         }
 
         func testEncodedFrameLimitsIncludeTheNewlineAndJSONEscaping() throws {

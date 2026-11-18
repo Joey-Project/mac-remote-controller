@@ -254,6 +254,41 @@ def exercise(fixture, assets, root):
         assert [(event["targetId"], event["action"]) for event in events] == expected, (
             f"Rejected actions were executed or accepted media was lost: {len(events)} events")
         assert float(events[1]["value"]) == -10 and float(events[3]["value"]) == 10
+        client = SocketClient(context, port, authority, origin, cookie)
+        welcome = client.message()
+        assert welcome["state"]["supportsGestures"] is True
+        session = welcome["connectionId"]
+        shortcuts = ["previous-space", "mission-control", "app-expose", "next-space"]
+        for sequence, shortcut in enumerate(shortcuts, 1):
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": sequence,
+                         "command": {"name": "system.shortcut", "shortcut": shortcut}})
+            result = client.message()
+            assert result["type"] == "result" and result["sequence"] == sequence
+            assert "error" not in result
+        client.close()
+
+        def completed_desktop_events():
+            events = [event for event in state()["events"] if event["name"] == "system.shortcut"]
+            return events if events and events[-1].get("shortcut") == "next-space" else None
+
+        assert wait_for(completed_desktop_events) == [
+            {"name": "system.shortcut", "shortcut": shortcut} for shortcut in shortcuts
+        ], "Desktop actions were changed, repeated or synthesized as keyboard commands"
+        for command in [
+            {"name": "system.shortcut", "shortcut": "control+up"},
+            {"name": "system.shortcut", "shortcut": "mission-control", "key": "up"},
+            {"name": "gesture.frame", "gesture": {
+                "id": str(uuid.uuid4()), "kind": "magnify", "phase": "began", "value": 0,
+                "timestamp": 1,
+            }},
+        ]:
+            client = SocketClient(context, port, authority, origin, cookie)
+            session = client.message()["connectionId"]
+            client.send({"protocolVersion": 1, "type": "command", "connectionId": session,
+                         "requestId": str(uuid.uuid4()), "sequence": 1, "command": command})
+            assert client.receive()[0] == 8, "Browser escaped the fixed desktop-action allowlist"
+            client.close()
         for name in ["session.unlock", "session.lock", "display.off", "display.wake",
                      "session.lock-display-off"]:
             client = SocketClient(context, port, authority, origin, cookie)
@@ -271,7 +306,7 @@ def exercise(fixture, assets, root):
         assert not rejected.upgraded, "Revoked cookie reconnected"
         rejected.close()
         assert state()["desktopEvents"] == 0
-        print("TLS, origin admission, PIN ownership, WSS input/media, scope, release and revocation passed.")
+        print("TLS, origin admission, PIN ownership, WSS input/media/desktop, scope, release and revocation passed.")
     finally:
         if child.poll() is None:
             child.send_signal(signal.SIGTERM)

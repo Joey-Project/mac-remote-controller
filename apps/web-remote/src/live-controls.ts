@@ -1,15 +1,20 @@
 import { MediaControlsModel, PlayerVolumeSender, type MediaAction } from './media-model.js';
 import { type InputCommand, RemoteInputBuffer } from './remote-input.js';
 import type { WebRemoteState } from './web-connection.js';
+import {
+  desktopActionsAvailable,
+  sendDesktopAction,
+  type DesktopAvailability,
+} from './desktop-controls.js';
 
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
-  if (!value) throw new Error('The media interface could not be loaded.');
+  if (!value) throw new Error('The remote controls could not be loaded.');
   return value as T;
 }
 
-/** Media UI updates only on snapshots and deliberate actions, never pointer movement. */
-export class LiveMediaControls {
+/** Floating panels update only on snapshots and deliberate actions, never pointer movement. */
+export class LiveControlPanels {
   private readonly model = new MediaControlsModel();
   private readonly volumes = new PlayerVolumeSender((command) => this.input.enqueue(command));
   private readonly overlays = element<HTMLElement>('overlays');
@@ -23,6 +28,12 @@ export class LiveMediaControls {
   private readonly availability = element<HTMLElement>('media-availability');
   private readonly showVolume = element<HTMLInputElement>('show-volume');
   private readonly showMedia = element<HTMLInputElement>('show-media');
+  private readonly showDesktop = element<HTMLInputElement>('show-desktop');
+  private readonly desktop = element<HTMLElement>('desktop');
+  private readonly desktopAvailability = element<HTMLElement>('desktop-availability');
+  private readonly desktopButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[data-desktop]'),
+  );
   private readonly buttons = Array.from(
     document.querySelectorAll<HTMLButtonElement>('[data-media]'),
   );
@@ -31,6 +42,8 @@ export class LiveMediaControls {
   private keyboard = false;
   private playerVolume = false;
   private systemVolume: number | null = null;
+  private supportsGestures = false;
+  private accessibilityGranted = false;
   private options = '';
 
   constructor(
@@ -42,13 +55,18 @@ export class LiveMediaControls {
       this.controls.style.setProperty('--overlay-height', `${height > 0 ? height + 20 : 0}px`);
     });
     this.observer.observe(this.overlays);
-    for (const toggle of [this.showVolume, this.showMedia]) {
+    for (const toggle of [this.showVolume, this.showMedia, this.showDesktop]) {
       toggle.addEventListener('change', () => {
         cancelPad();
         element<HTMLDetailsElement>('menu').open = false;
         this.render();
       });
     }
+    this.desktopButtons.forEach((button) =>
+      button.addEventListener('click', () => {
+        sendDesktopAction(this.desktopState, button.dataset['desktop'], this.input, cancelPad);
+      }),
+    );
     this.target.addEventListener('change', () => {
       this.volumes.cancel();
       this.input.cancelMediaVolume();
@@ -96,6 +114,8 @@ export class LiveMediaControls {
   setConnected(connected: boolean): void {
     this.connected = connected;
     if (!connected) {
+      this.supportsGestures = false;
+      this.accessibilityGranted = false;
       this.volumes.cancel();
       this.systemVolume = null;
       this.model.disconnect();
@@ -104,6 +124,8 @@ export class LiveMediaControls {
   }
   update(state: WebRemoteState): void {
     this.systemVolume = state.systemVolume;
+    this.supportsGestures = state.supportsGestures;
+    this.accessibilityGranted = state.accessibilityGranted;
     if (this.model.update(state.mediaTargets)) {
       this.volumes.cancel();
       this.input.cancelMediaVolume();
@@ -134,7 +156,20 @@ export class LiveMediaControls {
   private render(): void {
     this.volume.hidden = !this.keyboard && !this.showVolume.checked;
     this.media.hidden = !this.showMedia.checked;
-    this.overlays.hidden = this.volume.hidden && this.media.hidden;
+    this.desktop.hidden = !this.showDesktop.checked;
+    this.overlays.hidden = this.volume.hidden && this.media.hidden && this.desktop.hidden;
+    const desktopEnabled = desktopActionsAvailable(this.desktopState);
+    this.desktopButtons.forEach((button) => {
+      button.disabled = !desktopEnabled;
+    });
+    this.desktopAvailability.textContent = !this.connected
+      ? 'Connect to your Mac to use desktop controls.'
+      : !this.supportsGestures
+        ? 'Update the Mac companion to use desktop controls.'
+        : !this.accessibilityGranted
+          ? 'Allow Accessibility on your Mac to use desktop controls.'
+          : '';
+    this.desktopAvailability.hidden = !this.desktopAvailability.textContent;
 
     const targets = this.model.targets ?? [];
     const signature = JSON.stringify(targets.map(({ id, name }) => [id, name]));
@@ -185,5 +220,12 @@ export class LiveMediaControls {
     const display = percent === null ? 'Unavailable' : `${Math.round(percent)}%`;
     this.value.value = display;
     this.range.setAttribute('aria-valuetext', display);
+  }
+  private get desktopState(): DesktopAvailability {
+    return {
+      connected: this.connected,
+      supportsGestures: this.supportsGestures,
+      accessibilityGranted: this.accessibilityGranted,
+    };
   }
 }

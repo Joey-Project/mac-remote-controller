@@ -168,6 +168,45 @@ test('invalid media state terminates the stream rather than advertising unsafe c
   assert.equal(f.sockets[0].readyState, 3);
 });
 
+test('desktop capability is opt-in and follows current connection snapshots', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  f.sockets[0].welcome();
+  assert.equal(f.states.at(-1).supportsGestures, false);
+  for (const supportsGestures of [true, false, null]) {
+    f.sockets[0].message({
+      protocolVersion: 1,
+      type: 'state',
+      connectionId: 'test-connection',
+      state: {
+        accessibilityGranted: true,
+        deviceName: 'Fixture',
+        systemVolume: 0,
+        supportsGestures,
+      },
+    });
+    assert.equal(f.states.at(-1).supportsGestures, supportsGestures === true);
+  }
+});
+
+test('invalid desktop capability closes instead of enabling controls from a truthy value', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  f.sockets[0].message({
+    protocolVersion: 1,
+    type: 'welcome',
+    connectionId: 'fixture',
+    state: {
+      accessibilityGranted: true,
+      deviceName: 'Fixture',
+      systemVolume: 0,
+      supportsGestures: 'true',
+    },
+  });
+  assert.equal(f.states.length, 0);
+  assert.equal(f.sockets[0].readyState, 3);
+});
+
 test('HTTPS own-origin requests use cookies and reject redirects without JS credentials', async (t) => {
   const f = fixture(t);
   await f.connection.connect();

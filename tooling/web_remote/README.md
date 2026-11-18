@@ -7,11 +7,12 @@ the phone is required. Native app connections keep their existing transport.
 
 The initial Web client supports pointer movement, clicks, two-finger scrolling
 and right tap, three-finger drag, text/control keys, system/player volume and
-IINA/Chrome media control through the existing Mac adapters. Pairing
+IINA/Chrome media control through the existing Mac adapters, and fixed desktop
+action buttons. Pairing
 uses the Mac-displayed four-digit code; the Mac must be unlocked for new pairing.
 Existing paired browsers appear in the companion's device list and can be
-revoked there. Session lock/unlock, display controls, BLE, and
-native pinch/system gestures remain native-app features.
+revoked there. Session lock/unlock, display controls, BLE and phased pinch
+gestures remain native-app features.
 
 ## Media controls
 
@@ -36,6 +37,24 @@ media router. No additional bridge token or adapter setup is sent to the browser
 While a player-volume request is awaiting acknowledgement, only the latest
 unsent slider value is retained. Pointer/keyboard input does not wait for the
 player, and intermediate slider values cannot fill the shared request queue.
+
+## Desktop controls
+
+Enable **Desktop controls** in the Web menu for Previous desktop, Mission
+Control, App windows and Next desktop. The desktop group is independently
+hideable alongside volume and player controls, so the touchpad supports all
+eight visibility combinations without changing its frame. Keyboard mode keeps
+the existing volume behavior and leaves the text field below visible panels.
+On short screens, the floating stack can be scrolled to reach every group.
+
+Buttons require an active connection, the companion's advertised gesture
+support and Accessibility permission on the Mac. Missing support or permission
+disables them and shows guidance. An action releases a local drag before sending
+one allowlisted native command. Pointer and keyboard input remain independent
+of media acknowledgements. Desktop actions use the same native Mac executor as
+the iOS buttons; the browser does not send modifier keys or arbitrary shortcuts.
+They are never replayed on reconnect. Actual desktop animation and switching
+still require acceptance on the Mac after deployment.
 
 ## Certificate and DNS
 
@@ -176,12 +195,14 @@ To stop checks, boot out only this user job and remove its plist from
 
 - `pnpm --filter @mac-remote-controller/web-remote-preview test` covers input
   ordering, gestures, acknowledgements, reconnect generations, held-input leases,
-  media capabilities/selection and player-volume bounds, snapping and stale acks.
+  media capabilities/selection, player-volume bounds, snapping and stale acks,
+  desktop capability gating, action ordering and held-drag release.
 - `swift test --package-path packages/web-gateway` covers admission, pairing,
   DNS publication and private-file policy.
 - Apple CI also runs `test_transport.py` against `SofaRemoteWebFixture`: ephemeral
   trusted test certificate, real TLS/HTTP/WSS, input acknowledgements, disconnect
-  release, media delivery/rejection, restricted command scope and revocation.
+  release, media delivery/rejection, fixed desktop actions, restricted command
+  scope and revocation.
   Mock players include a 400% volume range and unsupported controls. The fixture
   never imports AppKit, posts desktop input or plays audio.
 - Physical iPhone/iPad Safari, touch latency, Mac application effects and a real

@@ -1,7 +1,7 @@
 import './live.css';
 import { RemoteInputBuffer, type RemoteKey } from './remote-input.js';
 import { LiveTouchpad } from './live-touchpad.js';
-import { LiveMediaControls } from './live-media.js';
+import { LiveControlPanels } from './live-controls.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
 import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
@@ -41,7 +41,7 @@ const input = new RemoteInputBuffer(
   () => connection.fail(),
 );
 const pad = new LiveTouchpad((command) => input.enqueue(command));
-const media = new LiveMediaControls(input, cancelPad);
+const panels = new LiveControlPanels(input, cancelPad);
 const connection = new WebRemoteConnection({
   origin: location.origin,
   input,
@@ -49,7 +49,7 @@ const connection = new WebRemoteConnection({
   onStatus(status) {
     lifecycle.update(status);
     connected = status === 'connected';
-    media.setConnected(connected);
+    panels.setConnected(connected);
     controls.inert = !connected;
     pairing.hidden = !lifecycle.showPairing;
     controls.hidden = !lifecycle.showControls;
@@ -77,7 +77,7 @@ const connection = new WebRemoteConnection({
     showError(message);
   },
   onResult(command, error) {
-    media.complete(command, error);
+    panels.complete(command, error);
     if (error && command.name.startsWith('pointer.')) cancelPad();
     if (command.name !== 'keyboard.text') return;
     sendText.disabled = false;
@@ -95,7 +95,7 @@ function clearError(): void {
 }
 function renderState(state: WebRemoteState): void {
   nameLabel.textContent = state.deviceName;
-  media.update(state);
+  panels.update(state);
   surface.setAttribute('aria-disabled', String(!state.accessibilityGranted));
   if (!state.accessibilityGranted)
     showError('Allow Accessibility in the Mac companion for pointer and keyboard control.');
@@ -117,7 +117,7 @@ function selectMode(value: boolean): void {
   keyboardMode.setAttribute('aria-pressed', String(keyboard));
   touchpadMode.classList.toggle('selected', !keyboard);
   keyboardMode.classList.toggle('selected', keyboard);
-  media.setKeyboard(keyboard);
+  panels.setKeyboard(keyboard);
 }
 touchpadMode.addEventListener('click', () => selectMode(false));
 keyboardMode.addEventListener('click', () => selectMode(true));
