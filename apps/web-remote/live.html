@@ -26,6 +26,7 @@
             <label><input id="show-volume" type="checkbox" /> Volume on touchpad</label>
             <label><input id="show-media" type="checkbox" /> Player controls</label>
             <label><input id="show-desktop" type="checkbox" /> Desktop controls</label>
+            <button id="open-settings">Settings</button>
             <section
               id="session-controls"
               class="session-controls"
@@ -48,6 +49,34 @@
         </details>
       </header>
       <p id="error" role="alert" hidden></p>
+      <section id="settings-panel" class="settings-panel" aria-labelledby="settings-title" hidden>
+        <div class="settings-heading">
+          <h1 id="settings-title" tabindex="-1">Settings</h1>
+          <button id="close-settings">Back</button>
+        </div>
+        <fieldset>
+          <legend>Media playback</legend>
+          <label for="settings-seek">Skip interval</label>
+          <select id="settings-seek" aria-describedby="settings-seek-help">
+            <option value="5">5 seconds</option>
+            <option value="10" selected>10 seconds</option>
+            <option value="15">15 seconds</option>
+            <option value="30">30 seconds</option>
+          </select>
+          <p id="settings-seek-help">Used for both backward and forward seeking.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Touchpad gestures</legend>
+          <label class="settings-toggle"
+            ><input id="settings-drag" type="checkbox" checked /> Three-finger drag</label
+          >
+          <p>Other touchpad gestures are unchanged.</p>
+        </fieldset>
+        <p id="settings-persistence" role="status"></p>
+        <p class="settings-note">
+          Settings stay in this browser. Pairing and Mac permissions are managed separately.
+        </p>
+      </section>
       <section id="pairing" class="pairing" hidden aria-label="Pair this browser">
         <h1>Pair with your Mac</h1>
         <p>Keep the Mac unlocked. Enter the four-digit code it displays.</p>
@@ -137,7 +166,7 @@
             <p>
               One finger to move<br /><span id="two-finger-hint"
                 >Two fingers to scroll or tap for right click</span
-              ><br />Three fingers to drag
+              ><br /><span id="three-finger-hint">Three fingers to drag</span>
             </p>
           </div>
           <div class="clicks">

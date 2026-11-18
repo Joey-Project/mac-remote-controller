@@ -3,6 +3,7 @@ import { RemoteInputBuffer, type RemoteKey } from './remote-input.js';
 import { LiveTouchpad } from './live-touchpad.js';
 import { LiveControlPanels } from './live-controls.js';
 import { LiveSessionControls } from './live-session.js';
+import { LiveSettings } from './live-settings.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
 import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
@@ -28,9 +29,13 @@ const pairing = element<HTMLElement>('pairing');
 const confirmForm = element<HTMLFormElement>('confirm-pairing');
 const codeInput = element<HTMLInputElement>('pairing-code');
 const menu = element<HTMLDetailsElement>('menu');
+const settingsPanel = element<HTMLElement>('settings-panel');
 const captures = new Set<number>();
 let keyboard = false;
 let connected = false;
+let settingsOpen = false;
+let magnificationAvailable = false;
+let threeFingerDragEnabled = true;
 let requestID: string | null = null;
 const lifecycle = new WebRemoteLifecycle();
 
@@ -48,6 +53,12 @@ const pad = new LiveTouchpad(
 );
 const panels = new LiveControlPanels(input, cancelPad);
 const sessionControls = new LiveSessionControls(input, cancelPad, menu);
+new LiveSettings((value) => {
+  threeFingerDragEnabled = value.threeFingerDrag;
+  pad.setThreeFingerDragEnabled(value.threeFingerDrag);
+  panels.setSeekInterval(value.seekSeconds);
+  renderTouchHint();
+});
 const connection = new WebRemoteConnection({
   origin: location.origin,
   input,
@@ -57,9 +68,7 @@ const connection = new WebRemoteConnection({
     connected = status === 'connected';
     panels.setConnected(connected);
     sessionControls.setConnected(connected);
-    controls.inert = !connected;
-    pairing.hidden = !lifecycle.showPairing;
-    controls.hidden = !lifecycle.showControls;
+    renderScreen();
     statusLabel.textContent = {
       disconnected: 'Disconnected',
       connecting: 'Connecting…',
@@ -101,6 +110,12 @@ function clearError(): void {
   errorLabel.textContent = '';
   errorLabel.hidden = true;
 }
+function renderScreen(): void {
+  settingsPanel.hidden = !settingsOpen;
+  controls.inert = !connected || settingsOpen;
+  pairing.hidden = settingsOpen || !lifecycle.showPairing;
+  controls.hidden = settingsOpen || !lifecycle.showControls;
+}
 function renderState(state: WebRemoteState): void {
   nameLabel.textContent = state.deviceName;
   panels.update(state);
@@ -109,19 +124,24 @@ function renderState(state: WebRemoteState): void {
     state.accessibilityGranted &&
     state.supportsGestures &&
     state.capabilities.includes('simulatedGestures.v1');
+  magnificationAvailable = canMagnify;
   pad.setMagnificationEnabled(canMagnify);
-  element<HTMLElement>('two-finger-hint').textContent = canMagnify
-    ? 'Two fingers to scroll, pinch or right-click'
-    : 'Two fingers to scroll or tap for right click';
-  surface.setAttribute(
-    'aria-label',
-    canMagnify
-      ? 'Mac touchpad: one finger moves, two fingers scroll, pinch or tap for right click, three fingers drag'
-      : 'Mac touchpad: one finger moves, two fingers scroll or tap for right click, three fingers drag',
-  );
+  renderTouchHint();
   surface.setAttribute('aria-disabled', String(!state.accessibilityGranted));
   if (!state.accessibilityGranted)
     showError('Allow Accessibility in the Mac companion for pointer and keyboard control.');
+}
+function renderTouchHint(): void {
+  element<HTMLElement>('two-finger-hint').textContent = magnificationAvailable
+    ? 'Two fingers to scroll, pinch or right-click'
+    : 'Two fingers to scroll or tap for right click';
+  element<HTMLElement>('three-finger-hint').textContent = threeFingerDragEnabled
+    ? 'Three fingers to drag'
+    : 'Three-finger drag is off';
+  surface.setAttribute(
+    'aria-label',
+    `Mac touchpad: one finger moves, two fingers ${magnificationAvailable ? 'scroll, pinch or tap for right click' : 'scroll or tap for right click'}, ${threeFingerDragEnabled ? 'three fingers drag' : 'three-finger drag is off'}`,
+  );
 }
 
 function cancelPad(): void {
@@ -133,6 +153,8 @@ function cancelPad(): void {
 
 function selectMode(value: boolean): void {
   cancelPad();
+  settingsOpen = false;
+  renderScreen();
   keyboard = value;
   keyboardPanel.hidden = !keyboard;
   touchpadPanel.hidden = keyboard;
@@ -144,6 +166,19 @@ function selectMode(value: boolean): void {
 }
 touchpadMode.addEventListener('click', () => selectMode(false));
 keyboardMode.addEventListener('click', () => selectMode(true));
+element<HTMLButtonElement>('open-settings').addEventListener('click', () => {
+  cancelPad();
+  menu.open = false;
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  settingsOpen = true;
+  renderScreen();
+  element<HTMLElement>('settings-title').focus({ preventScroll: true });
+});
+element<HTMLButtonElement>('close-settings').addEventListener('click', () => {
+  settingsOpen = false;
+  renderScreen();
+  menu.querySelector('summary')?.focus({ preventScroll: true });
+});
 
 surface.addEventListener('pointerdown', (event) => {
   if (
@@ -223,6 +258,7 @@ window.addEventListener('keydown', (event) => {
     event.target.closest('button, input, select, textarea, summary, a, [contenteditable]');
   if (
     !connected ||
+    settingsOpen ||
     !shouldHandleWindowShortcut(event.key, target ? 'control' : 'page', event) ||
     event.repeat
   )

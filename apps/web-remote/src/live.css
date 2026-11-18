@@ -181,6 +181,71 @@ summary::-webkit-details-marker {
 .controls[inert] {
   opacity: 0.45;
 }
+.settings-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 4px 16px;
+}
+.settings-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #101114;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+}
+.settings-heading h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.settings-panel fieldset {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid #4e5563;
+  border-radius: 16px;
+  background: #20242c;
+}
+.settings-panel legend {
+  padding-inline: 6px;
+  font-weight: 600;
+}
+.settings-panel select {
+  min-height: 44px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #565c69;
+  border-radius: 10px;
+  background: #1b1e24;
+  color: inherit;
+}
+.settings-toggle {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-toggle input {
+  width: 24px;
+  height: 24px;
+}
+.settings-panel p {
+  margin: 0;
+  color: #c5cbd5;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.settings-panel .settings-note {
+  margin-top: 12px;
+}
 .touchpad-panel {
   display: flex;
   flex-direction: column;
