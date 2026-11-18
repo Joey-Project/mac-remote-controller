@@ -13,6 +13,31 @@ uses the Mac-displayed four-digit code; the Mac must be unlocked for new pairing
 Existing paired browsers appear in the companion's device list and can be
 revoked there. BLE remains a native-app feature.
 
+## Settings
+
+Open **Settings** from the existing menu. This is a separate local page; the
+touchpad and keyboard pages and their floating controls keep their layout.
+Frequent volume/player/desktop visibility toggles stay in the menu. **Back**
+returns to the chosen control mode, or to pairing if no Mac is paired. Opening
+settings releases local held input; arrow/control keys used on this page are
+never forwarded to the Mac. Keyboard drafts and unfinished pairing inputs stay
+intact when visiting settings or resuming the page from the background.
+
+**Skip interval** provides 5, 10, 15 and 30 seconds, matching the native app;
+the default remains 10. It changes both directions and the visible/accessibility
+labels of the existing five-button media row. Only future clicks use the new
+interval; changing it does not issue or repeat a media command.
+**Three-finger drag** defaults to enabled. Disabling it does not change other
+touchpad gestures, and an interrupted drag releases its held button once.
+
+These two non-secret preferences are saved in this browser, including while
+offline or unpaired. Settings stay open across transport reconnect/backgrounding.
+If browser storage is unavailable, changes still apply in the current tab and
+the page explains that they could not be saved. Malformed saved fields fall
+back to native defaults. Other open tabs retain their current choices until
+reloaded. The store never saves pairing credentials, keyboard drafts or
+Mac/helper permissions.
+
 ## Pinch and scrolling
 
 On the touch surface, two fingers moving together scroll; fingers moving apart
@@ -56,7 +81,7 @@ the selected player's volume. Player volume requires a reported range and
 current value, uses 10-percentage-point increments with a strong 100% detent,
 and displays the full supported range, including values such as 120% or 400%.
 Arrow keys adjust player volume by 10 percentage points; Home/End reach its
-endpoints. Seek duration is fixed at 10 seconds in this slice.
+endpoints. Seek duration defaults to 10 seconds and is configurable in Settings.
 
 Media commands use the existing authenticated same-origin connection and Mac
 media router. No additional bridge token or adapter setup is sent to the browser.
@@ -246,6 +271,7 @@ To stop checks, boot out only this user job and remove its plist from
 - `pnpm --filter @mac-remote-controller/web-remote-preview test` covers input
   ordering, gestures, acknowledgements, reconnect generations, held-input leases,
   media capabilities/selection, player-volume bounds, snapping and stale acks,
+  local preference validation/persistence fallbacks, disabled-drag release,
   phased pinch/scroll discrimination, one-frame contact sampling, cumulative
   coalescing, stationary gesture leases and cancellation, desktop capability
   gating, session permission/state policy, native session

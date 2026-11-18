@@ -15,6 +15,7 @@ export class LiveTouchpad {
   private dragX = 0;
   private dragY = 0;
   private magnificationEnabled = false;
+  private threeFingerDragEnabled = true;
   private gesture: MagnifyFrame | null = null;
   private twoPending = false;
   private initialSpan = 0;
@@ -30,6 +31,17 @@ export class LiveTouchpad {
   setMagnificationEnabled(enabled: boolean): void {
     if (enabled === this.magnificationEnabled) return;
     this.magnificationEnabled = enabled;
+    if (this.points.size === 0) return;
+    this.finishMagnify('cancelled');
+    this.releaseDrag();
+    this.twoPending = false;
+    this.tapPossible = false;
+    this.phase = 'settling';
+  }
+
+  setThreeFingerDragEnabled(enabled: boolean): void {
+    if (enabled === this.threeFingerDragEnabled) return;
+    this.threeFingerDragEnabled = enabled;
     if (this.points.size === 0) return;
     this.finishMagnify('cancelled');
     this.releaseDrag();
@@ -76,7 +88,7 @@ export class LiveTouchpad {
     if (this.points.size === 3) {
       const pinching = this.gesture !== null;
       this.finishMagnify('cancelled');
-      this.phase = pinching ? 'settling' : 'drag';
+      this.phase = pinching || !this.threeFingerDragEnabled ? 'settling' : 'drag';
       this.twoPending = false;
       this.tapPossible = false;
     }

@@ -1,6 +1,7 @@
 import { MediaControlsModel, PlayerVolumeSender, type MediaAction } from './media-model.js';
 import { type InputCommand, RemoteInputBuffer } from './remote-input.js';
 import type { WebRemoteState } from './web-connection.js';
+import { isSeekInterval, type SeekInterval } from './preferences.js';
 import {
   desktopActionsAvailable,
   sendDesktopAction,
@@ -135,6 +136,16 @@ export class LiveControlPanels {
   setKeyboard(keyboard: boolean): void {
     this.keyboard = keyboard;
     this.render();
+  }
+  setSeekInterval(seconds: SeekInterval): void {
+    if (!isSeekInterval(seconds)) return;
+    for (const button of this.buttons) {
+      if (button.dataset['media'] !== 'seek') continue;
+      const backward = Number(button.dataset['seconds']) < 0;
+      button.dataset['seconds'] = String(backward ? -seconds : seconds);
+      button.textContent = backward ? `↶ ${seconds}` : `${seconds} ↷`;
+      button.setAttribute('aria-label', `${backward ? 'Back' : 'Forward'} ${seconds} seconds`);
+    }
   }
   complete(command: InputCommand, error: string | null): void {
     if (command.name !== 'media.control') return;

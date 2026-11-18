@@ -210,3 +210,31 @@ test('older companions retain scrolling and right tap without phased commands', 
   pad.end(2, 21);
   assert.deepEqual(commands, [{ name: 'pointer.scroll', x: 0, y: 20 }]);
 });
+
+test('disabled three-finger drag sends no down, movement or trailing click', () => {
+  const { pad, commands } = fixture();
+  pad.setThreeFingerDragEnabled(false);
+  for (let id = 1; id <= 3; id += 1) pad.begin(id, { x: id * 10, y: 10 }, id);
+  pad.move(1, { x: 100, y: 10 }, 20);
+  for (let id = 1; id <= 3; id += 1) pad.end(id, 30 + id);
+  assert.deepEqual(commands, []);
+});
+
+test('changing drag preference releases held input once and waits for all fingers to lift', () => {
+  const { pad, commands } = fixture();
+  for (let id = 1; id <= 3; id += 1) pad.begin(id, { x: id * 10, y: 10 }, id);
+  pad.move(1, { x: 22, y: 10 }, 10);
+  pad.setThreeFingerDragEnabled(false);
+  pad.setThreeFingerDragEnabled(false);
+  pad.setThreeFingerDragEnabled(true);
+  pad.move(2, { x: 100, y: 10 }, 20);
+  for (let id = 1; id <= 3; id += 1) pad.end(id, 30 + id);
+  assert.deepEqual(
+    commands.map((c) => c.name),
+    ['pointer.button.down', 'pointer.move', 'pointer.button.up'],
+  );
+  for (let id = 1; id <= 3; id += 1) pad.begin(id, { x: id * 10, y: 10 }, 100 + id);
+  pad.move(1, { x: 22, y: 10 }, 110);
+  assert.equal(commands.at(-2).name, 'pointer.button.down');
+  pad.cancel();
+});
