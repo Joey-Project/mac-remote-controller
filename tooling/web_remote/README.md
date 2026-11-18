@@ -8,11 +8,10 @@ the phone is required. Native app connections keep their existing transport.
 The initial Web client supports pointer movement, clicks, two-finger scrolling
 and right tap, three-finger drag, text/control keys, system/player volume and
 IINA/Chrome media control through the existing Mac adapters, and fixed desktop
-action buttons. Pairing
+action buttons and session/display controls. Pairing
 uses the Mac-displayed four-digit code; the Mac must be unlocked for new pairing.
 Existing paired browsers appear in the companion's device list and can be
-revoked there. Session lock/unlock, display controls, BLE and phased pinch
-gestures remain native-app features.
+revoked there. BLE and phased pinch gestures remain native-app features.
 
 ## Media controls
 
@@ -55,6 +54,30 @@ of media acknowledgements. Desktop actions use the same native Mac executor as
 the iOS buttons; the browser does not send modifier keys or arbitrary shortcuts.
 They are never replayed on reconnect. Actual desktop animation and switching
 still require acceptance on the Mac after deployment.
+
+## Lock and display controls
+
+The Web menu shows **Lock Mac** or **Unlock Mac** from the Mac's reported login
+state, and **Turn Display Off** or **Wake Display** from its reported display
+state. **Lock & Turn Display Off** combines the two existing native operations.
+Turning displays off keeps the Mac running; it does not request full-system
+sleep. The menu scrolls on short screens so its controls remain reachable.
+
+Unlock requires the existing native unlock helper to be configured and enabled,
+Accessibility to be granted, and this paired browser to be explicitly allowed
+under **Remote unlock** in the Mac companion. Pairing alone does not grant
+unlock permission. Display wake does not unlock the Mac. Missing capabilities
+hide unsupported controls; unknown state disables them rather than assuming the
+Mac is unlocked or its displays are awake.
+
+Each menu request executes once. While it is pending, the other session/display
+buttons are disabled; touchpad, keyboard and media input remain independent.
+Requests release any local held drag first, and reconnect never replays them.
+Unlock uses the native app's 12-second reply deadline; the other four actions
+use 10 seconds, while ordinary input retains its existing three-second limit.
+If the result is uncertain, check the Mac's state before making another manual
+request. A fully sleeping or offline Mac may be unreachable from a browser;
+network wake remains separate work.
 
 ## Certificate and DNS
 
@@ -196,13 +219,14 @@ To stop checks, boot out only this user job and remove its plist from
 - `pnpm --filter @mac-remote-controller/web-remote-preview test` covers input
   ordering, gestures, acknowledgements, reconnect generations, held-input leases,
   media capabilities/selection, player-volume bounds, snapping and stale acks,
-  desktop capability gating, action ordering and held-drag release.
+  desktop capability gating, session permission/state policy, native session
+  deadlines, one-operation busy state, action ordering and held-drag release.
 - `swift test --package-path packages/web-gateway` covers admission, pairing,
   DNS publication and private-file policy.
 - Apple CI also runs `test_transport.py` against `SofaRemoteWebFixture`: ephemeral
   trusted test certificate, real TLS/HTTP/WSS, input acknowledgements, disconnect
-  release, media delivery/rejection, fixed desktop actions, restricted command
-  scope and revocation.
+  release, media delivery/rejection, fixed desktop and session/display actions,
+  denied browser unlock, restricted command scope and revocation.
   Mock players include a 400% volume range and unsupported controls. The fixture
   never imports AppKit, posts desktop input or plays audio.
 - Physical iPhone/iPad Safari, touch latency, Mac application effects and a real

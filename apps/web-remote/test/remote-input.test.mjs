@@ -55,6 +55,44 @@ test('desktop actions are immediate ordering barriers and are not repeated on th
   );
 });
 
+test('session actions send exactly one parameterless command immediately', () => {
+  const f = fixture();
+  const names = [
+    'session.lock',
+    'session.unlock',
+    'display.off',
+    'display.wake',
+    'session.lock-display-off',
+  ];
+  for (const name of names) assert.equal(f.input.enqueue({ name }), true);
+  f.frame();
+  assert.deepEqual(
+    f.sent,
+    names.map((name) => ({ name })),
+  );
+  f.input.disconnect();
+  f.input.connect(() => assert.fail('a session action must never replay'));
+  f.frame();
+});
+
+test('session actions reject extra fields and arbitrary power commands', () => {
+  const f = fixture();
+  for (const name of [
+    'session.lock',
+    'session.unlock',
+    'display.off',
+    'display.wake',
+    'session.lock-display-off',
+  ]) {
+    assert.equal(f.input.enqueue({ name, value: 1 }), false);
+    assert.equal(f.input.enqueue({ name, key: 'return' }), false);
+    assert.equal(f.input.enqueue({ name, value: undefined }), false);
+  }
+  for (const name of ['system.sleep', 'session.login', 'display.shell'])
+    assert.equal(f.input.enqueue({ name }), false);
+  assert.deepEqual(f.sent, []);
+});
+
 test('gesture cancellation preserves queued media volume but target cancellation drops it', () => {
   const f = fixture();
   const command = {

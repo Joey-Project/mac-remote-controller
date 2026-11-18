@@ -231,6 +231,149 @@ test('HTTPS own-origin requests use cookies and reject redirects without JS cred
   assert.equal(f.results[0].error, null);
 });
 
+test('session snapshots preserve false and unknown values without retaining old permissions', async (t) => {
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  socket.welcome();
+  assert.deepEqual(f.states.at(-1).capabilities, []);
+  assert.equal(f.states.at(-1).sessionLocked, null);
+  assert.equal(f.states.at(-1).unlockAvailable, null);
+  assert.equal(f.states.at(-1).displayAsleep, null);
+  socket.message({
+    protocolVersion: 1,
+    type: 'state',
+    connectionId: 'test-connection',
+    state: {
+      accessibilityGranted: true,
+      deviceName: 'Fixture',
+      capabilities: ['sessionUnlock.v1', 'future.v1'],
+      sessionLocked: true,
+      unlockAvailable: false,
+      displayAsleep: true,
+    },
+  });
+  assert.equal(f.states.at(-1).sessionLocked, true);
+  assert.equal(f.states.at(-1).unlockAvailable, false);
+  assert.equal(f.states.at(-1).displayAsleep, true);
+  assert.deepEqual(f.states.at(-1).capabilities, ['sessionUnlock.v1', 'future.v1']);
+  socket.message({
+    protocolVersion: 1,
+    type: 'state',
+    connectionId: 'test-connection',
+    state: {
+      accessibilityGranted: true,
+      deviceName: 'Fixture',
+      capabilities: null,
+      sessionLocked: false,
+      unlockAvailable: null,
+      displayAsleep: false,
+    },
+  });
+  assert.equal(f.states.at(-1).sessionLocked, false);
+  assert.equal(f.states.at(-1).displayAsleep, false);
+  assert.deepEqual(f.states.at(-1).capabilities, []);
+});
+
+for (const fields of [
+  { sessionLocked: 'true' },
+  { displayAsleep: 1 },
+  { unlockAvailable: {} },
+  { capabilities: true },
+  { capabilities: [''] },
+  { capabilities: ['你'.repeat(22)] },
+  { capabilities: Array(17).fill('future.v1') },
+  { capabilities: [false] },
+])
+  test(`malformed session snapshot closes: ${JSON.stringify(fields)}`, async (t) => {
+    const f = fixture(t);
+    await f.connection.connect();
+    f.sockets[0].message({
+      protocolVersion: 1,
+      type: 'welcome',
+      connectionId: 'fixture',
+      state: {
+        accessibilityGranted: true,
+        deviceName: 'Fixture',
+        ...fields,
+      },
+    });
+    assert.equal(f.states.length, 0);
+    assert.equal(f.sockets[0].readyState, 3);
+  });
+
+for (const [name, timeout] of [
+  ['session.unlock', 12_000],
+  ['session.lock', 10_000],
+  ['display.off', 10_000],
+  ['display.wake', 10_000],
+  ['session.lock-display-off', 10_000],
+])
+  test(`${name} uses its native deadline without blocking input or replaying`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const f = fixture(t);
+    await f.connection.connect();
+    const socket = f.sockets[0];
+    socket.welcome();
+    assert.equal(f.input.enqueue({ name }), true);
+    f.advance(timeout - 1);
+    t.mock.timers.tick(1500);
+    assert.equal(socket.readyState, 1);
+    assert.equal(f.input.enqueue({ name: 'keyboard.key', key: 'escape' }), true);
+    const key = socket.sent.at(-1);
+    socket.message({
+      protocolVersion: 1,
+      type: 'result',
+      connectionId: key.connectionId,
+      requestId: key.requestId,
+      sequence: key.sequence,
+    });
+    f.advance(2);
+    t.mock.timers.tick(1500);
+    assert.equal(socket.readyState, 3);
+    await f.connection.connect();
+    f.sockets.at(-1).welcome('new-connection');
+    assert.deepEqual(f.sockets.at(-1).sent, []);
+  });
+
+test('an unanswered ordinary input still expires at three seconds during unlock', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture(t);
+  await f.connection.connect();
+  f.sockets[0].welcome();
+  f.input.enqueue({ name: 'session.unlock' });
+  f.input.enqueue({ name: 'keyboard.key', key: 'left' });
+  f.advance(3001);
+  t.mock.timers.tick(1500);
+  assert.equal(f.sockets[0].readyState, 3);
+});
+
+test('a slow unlock rejection reports once and keeps the connection usable', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture(t);
+  await f.connection.connect();
+  const socket = f.sockets[0];
+  socket.welcome();
+  f.input.enqueue({ name: 'session.unlock' });
+  const request = socket.sent[0];
+  f.advance(5000);
+  t.mock.timers.tick(1500);
+  socket.message({
+    protocolVersion: 1,
+    type: 'result',
+    connectionId: request.connectionId,
+    requestId: request.requestId,
+    sequence: request.sequence,
+    error: { code: 'unlock_unconfirmed', message: 'This browser is not allowed to unlock.' },
+  });
+  assert.equal(socket.readyState, 1);
+  assert.deepEqual(f.results, [
+    { command: { name: 'session.unlock' }, error: 'This browser is not allowed to unlock.' },
+  ]);
+  assert.deepEqual(f.errors, ['This browser is not allowed to unlock.']);
+  assert.equal(socket.sent.length, 1);
+});
+
 test('pairing POST preserves the browser Origin under the document no-referrer policy', async (t) => {
   const f = fixture(t, {
     request: () => Response.json({ requestId: 'pairing-request', paired: true }),

@@ -1,13 +1,15 @@
 import { RemoteInputBuffer, type InputCommand } from './remote-input.js';
 import { readMediaTargets, type MediaTarget } from './media-model.js';
+import { isSessionAction, type SessionState } from './session-controls.js';
 
-export type WebRemoteState = Readonly<{
-  accessibilityGranted: boolean;
-  supportsGestures: boolean;
-  deviceName: string;
-  systemVolume: number | null;
-  mediaTargets: readonly MediaTarget[] | null;
-}>;
+export type WebRemoteState = SessionState &
+  Readonly<{
+    accessibilityGranted: boolean;
+    supportsGestures: boolean;
+    deviceName: string;
+    systemVolume: number | null;
+    mediaTargets: readonly MediaTarget[] | null;
+  }>;
 export type WebRemoteStatus =
   'disconnected' | 'connecting' | 'connected' | 'pairing' | 'reconnecting';
 type Socket = Pick<
@@ -26,7 +28,7 @@ type Options = Readonly<{
   active?: () => boolean;
   now?: () => number;
 }>;
-type Pending = { sequence: number; at: number; command: InputCommand | null };
+type Pending = { sequence: number; at: number; timeout: number; command: InputCommand | null };
 
 /** The only endpoint is the page's own HTTPS origin. No JS bearer-token storage. */
 export class WebRemoteConnection {
@@ -214,7 +216,14 @@ export class WebRemoteConnection {
     };
     try {
       socket.send(JSON.stringify(envelope));
-      this.pending.set(requestId, { sequence, at: this.now(), command });
+      // Match native PendingCommandMetadata without extending ordinary input deadlines.
+      const timeout =
+        command?.name === 'session.unlock'
+          ? 12_000
+          : command && isSessionAction(command.name)
+            ? 10_000
+            : 3000;
+      this.pending.set(requestId, { sequence, at: this.now(), timeout, command });
       this.lastSentAt = this.now();
       return true;
     } catch {
@@ -226,7 +235,7 @@ export class WebRemoteConnection {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       const now = this.now();
-      if (Array.from(this.pending.values()).some((item) => now - item.at > 3000)) {
+      if (Array.from(this.pending.values()).some((item) => now - item.at > item.timeout)) {
         this.fail();
         return;
       }
@@ -323,12 +332,35 @@ function readState(value: unknown): WebRemoteState {
   )
     throw new Error();
   return {
+    capabilities: readCapabilities(value['capabilities']),
+    sessionLocked: readOptionalBoolean(value['sessionLocked']),
+    unlockAvailable: readOptionalBoolean(value['unlockAvailable']),
+    displayAsleep: readOptionalBoolean(value['displayAsleep']),
     accessibilityGranted: value['accessibilityGranted'],
     supportsGestures: supportsGestures === true,
     deviceName: value['deviceName'],
     systemVolume: typeof volume === 'number' ? volume : null,
     mediaTargets: readMediaTargets(value['mediaTargets']),
   };
+}
+
+function readOptionalBoolean(value: unknown): boolean | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'boolean') throw new Error();
+  return value;
+}
+
+function readCapabilities(value: unknown): readonly string[] {
+  if (value === undefined || value === null) return [];
+  if (
+    !Array.isArray(value) ||
+    value.length > 16 ||
+    value.some(
+      (entry) => typeof entry !== 'string' || !entry || new TextEncoder().encode(entry).length > 64,
+    )
+  )
+    throw new Error();
+  return value;
 }
 
 function errorMessage(code: unknown): string {
