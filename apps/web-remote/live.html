@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#101114" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Sofa Remote" />
     <title>Sofa Remote</title>
     <link rel="stylesheet" href="/app.css" />
     <script type="module" src="/app.js"></script>
@@ -28,9 +29,10 @@
         <details id="menu">
           <summary aria-label="Remote menu">•••</summary>
           <div class="menu-panel">
-            <label><input id="show-volume" type="checkbox" /> Volume on touchpad</label>
+            <label><input id="show-volume" type="checkbox" /> Volume</label>
             <label><input id="show-media" type="checkbox" /> Player controls</label>
             <label><input id="show-desktop" type="checkbox" /> Desktop controls</label>
+            <button id="hide-panels" disabled>Hide all controls</button>
             <button id="open-settings">Settings</button>
             <section
               id="session-controls"
@@ -130,7 +132,40 @@
           <label class="settings-toggle"
             ><input id="settings-drag" type="checkbox" checked /> Three-finger drag</label
           >
-          <p>Other touchpad gestures are unchanged.</p>
+          <label class="settings-toggle"
+            ><input id="settings-force" type="checkbox" checked disabled /> Pressure click when
+            supported</label
+          >
+          <p id="settings-force-help">
+            Pressure has not been reported by this browser and input device. Standard taps remain
+            available.
+          </p>
+          <p id="settings-gesture-help" hidden></p>
+        </fieldset>
+        <fieldset>
+          <legend>Feedback</legend>
+          <label class="settings-toggle"
+            ><input id="settings-haptics" type="checkbox" disabled /> Tap and drag feedback</label
+          >
+          <p id="settings-haptics-help">
+            Short local vibration when supported by this browser and device.
+          </p>
+        </fieldset>
+        <fieldset>
+          <legend>Home Screen and shortcuts</legend>
+          <p>
+            Open a mode below, then use your browser’s Add to Home Screen. In Safari, find it in
+            Share; keep Open as Web App enabled when offered. You can also use the link in a system
+            shortcut.
+          </p>
+          <div class="entry-links">
+            <a data-entry="touchpad" href="/#touchpad">Open Touchpad</a>
+            <a data-entry="keyboard" href="/#keyboard">Open Keyboard</a>
+          </div>
+          <p>
+            A new Home Screen app may ask you to pair again. Keep your Mac and this device on the
+            same network. Native Control Centre controls and widgets remain available in the App.
+          </p>
         </fieldset>
         <p id="settings-persistence" role="status"></p>
         <p class="settings-note">

@@ -11,6 +11,88 @@ function fixture() {
   return { pad, commands };
 }
 
+test('tap timestamps use the source event timeline instead of network arrival time', () => {
+  const { pad, commands } = fixture();
+  pad.begin(1, { x: 10, y: 10 }, 100);
+  pad.end(1, 321);
+  pad.begin(2, { x: 10, y: 10 }, 350);
+  pad.end(2, 370);
+  assert.deepEqual(
+    commands.map(({ tapTimestamp }) => tapTimestamp),
+    [0.321, 0.37],
+  );
+});
+
+test('unrepresentable event timelines preserve the legacy server-timed click', () => {
+  const { pad, commands } = fixture();
+  pad.begin(1, { x: 10, y: 10 }, 1_000_000_000_001);
+  pad.end(1, 1_000_000_000_020);
+  assert.deepEqual(commands, [{ name: 'pointer.click', button: 'left' }]);
+});
+
+test('reported pressure clicks once before lift without a trailing tap or feedback replay', () => {
+  const commands = [];
+  const feedback = [];
+  let capabilities = 0;
+  const pad = new LiveTouchpad(
+    (command) => {
+      commands.push(command);
+      return true;
+    },
+    () => {},
+    (kind) => feedback.push(kind),
+    () => capabilities++,
+  );
+  pad.begin(1, { x: 10, y: 10 }, 10);
+  pad.move(1, { x: 10, y: 10 }, 20, 0.3);
+  pad.move(1, { x: 12, y: 10 }, 30, 0.9);
+  pad.move(1, { x: 11, y: 10 }, 40, 1);
+  pad.end(1, 50);
+  assert.deepEqual(
+    commands.filter((command) => command.name === 'pointer.click'),
+    [{ name: 'pointer.click', button: 'left', tapTimestamp: 0.03 }],
+  );
+  assert.equal(capabilities, 1);
+  assert.deepEqual(feedback, ['pressure']);
+  assert.deepEqual(
+    commands.slice(-2),
+    [
+      { name: 'pointer.move', x: 3, y: 0 },
+      { name: 'pointer.click', button: 'left', tapTimestamp: 0.03 },
+    ],
+    'The pressure event must apply its final movement before clicking.',
+  );
+});
+
+test('unsupported pressure defaults never synthesize a force click', () => {
+  const { pad, commands } = fixture();
+  pad.begin(1, { x: 10, y: 10 }, 10);
+  for (const pressure of [undefined, 0, 0.5, NaN, Infinity, -1, 2])
+    pad.move(1, { x: 10, y: 10 }, 20, pressure);
+  assert.equal(commands.filter((command) => command.name === 'pointer.click').length, 0);
+  pad.end(1, 50);
+  assert.deepEqual(
+    commands.filter((command) => command.name === 'pointer.click'),
+    [{ name: 'pointer.click', button: 'left', tapTimestamp: 0.05 }],
+  );
+});
+
+test('disabling pressure keeps normal taps and never creates a held button', () => {
+  const { pad, commands } = fixture();
+  pad.setForceClickEnabled(false);
+  pad.begin(1, { x: 10, y: 10 }, 10);
+  pad.move(1, { x: 10, y: 10 }, 20, 0.9);
+  pad.end(1, 50);
+  assert.deepEqual(
+    commands.filter((command) => command.name === 'pointer.click'),
+    [{ name: 'pointer.click', button: 'left', tapTimestamp: 0.05 }],
+  );
+  assert.equal(
+    commands.some((command) => command.name.startsWith('pointer.button')),
+    false,
+  );
+});
+
 test('two stationary fingers emit one right click after both have lifted', () => {
   const { pad, commands } = fixture();
   pad.begin(1, { x: 10, y: 10 }, 0);
@@ -18,7 +100,7 @@ test('two stationary fingers emit one right click after both have lifted', () =>
   pad.end(1, 80);
   assert.deepEqual(commands, []);
   pad.end(2, 90);
-  assert.deepEqual(commands, [{ name: 'pointer.click', button: 'right' }]);
+  assert.deepEqual(commands, [{ name: 'pointer.click', button: 'right', tapTimestamp: 0.09 }]);
 });
 
 test('two-finger scroll preserves centroid displacement without moving the cursor', () => {

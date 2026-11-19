@@ -1,7 +1,12 @@
 import { MediaControlsModel, PlayerVolumeSender, type MediaAction } from './media-model.js';
 import { type InputCommand, RemoteInputBuffer } from './remote-input.js';
 import type { WebRemoteState } from './web-connection.js';
-import { isSeekInterval, type SeekInterval } from './preferences.js';
+import {
+  isSeekInterval,
+  WebPreferenceStore,
+  type SeekInterval,
+  type PanelName,
+} from './preferences.js';
 import {
   desktopActionsAvailable,
   sendDesktopAction,
@@ -30,6 +35,7 @@ export class LiveControlPanels {
   private readonly showVolume = element<HTMLInputElement>('show-volume');
   private readonly showMedia = element<HTMLInputElement>('show-media');
   private readonly showDesktop = element<HTMLInputElement>('show-desktop');
+  private readonly hideAll = element<HTMLButtonElement>('hide-panels');
   private readonly desktop = element<HTMLElement>('desktop');
   private readonly desktopAvailability = element<HTMLElement>('desktop-availability');
   private readonly desktopButtons = Array.from(
@@ -40,7 +46,6 @@ export class LiveControlPanels {
   );
   private readonly observer: ResizeObserver;
   private connected = false;
-  private keyboard = false;
   private playerVolume = false;
   private systemVolume: number | null = null;
   private supportsGestures = false;
@@ -50,19 +55,34 @@ export class LiveControlPanels {
   constructor(
     private readonly input: RemoteInputBuffer,
     cancelPad: () => void,
+    private readonly preferences: WebPreferenceStore,
   ) {
     this.observer = new ResizeObserver(() => {
       const height = this.overlays.getBoundingClientRect().height;
       this.controls.style.setProperty('--overlay-height', `${height > 0 ? height + 20 : 0}px`);
     });
     this.observer.observe(this.overlays);
-    for (const toggle of [this.showVolume, this.showMedia, this.showDesktop]) {
+    const toggles: readonly [PanelName, HTMLInputElement][] = [
+      ['volume', this.showVolume],
+      ['media', this.showMedia],
+      ['desktop', this.showDesktop],
+    ];
+    for (const [name, toggle] of toggles) {
+      toggle.checked = this.preferences.values.panels[name];
       toggle.addEventListener('change', () => {
         cancelPad();
         element<HTMLDetailsElement>('menu').open = false;
+        this.preferences.setPanelVisibility(name, toggle.checked);
         this.render();
       });
     }
+    this.hideAll.addEventListener('click', () => {
+      cancelPad();
+      this.preferences.hidePanels();
+      for (const [, toggle] of toggles) toggle.checked = false;
+      element<HTMLDetailsElement>('menu').open = false;
+      this.render();
+    });
     this.desktopButtons.forEach((button) =>
       button.addEventListener('click', () => {
         sendDesktopAction(this.desktopState, button.dataset['desktop'], this.input, cancelPad);
@@ -133,10 +153,6 @@ export class LiveControlPanels {
     }
     this.render();
   }
-  setKeyboard(keyboard: boolean): void {
-    this.keyboard = keyboard;
-    this.render();
-  }
   setSeekInterval(seconds: SeekInterval): void {
     if (!isSeekInterval(seconds)) return;
     for (const button of this.buttons) {
@@ -165,10 +181,11 @@ export class LiveControlPanels {
     this.render();
   }
   private render(): void {
-    this.volume.hidden = !this.keyboard && !this.showVolume.checked;
+    this.volume.hidden = !this.showVolume.checked;
     this.media.hidden = !this.showMedia.checked;
     this.desktop.hidden = !this.showDesktop.checked;
     this.overlays.hidden = this.volume.hidden && this.media.hidden && this.desktop.hidden;
+    this.hideAll.disabled = this.overlays.hidden;
     const desktopEnabled = desktopActionsAvailable(this.desktopState);
     this.desktopButtons.forEach((button) => {
       button.disabled = !desktopEnabled;

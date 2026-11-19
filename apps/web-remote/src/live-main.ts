@@ -6,6 +6,9 @@ import { LiveSessionControls } from './live-session.js';
 import { LiveSettings } from './live-settings.js';
 import { LiveKeyboardControls } from './live-keyboard.js';
 import { LiveConnectionDetails } from './live-connection.js';
+import { WebPreferenceStore } from './preferences.js';
+import { TouchFeedback, clientTapTimestamp } from './touch-feedback.js';
+import { entryMode } from './entry-points.js';
 import { WebRemoteConnection, type WebRemoteState } from './web-connection.js';
 import { WebRemoteLifecycle } from './web-lifecycle.js';
 import { normalizeWheelDeltaY, shouldHandleWindowShortcut } from './preview-model.js';
@@ -40,6 +43,7 @@ let settingsOpen = false;
 let connectionOpen = false;
 let magnificationAvailable = false;
 let threeFingerDragEnabled = true;
+let gesturesAvailable = false;
 let requestID: string | null = null;
 const lifecycle = new WebRemoteLifecycle();
 
@@ -51,20 +55,35 @@ const input = new RemoteInputBuffer(
   () => connection.fail(),
   () => pad.flush(),
 );
+const preferences = new WebPreferenceStore(() => window.localStorage);
+const feedback = new TouchFeedback(
+  typeof navigator.vibrate === 'function'
+    ? (milliseconds) => navigator.vibrate(milliseconds)
+    : null,
+  () => settings.refresh(),
+);
 const pad = new LiveTouchpad(
   (command) => input.enqueue(command),
   () => input.requestFlush(),
+  (kind) => feedback.pulse(kind),
+  () => settings.reportPressure(),
 );
-const panels = new LiveControlPanels(input, cancelPad);
+const panels = new LiveControlPanels(input, cancelPad, preferences);
 const sessionControls = new LiveSessionControls(input, cancelPad, menu);
 const keyboardControls = new LiveKeyboardControls((command) => input.enqueue(command), cancelPad);
 const connectionDetails = new LiveConnectionDetails((signal) => connection.probe(signal));
-new LiveSettings((value) => {
-  threeFingerDragEnabled = value.threeFingerDrag;
-  pad.setThreeFingerDragEnabled(value.threeFingerDrag);
-  panels.setSeekInterval(value.seekSeconds);
-  renderTouchHint();
-});
+const settings = new LiveSettings(
+  (value) => {
+    threeFingerDragEnabled = value.threeFingerDrag;
+    pad.setThreeFingerDragEnabled(value.threeFingerDrag && gesturesAvailable);
+    pad.setForceClickEnabled(value.forceClick && gesturesAvailable);
+    feedback.setEnabled(value.haptics && gesturesAvailable);
+    panels.setSeekInterval(value.seekSeconds);
+    renderTouchHint();
+  },
+  preferences,
+  feedback,
+);
 const connection = new WebRemoteConnection({
   origin: location.origin,
   input,
@@ -85,6 +104,11 @@ const connection = new WebRemoteConnection({
       reconnecting: 'Reconnecting…',
     }[status];
     if (!connected) {
+      gesturesAvailable = false;
+      pad.setThreeFingerDragEnabled(false);
+      pad.setForceClickEnabled(false);
+      feedback.setEnabled(false);
+      settings.setCompanionSupport(null);
       pad.cancel();
       sendText.disabled = false;
     } else {
@@ -136,6 +160,11 @@ function renderState(state: WebRemoteState): void {
   sessionControls.update(state);
   keyboardControls.update(state);
   connectionDetails.update(state);
+  gesturesAvailable = state.accessibilityGranted && state.supportsGestures;
+  settings.setCompanionSupport(state.supportsGestures);
+  pad.setForceClickEnabled(preferences.values.forceClick && gesturesAvailable);
+  pad.setThreeFingerDragEnabled(preferences.values.threeFingerDrag && gesturesAvailable);
+  feedback.setEnabled(preferences.values.haptics && gesturesAvailable);
   const canMagnify =
     state.accessibilityGranted &&
     state.supportsGestures &&
@@ -148,15 +177,16 @@ function renderState(state: WebRemoteState): void {
     showError('Allow Accessibility in the Mac companion for pointer and keyboard control.');
 }
 function renderTouchHint(): void {
+  const dragAvailable = gesturesAvailable && threeFingerDragEnabled;
   element<HTMLElement>('two-finger-hint').textContent = magnificationAvailable
     ? 'Two fingers to scroll, pinch or right-click'
     : 'Two fingers to scroll or tap for right click';
-  element<HTMLElement>('three-finger-hint').textContent = threeFingerDragEnabled
+  element<HTMLElement>('three-finger-hint').textContent = dragAvailable
     ? 'Three fingers to drag'
     : 'Three-finger drag is off';
   surface.setAttribute(
     'aria-label',
-    `Mac touchpad: one finger moves, two fingers ${magnificationAvailable ? 'scroll, pinch or tap for right click' : 'scroll or tap for right click'}, ${threeFingerDragEnabled ? 'three fingers drag' : 'three-finger drag is off'}`,
+    `Mac touchpad: one finger moves, two fingers ${magnificationAvailable ? 'scroll, pinch or tap for right click' : 'scroll or tap for right click'}, ${dragAvailable ? 'three fingers drag' : 'three-finger drag is off'}`,
   );
 }
 
@@ -180,7 +210,6 @@ function selectMode(value: boolean): void {
   keyboardMode.setAttribute('aria-pressed', String(keyboard));
   touchpadMode.classList.toggle('selected', !keyboard);
   keyboardMode.classList.toggle('selected', keyboard);
-  panels.setKeyboard(keyboard);
 }
 touchpadMode.addEventListener('click', () => selectMode(false));
 keyboardMode.addEventListener('click', () => selectMode(true));
@@ -191,6 +220,7 @@ element<HTMLButtonElement>('open-settings').addEventListener('click', () => {
   settingsOpen = true;
   connectionOpen = false;
   connectionDetails.leave();
+  settings.refresh();
   renderScreen();
   element<HTMLElement>('settings-title').focus({ preventScroll: true });
 });
@@ -234,7 +264,12 @@ surface.addEventListener('pointerdown', (event) => {
   captures.add(event.pointerId);
 });
 surface.addEventListener('pointermove', (event) => {
-  pad.move(event.pointerId, { x: event.clientX, y: event.clientY }, event.timeStamp);
+  pad.move(
+    event.pointerId,
+    { x: event.clientX, y: event.clientY },
+    event.timeStamp,
+    event.pointerType === 'touch' || event.pointerType === 'pen' ? event.pressure : undefined,
+  );
 });
 surface.addEventListener('pointerup', (event) => {
   pad.end(event.pointerId, event.timeStamp, { x: event.clientX, y: event.clientY });
@@ -272,10 +307,18 @@ surface.addEventListener(
 );
 
 document.querySelectorAll<HTMLButtonElement>('[data-button]').forEach((button) => {
-  button.addEventListener('click', () => {
+  button.addEventListener('click', (event) => {
     const value = button.dataset['button'];
-    if (value === 'left' || value === 'right')
-      input.enqueue({ name: 'pointer.click', button: value });
+    const tapTimestamp = clientTapTimestamp(event.timeStamp);
+    if (
+      (value === 'left' || value === 'right') &&
+      input.enqueue({
+        name: 'pointer.click',
+        button: value,
+        ...(tapTimestamp === null ? {} : { tapTimestamp }),
+      })
+    )
+      feedback.pulse('tap');
   });
 });
 const keys: Readonly<Record<string, RemoteKey>> = {
@@ -392,4 +435,19 @@ function resize(): void {
 window.visualViewport?.addEventListener('resize', resize);
 window.addEventListener('resize', resize);
 resize();
+window.addEventListener('hashchange', () => {
+  const mode = entryMode(location.hash);
+  if (mode) selectMode(mode === 'keyboard');
+});
+document.querySelectorAll<HTMLAnchorElement>('[data-entry]').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    const mode = entryMode(new URL(link.href).hash);
+    if (mode && location.hash === `#${mode}`) {
+      event.preventDefault();
+      selectMode(mode === 'keyboard');
+    }
+  });
+});
+const initialMode = entryMode(location.hash);
+if (initialMode) selectMode(initialMode === 'keyboard');
 void connection.connect();

@@ -39,6 +39,24 @@ function fixture() {
   };
 }
 
+test('source tap timestamps are one-shot ordering barriers and malformed values never send', () => {
+  const f = fixture();
+  f.input.enqueue({ name: 'pointer.move', x: 2, y: 3 });
+  const command = { name: 'pointer.click', button: 'left', tapTimestamp: 0.321 };
+  assert.equal(f.input.enqueue(command), true);
+  f.frame();
+  assert.deepEqual(f.sent, [{ name: 'pointer.move', x: 2, y: 3 }, command]);
+  for (const value of [-1, NaN, Infinity, null, undefined, '0.2', 1_000_000_001])
+    assert.equal(f.input.enqueue({ ...command, tapTimestamp: value }), false);
+  for (const name of ['pointer.button.down', 'pointer.button.up'])
+    assert.equal(f.input.enqueue({ name, button: 'left', tapTimestamp: 1 }), false);
+  assert.equal(f.input.enqueue({ ...command, arbitrary: true }), false);
+  assert.equal(f.sent.length, 2);
+  f.input.disconnect();
+  f.input.connect(() => assert.fail('Clicks must never replay'));
+  f.frame();
+});
+
 test('desktop actions are immediate ordering barriers and are not repeated on the next frame', () => {
   const f = fixture();
   f.input.enqueue({ name: 'pointer.move', x: 12, y: 7 });
