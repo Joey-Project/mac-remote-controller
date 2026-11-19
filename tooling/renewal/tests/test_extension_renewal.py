@@ -257,7 +257,7 @@ class ExtensionRenewalTests(unittest.TestCase):
             return b""
 
         with patch.object(run, "profile", side_effect=[old, issued]), \
-            patch.object(run, "verify_signature"), patch.object(run, "require_mac_lock"), \
+            patch.object(run, "verify_signature"), patch.object(run, "record_mac_lock"), \
             patch.object(run, "command", side_effect=command):
             path, result, certificate = run.issue("widget", child)
         self.assertEqual(path.parent.parent, run.root / "widget-issuance")

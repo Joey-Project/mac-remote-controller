@@ -215,6 +215,15 @@ class CommandLog:
         return bytes(output)
 
 
+def completed_wifi_install_receipt(receipt):
+    """Select completed Wi-Fi installs; lock observations are not acceptance gates."""
+    return (isinstance(receipt, dict) and receipt.get("target") == "ios"
+        and receipt.get("status") == "passed"
+        and receipt.get("installationCommandSucceeded") is True
+        and receipt.get("installedAppReadback") is True
+        and receipt.get("transport") == "localNetwork")
+
+
 class Run(CommandLog):
     def __init__(self, config, manual_recovery=False):
         self.config = config
@@ -224,25 +233,26 @@ class Run(CommandLog):
         super().__init__(root)
         self.probe = Path(config["probeApp"])
         self.executable = self.probe / "Contents/MacOS/SofaRenewalProbe"
-        self.summary = {"startedAt": now().isoformat(), "appLaunched": False, "appUninstalled": False}
+        self.summary = {"startedAt": now().isoformat(), "appLaunched": False, "appUninstalled": False,
+                        "lockStateRequirement": "none"}
         if manual_recovery:
             self.summary["manualRecovery"] = True
 
-    def require_mac_lock(self):
-        state = self.locked()
-        if self.manual_recovery:
-            require(isinstance(state, bool), "mac-lock-state-unavailable")
-        else:
-            require(state is True, "mac-must-remain-locked")
+    def record_mac_lock(self, phase):
+        try:
+            state = self.locked()
+        except (RenewalError, OSError, ValueError, TypeError, subprocess.SubprocessError):
+            state = None
+        state = state if type(state) is bool else None
+        self.summary.setdefault("macLockStates", {})[phase] = state
         return state
 
     def require_phone_state(self, state):
         if self.manual_recovery:
-            require(isinstance(state["locked"], bool) and state["transport"] in ("wired", "localNetwork"),
+            require(state["transport"] in ("wired", "localNetwork"),
                 "paired-phone-state-unavailable")
         else:
-            require(state["transport"] == "localNetwork" and state["locked"] is True,
-                "locked-wifi-phone-required")
+            require(state["transport"] == "localNetwork", "wifi-phone-required")
 
     def profile(self, path):
         require(path.stat().st_size <= 1024 * 1024, "profile-too-large")
@@ -288,7 +298,7 @@ class Run(CommandLog):
         config.write_text(json.dumps({"expectedTeamID": team, "targetUDID": device,
             "existingCertificatePath": str(cert), "probeBundleIdentifier": PROBE_ID, "outputDirectory": str(out)}))
         config.chmod(0o600)
-        self.require_mac_lock()
+        self.record_mac_lock(target + "-before")
         started = now()
         mode = {"mac": "mac-profile", "ios": "app-profile", "widget": "widget-profile"}[target]
         self.command("issue-profile", [str(self.executable), "ds", "renewal-probe", mode],
@@ -296,7 +306,7 @@ class Run(CommandLog):
         path = out / "probe.mobileprovision"
         profile = self.profile(path)
         validate_profile(profile, team, bundle, device, certificate, old, started)
-        self.require_mac_lock()
+        self.record_mac_lock(target + "-after")
         receipt = dict(previousExpiration=utc(old["ExpirationDate"]).isoformat(),
             creation=utc(profile["CreationDate"]).isoformat(), expiration=utc(profile["ExpirationDate"]).isoformat(),
             profileSHA256=hashlib.sha256(path.read_bytes()).hexdigest(), profileIdentityVerified=True)
@@ -357,14 +367,21 @@ class Run(CommandLog):
         state = {}
         for action, arguments in (("details", ["details"]), ("lockState", ["lockState"]), ("apps", ["apps", "--bundle-id", IOS_ID])):
             path = self.root / f"{label}-{action}-private.json"
-            self.command(f"device-{action}", ["xcrun", "devicectl", "--timeout", "35", "--json-output", str(path),
-                "device", "info", *arguments, "--device", self.config["deviceIdentifier"]], seconds=45)
-            require(path.stat().st_size <= 1024 * 1024, "device-result-too-large")
-            result = json.loads(path.read_text())["result"]
+            try:
+                self.command(f"device-{action}", ["xcrun", "devicectl", "--timeout", "35", "--json-output", str(path),
+                    "device", "info", *arguments, "--device", self.config["deviceIdentifier"]], seconds=45)
+                require(path.stat().st_size <= 1024 * 1024, "device-result-too-large")
+                result = json.loads(path.read_text())["result"]
+            except (RenewalError, OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+                if action != "lockState":
+                    raise
+                state["locked"] = None
+                continue
             if action == "details":
                 state["transport"] = result.get("device", result).get("connectionProperties", {}).get("transportType")
             elif action == "lockState":
-                state["locked"] = result.get("passcodeRequired")
+                value = result.get("passcodeRequired") if isinstance(result, dict) else None
+                state["locked"] = value if type(value) is bool else None
             else:
                 state["appCount"] = len([a for a in result.get("apps", []) if a.get("bundleIdentifier") == IOS_ID])
         return state
@@ -373,16 +390,19 @@ class Run(CommandLog):
         self.verify_signature(candidate)
         before = self.device("before")
         self.require_phone_state(before)
-        self.require_mac_lock()
+        self.record_mac_lock("install-before")
         self.command("install", ["xcrun", "devicectl", "--timeout", "120", "--json-output", str(self.root / "install-private.json"),
             "device", "install", "app", "--device", self.config["deviceIdentifier"], str(candidate)], seconds=130)
         self.summary["installationCommandSucceeded"] = True
         after = self.device("after")
         self.require_phone_state(after)
         require(after["appCount"] == 1, "post-install-state-mismatch")
-        mac_locked = self.require_mac_lock()
+        mac_locked = self.record_mac_lock("install-after")
+        lock_states = (mac_locked, after["locked"])
+        both_locked = False if False in lock_states else (True if all(v is True for v in lock_states) else None)
         self.summary.update(installedAppReadback=True,
-            bothDevicesLocked=mac_locked and after["locked"], transport=after["transport"])
+            macLockedAfter=mac_locked, phoneLockedBefore=before["locked"], phoneLockedAfter=after["locked"],
+            bothDevicesLocked=both_locked, transport=after["transport"])
 
     def execute(self, action):
         require(not self.manual_recovery or action in ("ios-candidate", "ios-install"),
@@ -409,7 +429,8 @@ class Run(CommandLog):
                 "ds", "renewal-probe", "inspect"], seconds=90, environment=environment)
             authenticated = any(json.loads(line).get("authenticatedToApple") is True
                 for line in response.decode().splitlines() if line.startswith("{"))
-            require(authenticated and self.locked() is True, "candidate-session-or-lock-check-failed")
+            require(authenticated, "candidate-session-check-failed")
+            self.record_mac_lock("mac-adopt")
             suffix = uuid.uuid4().hex
             staged = self.probe.with_name(f".renewal-{suffix}.app")
             self.summary.update(stagedProbe=str(staged))
@@ -433,7 +454,7 @@ def main():
     parser.add_argument("action", choices=("ios-candidate", "ios-install", "mac-candidate", "mac-adopt"))
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--manual-recovery", action="store_true",
-        help="Explicit iOS recovery with either device unlocked and a paired USB or Wi-Fi transport.")
+        help="Explicit iOS recovery allowing a paired USB transport in addition to Wi-Fi.")
     args = parser.parse_args()
     try:
         run = Run(read_config(args.config), manual_recovery=args.manual_recovery)

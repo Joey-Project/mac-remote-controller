@@ -5,7 +5,11 @@ development account. It is separate from the remote-control UI. It does not
 install a scheduler, unlock either device, create/revoke certificates, delete
 profiles, uninstall the phone app, or launch a media player.
 
-The proof covers a warm, paired iPhone over Wi-Fi after its first unlock since
+Renewal and daily background tests permit both locked and unlocked devices.
+Lock state is recorded best-effort as `true`, `false` or `null`; missing lock
+telemetry or a lock-state change does not block signing, installation or adoption.
+This policy does not lock or unlock either device. A warm, paired iPhone over
+Wi-Fi is still required for daily installation after its first unlock since
 boot. Phone developer-service initialization after restart can require a manual
 unlock. The probe can renew itself **before** expiration; recovery after the Mac
 probe itself has expired still needs a bootstrap repair design.
@@ -91,10 +95,10 @@ These are its only accepted fields:
 
 The Mac companion's **Setup & Recovery → Choose Renewal Setup…** can import this
 configuration and retain its own accepted app copy. **Re-sign & Reinstall…**
-runs `ios-install --manual-recovery`, allowing an unlocked Mac and a paired phone
-over USB or Wi-Fi. That explicit flag is restricted to iOS candidate/install
-commands. Omitting it preserves the locked-device Wi-Fi research requirements;
-the menu-bar action does not change a daily test's configuration or schedule.
+runs `ios-install --manual-recovery`, allowing a paired phone over USB or Wi-Fi.
+That explicit flag is restricted to iOS candidate/install commands. Omitting it
+retains the daily Wi-Fi transport requirement; either lock state is permitted.
+The menu-bar action does not change a daily test's configuration or schedule.
 
 No account password or token is accepted. Team and certificate data are derived
 from the existing signed apps. Use the iPhone's provisioning UDID, not its
@@ -137,8 +141,9 @@ daily observation separate from mocked renewal tests and Simulator validation.
 
 ## Explicit validation commands
 
-Lock the Mac before a run. For installation, also lock the already-initialized
-iPhone and keep it paired and reachable over Wi-Fi.
+The Mac and the already-initialized iPhone may remain locked or unlocked. Keep
+the phone paired and reachable over Wi-Fi for installation. Default Mac
+candidate/adoption commands also permit either state and need no manual flag.
 
 ```sh
 python3 tooling/renewal/renew.py ios-candidate --config /path/to/configuration-private.json
@@ -161,6 +166,12 @@ when their receipt directories differ. This prevents overlapping scheduled and
 manual runs; it is not protection against a malicious same-user process.
 
 Each run uses a new owner-private directory and writes a sanitized `receipt.json`.
+`lockStateRequirement: "none"` identifies this policy. Mac and phone snapshots
+are observations; `bothDevicesLocked` can be false or null on a successful run
+and must not be required by an accepting scheduler. Accept only completed
+Wi-Fi installs with independent signature, profile, fixed-extension and actual
+installed-version validation. `completed_wifi_install_receipt` supplies the
+completion/transport filter; it does not replace those independent checks.
 Raw command diagnostics, decoded profiles and public certificate bytes remain
 local. Command logs have per-command byte/time limits and a 4 MiB aggregate
 budget. Failures stop the sequence; a successful request with unchanged expiry
